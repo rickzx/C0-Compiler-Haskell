@@ -1,0 +1,75 @@
+Name: c0c
+Version: 0.0
+Synopsis: C0 Compiler Base Code
+Author: Matthew Maurer
+Maintainer: nroberts@andrew.cmu.edu
+Category: Development
+Build-type: Simple
+Cabal-version: >=1.12
+
+Executable c0c
+  Main-Is: c0c.hs
+  Hs-Source-Dirs: src
+  ghc-options:
+    -O3
+    -threaded
+    -rtsopts
+    -with-rtsopts=-N
+    -funbox-strict-fields
+    -Wall
+  default-language: Haskell2010
+  -- These are all the packages installed on the autograder.
+  -- Feel free to delete any of these from your dependencies.
+  -- If you add additional dependencies, contact the instructors
+  -- so we can install them on the base image (and so stack won't
+  -- have to build the dependency each time you run the code).
+  Build-Depends:
+      array
+    , base
+    , bifunctors
+    , bytestring
+    , Cardinality
+    , containers
+    , deepseq
+    , fgl
+    , filepath
+    , heap
+    , lens
+    --, llvm-hs -- Uncomment if you choose llvm for lab 6.
+    , mtl
+    , primitive
+    , process
+    , pqueue
+    , psqueues
+    , split
+    , syb
+    , test-framework
+    , test-framework-hunit
+    , test-framework-quickcheck2
+    , transformers
+    , unordered-containers
+    , utf8-string
+    , vector
+  Build-Tools:
+      alex
+    , happy
+  default-extensions:
+      DeriveDataTypeable
+    , RankNTypes
+    , FlexibleInstances
+    , MultiParamTypeClasses
+    , FlexibleContexts
+  other-modules:
+      Args
+    , Compile
+    , Compile.CheckAST
+    , Compile.CodeGen
+    , Compile.Lexer
+    , Compile.Parser
+    , Compile.Types
+    , Compile.Types.AST
+    , Compile.Types.AbstractAssembly
+    , Compile.Types.Job
+    , Compile.Types.Ops
+    , LiftIOE
+    , Util
