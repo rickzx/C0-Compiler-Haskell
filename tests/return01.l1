@@ -1,0 +1,12 @@
+//test return 4
+
+//test basic arithmetic operations and parentheses
+
+int main() {
+    int a;
+    int b;
+    
+    a = 5 - (-2) + 3 * 4 / 5 - 8;
+    b = 18 % (17 / 3);
+    return a + b;
+}

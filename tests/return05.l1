@@ -1,0 +1,22 @@
+//test return 0
+
+//test correct but weird syntax
+
+int main() {
+    int x = 3;
+    int y = x;
+
+    int a;
+    int b;
+
+    int z;
+    z = (x + y) / y;
+
+    int m = 0;
+    ((((m)))) *= z;
+
+    return m;
+
+    x = x / 0; // should not be executed
+    a = b; // don't need to be initilized
+}

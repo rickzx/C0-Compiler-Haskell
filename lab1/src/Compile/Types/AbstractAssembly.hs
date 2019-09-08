@@ -20,11 +20,11 @@ data AAsm
 
 data AVal
   = ALoc ALoc
-  | AImm Int
+  | AImm Int deriving (Eq, Ord)
 
 data ALoc
   = AReg Int
-  | ATemp Int
+  | ATemp Int deriving (Eq, Ord)
 
 instance Show AAsm where
   show (AAsm [dest] ANop [src]) = show dest ++ " <-- " ++ show src ++ "\n"

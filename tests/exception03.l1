@@ -1,0 +1,11 @@
+//test exception
+
+//test undeclared variable
+
+int main() {
+    int x;
+    
+    y += x;
+
+    return y;
+}

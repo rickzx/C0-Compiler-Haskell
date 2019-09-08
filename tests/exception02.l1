@@ -1,0 +1,9 @@
+//test exception
+
+//test division overflow
+
+int main() {
+    int INT_MIN = -2147483648;
+
+    return INT_MIN / (-1);
+}

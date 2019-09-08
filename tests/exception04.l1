@@ -1,0 +1,8 @@
+//test exception
+
+//test uninitialized variable
+
+int main() {
+    int x;
+    return x;
+}

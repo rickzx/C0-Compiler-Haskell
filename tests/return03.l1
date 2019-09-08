@@ -1,0 +1,10 @@
+//test return 1
+
+//test addition overflow
+
+int main() {
+    int a = 0xFFFFFFFF;
+    int b = 2;
+
+    return a + b;
+}

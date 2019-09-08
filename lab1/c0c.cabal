@@ -69,6 +69,8 @@ Executable c0c
     , Compile.Types
     , Compile.Types.AST
     , Compile.Types.AbstractAssembly
+    , Compile.Backend.RegisterAlloc
+    , Compile.Types.Assembly
     , Compile.Types.Job
     , Compile.Types.Ops
     , LiftIOE

@@ -1,0 +1,33 @@
+//test return 10
+
+//test register allocation
+
+int main() {
+    int one;
+    int a0;
+    int a1;
+    int a2;
+    int a3;
+    int a4;
+    int a5;
+    int a6;
+    int a7;
+    int a8;
+    int a9;
+    int a10;
+    
+    one = 1;
+    a0 = 0;
+    a1 = a0 + one;
+    a2 = a1 + one;
+    a3 = a2 + one;
+    a4 = a3 + one;
+    a5 = a4 + one;
+    a6 = a5 + one;
+    a7 = a6 + one;
+    a8 = a7 + one;
+    a9 = a8 + one;
+    a10 = a9 + one;
+
+    return a10;
+}
