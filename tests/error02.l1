@@ -1,5 +1,6 @@
 //test error
 
+//test missing semicolon
 int main{
     int x;
     int y;
