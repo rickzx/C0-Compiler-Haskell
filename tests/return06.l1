@@ -1,5 +1,6 @@
 //test return 10
 
+//test simple operations
 int main(){
     int a;
     int b;
