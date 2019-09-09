@@ -1,4 +1,6 @@
 //test return 60
+
+//test optimizing register allocation
 int main(){
     int a1;
     int a2;
