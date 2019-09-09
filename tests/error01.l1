@@ -1,4 +1,6 @@
 //test error
+
+//test usage of uninitialized variable
 int main(){
     int x;
     int y;
