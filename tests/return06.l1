@@ -10,5 +10,5 @@ int main(){
     b = 4 + 5;
     c = a * b + 10;
     b = c;
-    return 1;
+    return b;
 }

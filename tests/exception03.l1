@@ -1,6 +1,6 @@
 //test div-by-zero
 
-int main{
+int main(){
     //add some comment in here
     int x;
     int y;
