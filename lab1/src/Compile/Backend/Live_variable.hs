@@ -5,7 +5,8 @@ module Compile.Backend.Live_variable(getLoc, reverseAAsm, computeLivelist) where
     import System.IO
     
     import Control.Monad.Trans.Except
-    
+    import Compile.Types.Ops
+
     import Compile.Types
     import Compile.Lexer
     import Compile.Parser
@@ -15,7 +16,7 @@ module Compile.Backend.Live_variable(getLoc, reverseAAsm, computeLivelist) where
     import LiftIOE
     
     --given a list of AVal, we just care about the temps, not the
-    --constants
+    --constants.
     getLoc :: [AVal] -> [ALoc]
     getLoc [] = []
     getLoc (x:rest) = case x of
@@ -52,5 +53,9 @@ module Compile.Backend.Live_variable(getLoc, reverseAAsm, computeLivelist) where
                 relev = getLoc args
                 current_live = ((y \\ assign) ++ (relev \\ y)) in
                 computeLivelist(current_live:accum, ast)
-        
     
+    testAASM :: [AAsm]
+    testAASM = [AAsm{aAssign = [AReg 0], aOp = AAdd, aArgs = [AImm 5, AImm 7]}, AAsm{aAssign = [AReg 1], aOp = AAdd, aArgs = [AImm 3, AImm 5]}, AAsm{aAssign = [AReg 2], aOp = AAdd, aArgs = [ALoc (AReg 0), ALoc(AReg 1)]}, ARet (ALoc(AReg 2))]
+    
+    test1 :: IO ()
+    test1 = print (computeLivelist([], reverseAAsm [] testAASM))
