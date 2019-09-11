@@ -1,9 +1,9 @@
-//test return 260
+//test return 87062
 
 //test re-assignment and hex addition
 
 int main() {
     int x = 0;
-    x = 5 + 0xff;
+    x = 5 + 0x15411;
     return x;
 }

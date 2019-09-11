@@ -1,0 +1,11 @@
+//test error
+
+//test usage of uninitialized variable
+int main(){
+    int x;
+    int y;
+    int z;
+
+    z = 15;
+    return x % y;
+}

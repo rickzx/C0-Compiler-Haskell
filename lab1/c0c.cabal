@@ -71,6 +71,7 @@ Executable c0c
     , Compile.Types.AbstractAssembly
     , Compile.Backend.RegisterAlloc
     , Compile.Backend.AAsm2Asm
+    , Compile.Backend.LiveVariable
     , Compile.Types.Assembly
     , Compile.Types.Job
     , Compile.Types.Ops

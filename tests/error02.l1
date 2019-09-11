@@ -1,0 +1,10 @@
+//test error
+
+//test missing semicolon
+int main{
+    int x;
+    int y;
+    y = 10;
+    return y/10;
+    x = 5
+}
