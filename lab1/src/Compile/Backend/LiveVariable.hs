@@ -2,14 +2,6 @@ module Compile.Backend.LiveVariable(getLoc, reverseAAsm, computeLivelist) where
 
     import Data.List
     
-<<<<<<< HEAD:lab1/src/Compile/Backend/Live_variable.hs
-    import System.IO
-    
-    import Control.Monad.Trans.Except
-    import Compile.Types.Ops
-
-=======
->>>>>>> d0ee5c2c97597f545eb93ccf7ab625bb6b119f73:lab1/src/Compile/Backend/LiveVariable.hs
     import Compile.Types
     
     --given a list of AVal, we just care about the temps, not the
