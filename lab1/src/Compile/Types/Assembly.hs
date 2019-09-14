@@ -31,6 +31,10 @@ data Operand
         , base :: Register
         , index :: Register
         , width :: Int
+        }
+    | Mem'
+        { imm :: Int
+        , base :: Register
         } deriving (Eq, Ord)
 
 data Register
@@ -105,6 +109,7 @@ instance Show Operand where
     show (Imm x) = "$" ++ show x
     show (Reg r) = show r
     show (Mem x b i w) = show x ++ "(" ++ show b ++ ", " ++ show i ++ ", " ++ show w ++ ")"
+    show (Mem' x b) = show x ++ "(" ++ show b ++ ")"
 
 instance Show Inst where
     show (Movq x1 x2) = "movq " ++ show x1 ++ ", " ++ show x2

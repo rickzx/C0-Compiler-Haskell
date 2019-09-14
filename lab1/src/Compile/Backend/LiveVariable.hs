@@ -1,6 +1,7 @@
 module Compile.Backend.LiveVariable where 
 
     import Data.List
+<<<<<<< HEAD
     import qualified Data.Set as Set
     import qualified Data.Map as Map
     import Data.Maybe
@@ -10,6 +11,9 @@ module Compile.Backend.LiveVariable where
     import Control.Monad.Trans.Except
     import Compile.Types.Ops
 
+=======
+    
+>>>>>>> b18e214b46395fae4f2f1860b1b73540fcfde069
     import Compile.Types
     
     type Graph = Map.Map ALoc (Set.Set ALoc)
