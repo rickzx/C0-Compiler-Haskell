@@ -39,7 +39,8 @@ instance Show AVal where
   show (AImm n) = "$" ++ (show n)
 
 instance Show ALoc where
-  show (AReg _) = "%eax"
+  show (AReg 0) = "%eax"
+  show (AReg _) = "%edx"
   show (ATemp n) = "%t" ++ (show n)
 
 -- A hack to work with an AAsm tool

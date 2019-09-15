@@ -1,19 +1,11 @@
 module Compile.Backend.LiveVariable where 
 
-    import Data.List
-<<<<<<< HEAD
     import qualified Data.Set as Set
     import qualified Data.Map as Map
-    import Data.Maybe
 
-    import System.IO
-    
-    import Control.Monad.Trans.Except
     import Compile.Types.Ops
 
-=======
     
->>>>>>> b18e214b46395fae4f2f1860b1b73540fcfde069
     import Compile.Types
     
     type Graph = Map.Map ALoc (Set.Set ALoc)
@@ -28,7 +20,7 @@ module Compile.Backend.LiveVariable where
     --reverse the abstract assembly, so that we can work backwards for live variables
     --Stop at first return statment seen
     reverseAAsm :: [AAsm] -> [AAsm] -> [AAsm]
-    reverseAAsm acc [] = error "the AAsm has no return statement"
+    reverseAAsm _ [] = error "the AAsm has no return statement"
     reverseAAsm acc (x:rest) = case x of
         ARet _ -> x:acc
         _ -> reverseAAsm (x:acc) rest
@@ -38,21 +30,30 @@ module Compile.Backend.LiveVariable where
     {-for if else statement and loop, do a general tree stucture
         of the code by breaking control into segments, for each segment, 
         we do the single line livelist computes-}
-    computeLive :: ([Set.Set ALoc], [AAsm]) -> ([Set.Set ALoc], [AAsm])
-    computeLive (accset, []) = (accset, [])
-    computeLive (accset, x:ast) = 
+    computeLive :: ([Set.Set ALoc], [AAsm], Bool) -> ([Set.Set ALoc], [AAsm], Bool)
+    computeLive (accset, [], _) = (accset, [], False)
+    computeLive (accset, x:ast, prevDiv) = 
         case x of 
             ARet retval -> case retval of
-                ALoc a -> computeLive([Set.singleton a], ast)
-                AImm _ -> computeLive([Set.empty], ast)
-            AComment _ -> computeLive(accset, ast)
+                ALoc a -> computeLive([Set.singleton a], ast, False)
+                AImm _ -> computeLive([Set.empty], ast, False)
+            AComment _ -> computeLive(accset, ast, False)
             AAsm {aAssign = assign, aOp = op, aArgs = args} ->
                 case accset of 
                     [] -> error "The last statement of AAsm is not return"
                     y:rest -> let
                         relev = getLoc args
-                        current = (Set.union y relev) Set.\\ (Set.fromList assign) in
-                        computeLive(current:accset, ast)
+                        assigned = Set.fromList assign
+                        current = (Set.union y relev) Set.\\ (assigned)
+                        --if var is defined in this line, it must be live immediately
+                        --after the line to avoid register allocate conflicts.
+                        --if div, we also need to reserve rax and rdx for storing quotient and remainder
+                        updatedNext = if prevDiv then 
+                            Set.union y (Set.union assigned (Set.fromList [AReg 0, AReg 1]))
+                            else Set.union y assigned
+                        in
+                        if op == ADiv then computeLive(current:updatedNext:rest, ast, True)
+                        else computeLive(current:updatedNext:rest, ast, False)
 
     --for each set we have, all the elements in the set interferes with each other,
     --thus, we separate the set into key value paring of each key and values interferes with it
@@ -78,6 +79,7 @@ module Compile.Backend.LiveVariable where
 
     computeInterfere :: [Set.Set ALoc] -> Graph -> Graph
     computeInterfere [] g = g
+    --change to computeInterfere xs (findInterfere x g) if error occur
     computeInterfere (x:xs) g = foldl (flip findInterfere) g xs
 
     --example from Written 1
@@ -90,6 +92,8 @@ module Compile.Backend.LiveVariable where
         AAsm{aAssign = [ATemp 5], aOp = AAdd, aArgs = [ALoc (ATemp 1), ALoc(ATemp 4)]},
         AAsm{aAssign = [ATemp 6], aOp = AAdd, aArgs = [ALoc (ATemp 0), ALoc(ATemp 5)]},
         AAsm{aAssign = [ATemp 7], aOp = ANop, aArgs = [AImm 2]},
+        --T11 should interfere with everything Immediately after this line even if its not used
+        AAsm{aAssign = [ATemp 11], aOp = ANop, aArgs = [AImm 5]},
         AAsm{aAssign = [ATemp 8], aOp = AAdd, aArgs = [ALoc (ATemp 6), ALoc(ATemp 7)]},
         AAsm{aAssign = [ATemp 9], aOp = ANop, aArgs = [AImm 4]},
         AAsm{aAssign = [ATemp 10], aOp = ADiv, aArgs = [ALoc (ATemp 8), ALoc(ATemp 9)]},
@@ -101,33 +105,11 @@ module Compile.Backend.LiveVariable where
     testLive :: IO ()
     testLive = do{
        print exAASM;
-       print (computeLive([], reverseAAsm [] exAASM))
+       print (computeLive([], reverseAAsm [] exAASM, False))
     }
 
     testInterfere :: IO ()
     testInterfere = let 
-        (livelist, _) = computeLive([], reverseAAsm [] exAASM)
+        (livelist, _, _) = computeLive([], reverseAAsm [] exAASM, False)
         in print(computeInterfere livelist Map.empty)
 
-
-       -- computeInterfere xs (findInterfere x g)
-
-{-
-    computeLivelist :: ([[ALoc]], [AAsm]) -> ([[ALoc]], [AAsm])
-    computeLivelist (accum, []) = (accum, [])
-    computeLivelist (accum, x:ast) = 
-    --first line of AAsm should always be a return statement, working backwards
-      case x of
-        ARet retval -> case retval of
-            ALoc a -> computeLivelist([[a]], ast)
-            AImm _ -> computeLivelist([[]], ast)
-        AComment _ -> computeLivelist(accum, ast)
-        AAsm {aAssign = assign, aOp = op, aArgs = args} -> case accum of
-            --this should not happen
-            [] -> error "The last statement of AAsm is not return"
-            y : rest -> let
-                relev = getLoc args
-                current_live = ((y \\ assign) ++ (relev \\ y)) in
-                computeLivelist(current_live:accum, ast)
-  
--}
