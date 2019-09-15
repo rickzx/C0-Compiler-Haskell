@@ -43,7 +43,7 @@ checkStmt (Decl decl) = do
 checkStmt (Simp simp) = do
   _ <- checkSimp simp
   return False
-checkStmt (Ret e) = do
+checkStmt (Retn e) = do
   checkExp e
   -- Because we only have straightline code, at each ret, we'll "define" each declared variable.
   (declared, defined) <- get

@@ -35,7 +35,9 @@ toAsm (AAsm [assign] AAdd [src1, src2]) coloring =
                 , Addl src1' (Reg R11D)
                 , Movl (Reg R11D) assign'
                 ]
-            _ -> [Movl src1' assign', Addl src2' assign']
+            _ -> if src2' == assign'
+                then [Addl src1' assign']
+                else [Movl src1' assign', Addl src2' assign']
 toAsm (AAsm [assign] AAddq [src1, src2]) coloring =
     let assign' = mapToReg64 assign coloring
         src1'   = case src1 of
@@ -55,7 +57,9 @@ toAsm (AAsm [assign] AAddq [src1, src2]) coloring =
                 , Addq src1' (Reg R11)
                 , Movq (Reg R11) assign'
                 ]
-            _ -> [Movq src1' assign', Addq src2' assign']
+            _ -> if src2' == assign'
+                then [Addq src1' assign']
+                else [Movq src1' assign', Addq src2' assign']
 toAsm (AAsm [assign] ASub [src1, src2]) coloring =
     let assign' = mapToReg assign coloring
         src1'   = case src1 of
@@ -75,7 +79,9 @@ toAsm (AAsm [assign] ASub [src1, src2]) coloring =
                 , Subl src1' (Reg R11D)
                 , Movl (Reg R11D) assign'
                 ]
-            _ -> [Movl src1' assign', Subl src2' assign']
+            _ -> if src2' == assign'
+                then [Negl src2', Addl src1' src2']
+                else [Movl src1' assign', Subl src2' assign']
 toAsm (AAsm [assign] ASubq [src1, src2]) coloring =
     let assign' = mapToReg64 assign coloring
         src1'   = case src1 of
@@ -95,7 +101,9 @@ toAsm (AAsm [assign] ASubq [src1, src2]) coloring =
                 , Subq src1' (Reg R11)
                 , Movq (Reg R11) assign'
                 ]
-            _ -> [Movq src1' assign', Subq src2' assign']
+            _ -> if src2' == assign'
+                then [Negq src2', Addq src1' src2']
+                else [Movq src1' assign', Subq src2' assign']
 toAsm (AAsm [assign] ADiv [src1, src2]) coloring =
     let assign' = mapToReg assign coloring
         src1'   = case src1 of
@@ -133,7 +141,9 @@ toAsm (AAsm [assign] AMul [src1, src2]) coloring =
                 , Imull src1' (Reg R11D)
                 , Movl (Reg R11D) assign'
                 ]
-            _ -> [Movl src1' assign', Imull src2' assign']
+            _ -> if src2' == assign'
+                then [Imull src1' assign']
+                else [Movl src1' assign', Imull src2' assign']
 toAsm (AAsm [assign] AMod [src1, src2]) coloring =
     let assign' = mapToReg assign coloring
         src1'   = case src1 of
@@ -157,26 +167,30 @@ toAsm _        _ = error "ill-formed abstract assembly"
 
 removeDeadcode :: [Inst] -> [Inst]
 removeDeadcode insts = case List.elemIndex Ret insts of
-    Just i -> List.take i insts
+    Just i  -> List.take i insts
     Nothing -> insts
 
 printAsm :: [AAsm] -> String
 printAsm aasms =
     concatMap (\line -> "\t" ++ show line ++ "\n")
-        $  [Pushq (Reg RBP), Movq (Reg RSP) (Reg RBP), Subq (Imm (stackVar * 8)) (Reg RSP)]
-        ++ insts ++ [Addq (Imm (stackVar * 8)) (Reg RSP), Popq (Reg RBP), Ret] where
+        $  [ Pushq (Reg RBP)
+           , Movq (Reg RSP) (Reg RBP)
+           , Subq (Imm (stackVar * 8)) (Reg RSP)
+           ]
+        ++ insts
+        ++ [Addq (Imm (stackVar * 8)) (Reg RSP), Popq (Reg RBP), Ret]  where
     coloring = Map.fromList
-        [ (AReg 0 , 0)
-        , (ATemp 0, 1)
-        , (ATemp 1, 2)
-        , (ATemp 2, 3)
-        , (ATemp 3, 4)
-        , (ATemp 4, 5)
-        , (ATemp 5, 6)
-        , (ATemp 6, 7)
-        , (ATemp 7, 8)
-        , (ATemp 8, 9)
-        , (ATemp 9, 10)
+        [ (AReg 0  , 0)
+        , (ATemp 0 , 1)
+        , (ATemp 1 , 2)
+        , (ATemp 2 , 3)
+        , (ATemp 3 , 4)
+        , (ATemp 4 , 5)
+        , (ATemp 5 , 6)
+        , (ATemp 6 , 7)
+        , (ATemp 7 , 8)
+        , (ATemp 8 , 9)
+        , (ATemp 9 , 10)
         , (ATemp 10, 11)
         , (ATemp 11, 12)
         , (ATemp 12, 13)
@@ -214,8 +228,7 @@ printAsm aasms =
         Movl op1 op2 -> op1 /= op2
         Movq op1 op2 -> op1 /= op2
         _            -> True
-    insts = removeDeadcode $
-        foldl
+    insts = removeDeadcode $ foldl
         (\l aasm -> l ++ List.filter nonTrivial (toAsm aasm coloring))
         []
         aasms

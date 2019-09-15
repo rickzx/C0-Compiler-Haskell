@@ -278,7 +278,7 @@ happyReduction_12 happy_x_3
 	happy_x_1
 	 =  case happyOut11 happy_x_2 of { happy_var_2 -> 
 	happyIn9
-		 (Ret happy_var_2
+		 (Retn happy_var_2
 	)}
 
 #if __GLASGOW_HASKELL__ >= 710

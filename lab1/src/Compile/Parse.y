@@ -52,7 +52,7 @@ Stmts : {- Empty -} {[]}
 
 Stmt  : Decl ';' {Decl $1}
       | Simp ';' {Simp $1}
-      | ret Exp ';' {Ret $2}
+      | ret Exp ';' {Retn $2}
 
 Simp  : Lval asgnop Exp {Asgn $1 $2 $3}
 

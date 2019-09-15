@@ -16,7 +16,7 @@ data AST = Block [Stmt] deriving Eq
 data Stmt
   = Decl Decl
   | Simp Simp
-  | Ret Exp
+  | Retn Exp
   deriving Eq
 data Decl
   = JustDecl { dVar :: Ident }
@@ -43,7 +43,7 @@ instance Show AST where
 instance Show Stmt where
   show (Decl d) = show d
   show (Simp simp) = show simp
-  show (Ret e) = "return " ++ show e ++ ";"
+  show (Retn e) = "return " ++ show e ++ ";"
 
 instance Show Decl where
   show (JustDecl i) = "int " ++ i ++ ";"

@@ -23,7 +23,6 @@ import Compile.Lexer
 import Compile.Parser
 import Compile.CheckAST
 import Compile.CodeGen
-import Compile.Backend.AAsm2Asm
 import Data.Maybe (fromMaybe)
 import System.Environment
 
@@ -48,7 +47,7 @@ compile job = do
     liftEIO $ typeCheck ast
     case jobOutFormat job of
       TC -> liftEIO (Right ()) -- By now, we should have thrown any typechecking errors
-      Asm -> writeIOString (jobOut job) $ addHeader (printAsm (codeGen ast))
+      Asm -> writeIOString (jobOut job) $ addHeader (asmGen ast)
       Abs -> writeString (jobOut job) $ testPrintAAsm (codeGen ast) (jobOut job)
   case res of
     Left msg -> error msg
