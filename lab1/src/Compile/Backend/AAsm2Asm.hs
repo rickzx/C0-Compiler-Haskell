@@ -6,6 +6,7 @@ import           Compile.Types.Assembly
 import           Compile.Types.AbstractAssembly
 import qualified Data.Map                      as Map
 import qualified Data.List                     as List
+import Debug.Trace
 
 toAsm :: AAsm -> Coloring -> [Inst]
 toAsm (AAsm [assign] ANop [arg]) coloring =
@@ -15,6 +16,7 @@ toAsm (AAsm [assign] ANop [arg]) coloring =
             AImm x   -> Imm x
     in  case arg' of
             Mem{} -> [Movq arg' (Reg R11), Movq (Reg R11) assign']
+            Mem'{} -> [Movq arg' (Reg R11), Movq (Reg R11) assign']
             _     -> [Movq arg' assign']
 toAsm (AAsm [assign] AAdd [src1, src2]) coloring =
     let assign' = mapToReg assign coloring
@@ -30,7 +32,17 @@ toAsm (AAsm [assign] AAdd [src1, src2]) coloring =
                 , Addl src2' (Reg R11D)
                 , Movl (Reg R11D) assign'
                 ]
+            (Mem'{}, _) ->
+                [ Movl src1' (Reg R11D)
+                , Addl src2' (Reg R11D)
+                , Movl (Reg R11D) assign'
+                ]
             (_, Mem{}) ->
+                [ Movl src2' (Reg R11D)
+                , Addl src1' (Reg R11D)
+                , Movl (Reg R11D) assign'
+                ]
+            (_, Mem'{}) ->
                 [ Movl src2' (Reg R11D)
                 , Addl src1' (Reg R11D)
                 , Movl (Reg R11D) assign'
@@ -52,7 +64,17 @@ toAsm (AAsm [assign] AAddq [src1, src2]) coloring =
                 , Addq src2' (Reg R11)
                 , Movq (Reg R11) assign'
                 ]
+            (Mem'{}, _) ->
+                [ Movq src1' (Reg R11)
+                , Addq src2' (Reg R11)
+                , Movq (Reg R11) assign'
+                ]
             (_, Mem{}) ->
+                [ Movq src2' (Reg R11)
+                , Addq src1' (Reg R11)
+                , Movq (Reg R11) assign'
+                ]
+            (_, Mem'{}) ->
                 [ Movq src2' (Reg R11)
                 , Addq src1' (Reg R11)
                 , Movq (Reg R11) assign'
@@ -74,7 +96,17 @@ toAsm (AAsm [assign] ASub [src1, src2]) coloring =
                 , Subl src2' (Reg R11D)
                 , Movl (Reg R11D) assign'
                 ]
+            (Mem'{}, _) ->
+                [ Movl src1' (Reg R11D)
+                , Subl src2' (Reg R11D)
+                , Movl (Reg R11D) assign'
+                ]
             (_, Mem{}) ->
+                [ Movl src2' (Reg R11D)
+                , Subl src1' (Reg R11D)
+                , Movl (Reg R11D) assign'
+                ]
+            (_, Mem'{}) ->
                 [ Movl src2' (Reg R11D)
                 , Subl src1' (Reg R11D)
                 , Movl (Reg R11D) assign'
@@ -96,7 +128,17 @@ toAsm (AAsm [assign] ASubq [src1, src2]) coloring =
                 , Subq src2' (Reg R11)
                 , Movq (Reg R11) assign'
                 ]
+            (Mem'{}, _) ->
+                [ Movq src1' (Reg R11)
+                , Subq src2' (Reg R11)
+                , Movq (Reg R11) assign'
+                ]
             (_, Mem{}) ->
+                [ Movq src2' (Reg R11)
+                , Subq src1' (Reg R11)
+                , Movq (Reg R11) assign'
+                ]
+            (_, Mem'{}) ->
                 [ Movq src2' (Reg R11)
                 , Subq src1' (Reg R11)
                 , Movq (Reg R11) assign'
@@ -136,14 +178,26 @@ toAsm (AAsm [assign] AMul [src1, src2]) coloring =
                 , Imull src2' (Reg R11D)
                 , Movl (Reg R11D) assign'
                 ]
+            (Mem'{}, _) ->
+                [ Movl src1' (Reg R11D)
+                , Imull src2' (Reg R11D)
+                , Movl (Reg R11D) assign'
+                ]
             (_, Mem{}) ->
+                [ Movl src2' (Reg R11D)
+                , Imull src1' (Reg R11D)
+                , Movl (Reg R11D) assign'
+                ]
+            (_, Mem'{}) ->
                 [ Movl src2' (Reg R11D)
                 , Imull src1' (Reg R11D)
                 , Movl (Reg R11D) assign'
                 ]
             _ -> if src2' == assign'
                 then [Imull src1' assign']
-                else [Movl src1' assign', Imull src2' assign']
+                else (case assign' of
+                    Mem'{} -> [Movl src1' (Reg R11D), Imull src2' (Reg R11D), Movl (Reg R11D) assign']
+                    _ -> [Movl src1' assign', Imull src2' assign'])
 toAsm (AAsm [assign] AMod [src1, src2]) coloring =
     let assign' = mapToReg assign coloring
         src1'   = case src1 of
