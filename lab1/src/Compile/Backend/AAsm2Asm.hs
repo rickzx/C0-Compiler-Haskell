@@ -102,13 +102,13 @@ toAsm (AAsm [assign] ASub [src1, src2]) coloring =
                 , Movl (Reg R11D) assign'
                 ]
             (_, Mem{}) ->
-                [ Movl src2' (Reg R11D)
-                , Subl src1' (Reg R11D)
+                [ Movl src1' (Reg R11D)
+                , Subl src2' (Reg R11D)
                 , Movl (Reg R11D) assign'
                 ]
             (_, Mem'{}) ->
-                [ Movl src2' (Reg R11D)
-                , Subl src1' (Reg R11D)
+                [ Movl src1' (Reg R11D)
+                , Subl src2' (Reg R11D)
                 , Movl (Reg R11D) assign'
                 ]
             _ -> if src2' == assign'
@@ -134,13 +134,13 @@ toAsm (AAsm [assign] ASubq [src1, src2]) coloring =
                 , Movq (Reg R11) assign'
                 ]
             (_, Mem{}) ->
-                [ Movq src2' (Reg R11)
-                , Subq src1' (Reg R11)
+                [ Movq src1' (Reg R11)
+                , Subq src2' (Reg R11)
                 , Movq (Reg R11) assign'
                 ]
             (_, Mem'{}) ->
-                [ Movq src2' (Reg R11)
-                , Subq src1' (Reg R11)
+                [ Movq src1' (Reg R11)
+                , Subq src2' (Reg R11)
                 , Movq (Reg R11) assign'
                 ]
             _ -> if src2' == assign'
@@ -162,8 +162,54 @@ toAsm (AAsm [assign] ADiv [src1, src2]) coloring =
                 , Idivl (Reg R11D)
                 , Movl (Reg EAX) assign'
                 ]
+            Reg EAX ->
+                [ Movl src2' (Reg R11D)
+                , Movl src1' (Reg EAX)
+                , Cdq
+                , Idivl (Reg R11D)
+                , Movl (Reg EAX) assign'
+                ]
+            Reg EDX ->
+                [ Movl src2' (Reg R11D)
+                , Movl src1' (Reg EAX)
+                , Cdq
+                , Idivl (Reg R11D)
+                , Movl (Reg EAX) assign'
+                ]
             _ ->
                 [Movl src1' (Reg EAX), Cdq, Idivl src2', Movl (Reg EAX) assign']
+toAsm (AAsm [assign] ADivq [src1, src2]) coloring =
+    let assign' = mapToReg64 assign coloring
+        src1'   = case src1 of
+            ALoc loc -> mapToReg64 loc coloring
+            AImm x   -> Imm x
+        src2' = case src2 of
+            ALoc loc -> mapToReg64 loc coloring
+            AImm x   -> Imm x
+    in  case src2' of
+            Imm _ ->
+                [ Movq src2' (Reg R11)
+                , Movq src1' (Reg RAX)
+                , Cqto
+                , Idivq (Reg R11)
+                , Movq (Reg RAX) assign'
+                ]
+            Reg RAX ->
+                [ Movq src2' (Reg R11)
+                , Movq src1' (Reg RAX)
+                , Cqto
+                , Idivq (Reg R11)
+                , Movq (Reg RAX) assign'
+                ]
+            Reg RDX ->
+                [ Movq src2' (Reg R11)
+                , Movq src1' (Reg RAX)
+                , Cqto
+                , Idivq (Reg R11)
+                , Movq (Reg RAX) assign'
+                ]
+            _ ->
+                [Movq src1' (Reg RAX), Cqto, Idivq src2', Movq (Reg RAX) assign']
 toAsm (AAsm [assign] AMul [src1, src2]) coloring =
     let assign' = mapToReg assign coloring
         src1'   = case src1 of
@@ -214,8 +260,54 @@ toAsm (AAsm [assign] AMod [src1, src2]) coloring =
                 , Idivl (Reg R11D)
                 , Movl (Reg EDX) assign'
                 ]
+            Reg EAX ->
+                [ Movl src2' (Reg R11D)
+                , Movl src1' (Reg EAX)
+                , Cdq
+                , Idivl (Reg R11D)
+                , Movl (Reg EDX) assign'
+                ]
+            Reg EDX ->
+                [ Movl src2' (Reg R11D)
+                , Movl src1' (Reg EAX)
+                , Cdq
+                , Idivl (Reg R11D)
+                , Movl (Reg EDX) assign'
+                ]
             _ ->
                 [Movl src1' (Reg EAX), Cdq, Idivl src2', Movl (Reg EDX) assign']
+toAsm (AAsm [assign] AModq [src1, src2]) coloring =
+    let assign' = mapToReg64 assign coloring
+        src1'   = case src1 of
+            ALoc loc -> mapToReg64 loc coloring
+            AImm x   -> Imm x
+        src2' = case src2 of
+            ALoc loc -> mapToReg64 loc coloring
+            AImm x   -> Imm x
+    in  case src2' of
+            Imm _ ->
+                [ Movq src2' (Reg R11)
+                , Movq src1' (Reg RAX)
+                , Cqto
+                , Idivq (Reg R11)
+                , Movq (Reg RDX) assign'
+                ]
+            Reg RAX ->
+                [ Movq src2' (Reg R11)
+                , Movq src1' (Reg RAX)
+                , Cqto
+                , Idivq (Reg R11)
+                , Movq (Reg RDX) assign'
+                ]
+            Reg RDX ->
+                [ Movq src2' (Reg R11)
+                , Movq src1' (Reg RAX)
+                , Cqto
+                , Idivq (Reg R11)
+                , Movq (Reg RDX) assign'
+                ]
+            _ ->
+                [Movq src1' (Reg RAX), Cqto, Idivq src2', Movq (Reg RDX) assign']
 toAsm (ARet _) _ = [Ret]
 toAsm _        _ = error "ill-formed abstract assembly"
 

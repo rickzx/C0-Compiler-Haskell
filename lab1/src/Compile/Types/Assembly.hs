@@ -8,7 +8,7 @@ data Inst
     | Addl Operand  Operand
     | Subq Operand Operand
     | Subl Operand Operand
-    | Imulq Operand
+    | Imulq Operand Operand
     | Imull Operand Operand
     | Idivq Operand
     | Idivl Operand
@@ -21,6 +21,7 @@ data Inst
     | Pushq Operand
     | Popq Operand
     | Cdq
+    | Cqto
     | Ret deriving (Eq, Ord)
 
 data Operand
@@ -119,7 +120,7 @@ instance Show Inst where
     show (Addl x1 x2) = "addl " ++ show x1 ++ ", " ++ show x2
     show (Subq x1 x2) = "subq " ++ show x1 ++ ", " ++ show x2
     show (Subl x1 x2) = "subl " ++ show x1 ++ ", " ++ show x2
-    show (Imulq x) = "imulq " ++ show x
+    show (Imulq x1 x2) = "imulq " ++ show x1 ++ ", " ++ show x2 
     show (Imull x1 x2) = "imull " ++ show x1 ++ ", " ++ show x2
     show (Idivq x) = "idivq " ++ show x
     show (Idivl x) = "idivl " ++ show x
@@ -132,6 +133,7 @@ instance Show Inst where
     show (Pushq x) = "pushq " ++ show x
     show (Popq x) = "popq " ++ show x
     show Cdq = "cdq"
+    show Cqto = "cqto"
     show Ret = "retq"
 
 toReg64 :: Register -> Register

@@ -66,8 +66,8 @@ asmGen :: AST -> String
 asmGen ast = 
   let
     aasms = codeGen ast
-    (livelist, _, _) = computeLive([], reverseAAsm [] aasms, False)
-    graph = computeInterfere livelist Map.empty
+    (livelist, _) = computeLive([], reverseAAsm [] aasms)
+    graph = buildInterfere aasms livelist Map.empty 0
 
     precolor = Map.fromList [(AReg 0, 0), (AReg 1, 3)]
     seo = mcs graph precolor
@@ -78,6 +78,7 @@ asmGen ast =
         Movq op1 op2 -> op1 /= op2
         _            -> True
 
+    -- (trace $ show coloring ++ "\n\n" ++ show graph ++ "\n\n" ++ show livelist ++ "\n\n" ++ show aasms) 
     insts = removeDeadcode $
         foldl
         (\l aasm -> l ++ List.filter nonTrivial (toAsm aasm coloring))

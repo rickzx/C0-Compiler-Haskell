@@ -14,8 +14,11 @@ data AOp
   | ASub
   | ASubq
   | ADiv
+  | ADivq
   | AMul
+  | AMulq
   | AMod
+  | AModq
   | ANop
   deriving Eq
 
@@ -33,8 +36,11 @@ instance Show AOp where
   show ASub = "-"
   show ASubq = "-"
   show ADiv = "/"
+  show ADivq = "/"
   show AMul = "*"
+  show AMulq = "*"
   show AMod = "%"
+  show AModq = "%"
   show ANop = "[nop]"
 
 instance Show Binop where
