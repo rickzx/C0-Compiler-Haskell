@@ -13,6 +13,7 @@ import Compile.Types.Assembly
 import qualified Control.Monad.State.Strict as State
 import Data.Int
 import qualified Data.Map as Map
+import qualified Data.Set as Set
 import qualified Data.List as List
 import Data.Maybe (mapMaybe)
 import Compile.Backend.LiveVariable
@@ -47,7 +48,7 @@ getDecls = mapMaybe f
     f (Decl d) = Just d
     f _ = Nothing
 
-codeGen :: AST -> [AAsm]
+codeGen :: AST -> ([AAsm], Int)
 codeGen (Block stmts) = State.evalState assemM initialState
   where
     initialState = Alloc
@@ -57,21 +58,27 @@ codeGen (Block stmts) = State.evalState assemM initialState
       where
         decls = getDecls stmts
 
-    assemM :: AllocM [AAsm]
+    assemM :: AllocM ([AAsm], Int)
     assemM = do
       stmtAssemBlocks <- mapM genStmt stmts
-      return $ concat stmtAssemBlocks
+      localVar <- getNewUniqueID
+      return (concat stmtAssemBlocks, localVar)
 
 asmGen :: AST -> String
 asmGen ast = 
   let
-    aasms = codeGen ast
-    (livelist, _) = computeLive([], reverseAAsm [] aasms)
-    graph = buildInterfere aasms livelist Map.empty 0
+    (aasms, localVar) = codeGen ast
 
-    precolor = Map.fromList [(AReg 0, 0), (AReg 1, 3)]
-    seo = mcs graph precolor
-    (coloring, stackVar) = color graph seo precolor
+    (coloring, stackVar) = if localVar > 500 then allStackColor localVar 
+      else
+        let
+          (livelist, _) = computeLive([], reverseAAsm [] aasms)
+          graph = buildInterfere aasms livelist Map.empty 0
+
+          precolor = Map.fromList [(AReg 0, 0), (AReg 1, 3)]
+          seo = mcs graph precolor
+        in 
+          color graph seo precolor
 
     nonTrivial asm = case asm of
         Movl op1 op2 -> op1 /= op2
@@ -159,11 +166,14 @@ genExp (Binop binop exp1 exp2) dest =
       let combine = [AAsm [dest] (genBinOp binop) [ALoc $ ATemp n, ALoc $ ATemp n']]
       return $ codegen1 ++ codegen2 ++ combine
       
-genExp (Unop _unop expr) dest = do
-  n <- getNewUniqueID
-  cogen <- genExp expr (ATemp n)
-  let assign = [AAsm [dest] ASub [AImm 0, ALoc $ ATemp n]]
-  return $ cogen ++ assign
+genExp (Unop _unop expr) dest = 
+  case expr of
+    (Int n) -> return [AAsm [dest] ANop [AImm $ fromIntegral $ ((fromIntegral $ -n) :: Int32)]]
+    _ -> do
+      n <- getNewUniqueID
+      cogen <- genExp expr (ATemp n)
+      let assign = [AAsm [dest] ASub [AImm 0, ALoc $ ATemp n]]
+      return $ cogen ++ assign
 
 genBinOp :: Binop -> AOp
 genBinOp Add = AAdd

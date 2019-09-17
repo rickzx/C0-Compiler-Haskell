@@ -3,6 +3,8 @@ module Compile.Backend.RegisterAlloc where
 import qualified Data.Map                      as Map
 import qualified Data.Set                      as Set
 import qualified Data.PQueue.Max               as PQ
+import qualified Control.Monad.State.Strict    as State
+
 import           Compile.Types.AbstractAssembly
 import           Compile.Types.Assembly
 
@@ -51,6 +53,14 @@ color graph seo preColor = (coloring, maxColor - length regOrder + 3)
         )
         (preColor, 0)
         seo
+
+allStackColor :: Int -> (Coloring, Int)
+allStackColor localVar = 
+    let
+        vars = map ATemp [0..localVar]
+        l = zip vars [0..]
+    in
+        (Map.union (Map.fromList [(AReg 0, 0), (AReg 1, 3)]) (Map.fromList $ map (\(loc, i) -> (loc, i + length regOrder)) l), localVar + 3)
 
 regOrder :: [Register]
 regOrder =

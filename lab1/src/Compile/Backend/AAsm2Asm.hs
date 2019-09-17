@@ -10,14 +10,14 @@ import Debug.Trace
 
 toAsm :: AAsm -> Coloring -> [Inst]
 toAsm (AAsm [assign] ANop [arg]) coloring =
-    let assign' = mapToReg64 assign coloring
+    let assign' = mapToReg assign coloring
         arg'    = case arg of
-            ALoc loc -> mapToReg64 loc coloring
+            ALoc loc -> mapToReg loc coloring
             AImm x   -> Imm x
     in  case arg' of
-            Mem{} -> [Movq arg' (Reg R11), Movq (Reg R11) assign']
-            Mem'{} -> [Movq arg' (Reg R11), Movq (Reg R11) assign']
-            _     -> [Movq arg' assign']
+            Mem{} -> [Movl arg' (Reg R11D), Movl (Reg R11D) assign']
+            Mem'{} -> [Movl arg' (Reg R11D), Movl (Reg R11D) assign']
+            _     -> [Movl arg' assign']
 toAsm (AAsm [assign] AAdd [src1, src2]) coloring =
     let assign' = mapToReg assign coloring
         src1'   = case src1 of

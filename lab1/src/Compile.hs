@@ -48,7 +48,7 @@ compile job = do
     case jobOutFormat job of
       TC -> liftEIO (Right ()) -- By now, we should have thrown any typechecking errors
       Asm -> writeIOString (jobOut job) $ addHeader (asmGen ast)
-      Abs -> writeString (jobOut job) $ testPrintAAsm (codeGen ast) (jobOut job)
+      Abs -> writeString (jobOut job) $ testPrintAAsm (fst $ codeGen ast) (jobOut job)
   case res of
     Left msg -> error msg
     Right () -> return ()
