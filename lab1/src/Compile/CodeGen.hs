@@ -122,49 +122,18 @@ genSimp (Asgn v asnop expr) = do
       AsnOp binop -> Binop binop (Ident v) expr
   genExp expr' tmpNum
 
-genInt :: Int -> Int
-genInt a = fromIntegral $ ((fromIntegral a) :: Int32)
-  
-matchBinop :: Binop -> Int -> Int -> Int
-matchBinop b = case b of 
-  Add -> (+)
-  Sub -> (-)
-  Mul -> (*)
-  --we would not match div or mod
-  _ -> (+)
-  
-normBinop :: Binop -> Bool
-normBinop b = b == Add || b == Sub || b == Mul 
-
 genExp :: Exp -> ALoc -> AllocM [AAsm]
 genExp (Int n) dest = return [AAsm [dest] ANop [AImm $ fromIntegral $ ((fromIntegral n) :: Int32)]]
 genExp (Ident var) dest = do
   allocmap <- State.gets variables
   return [AAsm [dest] ANop [ALoc $ ATemp $ allocmap Map.! var]]
-genExp (Binop binop exp1 exp2) dest = 
-  case (exp1, exp2, normBinop binop) of
-    --try to compress the tree when constants occur
-    (Int a, Int b, True) -> return [AAsm [dest] ANop [AImm (genInt(matchBinop binop (genInt a)(genInt b)))]]
-    (_, Int a, True) -> do
-      n <- getNewUniqueID
-      codegen1 <- genExp exp1 (ATemp n)
-      let combine = [AAsm [dest] (genBinOp binop) [ALoc $ ATemp n, AImm (genInt a)]]
-      return $ codegen1 ++ combine
-    --this portion has arithmetic error
-
-    (Int a, _, True) -> do
-      n <- getNewUniqueID
-      codegen2 <- genExp exp2 (ATemp n)
-      let combine = [AAsm [dest] (genBinOp binop) [AImm (genInt a), ALoc $ ATemp n]]
-      return $ codegen2 ++ combine
-    --basic case
-    _ -> do
-      n <- getNewUniqueID
-      codegen1 <- genExp exp1 (ATemp n)
-      n' <- getNewUniqueID
-      codegen2 <- genExp exp2 (ATemp n')
-      let combine = [AAsm [dest] (genBinOp binop) [ALoc $ ATemp n, ALoc $ ATemp n']]
-      return $ codegen1 ++ codegen2 ++ combine
+genExp (Binop binop exp1 exp2) dest = do
+  n <- getNewUniqueID
+  codegen1 <- genExp exp1 (ATemp n)
+  n' <- getNewUniqueID
+  codegen2 <- genExp exp2 (ATemp n')
+  let combine = [AAsm [dest] (genBinOp binop) [ALoc $ ATemp n, ALoc $ ATemp n']]
+  return $ codegen1 ++ codegen2 ++ combine
       
 genExp (Unop _unop expr) dest = 
   case expr of
