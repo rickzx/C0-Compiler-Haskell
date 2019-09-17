@@ -137,12 +137,14 @@ genExp (Ident var) dest = do
 genExp (Binop binop exp1 exp2) dest = 
   case (exp1, exp2, normBinop binop) of
     --try to compress the tree when constants occur
-    (Int a, Int b, True) -> return [AAsm [dest] ANop [AImm (matchBinop binop (genInt a)(genInt b))]]
+    (Int a, Int b, True) -> return [AAsm [dest] ANop [AImm (genInt(matchBinop binop (genInt a)(genInt b)))]]
     (_, Int a, True) -> do
       n <- getNewUniqueID
       codegen1 <- genExp exp1 (ATemp n)
       let combine = [AAsm [dest] (genBinOp binop) [ALoc $ ATemp n, AImm (genInt a)]]
       return $ codegen1 ++ combine
+    --this portion has arithmetic error
+
     (Int a, _, True) -> do
       n <- getNewUniqueID
       codegen2 <- genExp exp2 (ATemp n)
@@ -156,6 +158,7 @@ genExp (Binop binop exp1 exp2) dest =
       codegen2 <- genExp exp2 (ATemp n')
       let combine = [AAsm [dest] (genBinOp binop) [ALoc $ ATemp n, ALoc $ ATemp n']]
       return $ codegen1 ++ codegen2 ++ combine
+      
 genExp (Unop _unop expr) dest = do
   n <- getNewUniqueID
   cogen <- genExp expr (ATemp n)
