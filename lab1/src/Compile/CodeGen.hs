@@ -64,11 +64,12 @@ codeGen (Block stmts) = State.evalState assemM initialState
       localVar <- getNewUniqueID
       return (concat stmtAssemBlocks, localVar)
 
+--from AST we generate to assembly language
 asmGen :: AST -> String
 asmGen ast = 
   let
     (aasms, localVar) = codeGen ast
-
+    --if too many local temp used, we spill everything on stack
     (coloring, stackVar) = if localVar > 500 then allStackColor localVar 
       else
         let
@@ -92,6 +93,7 @@ asmGen ast =
         []
         aasms
   in
+    --allocate space for spilling
     if stackVar > 0 then
     concatMap (\line -> "\t" ++ show line ++ "\n")
     $  [Pushq (Reg RBP), Movq (Reg RSP) (Reg RBP), Subq (Imm (stackVar * 8)) (Reg RSP)]

@@ -8,6 +8,10 @@ import qualified Data.Map                      as Map
 import qualified Data.List                     as List
 import Debug.Trace
 
+--generates Assembly code from our AASM and register allocation.
+--When moving from memory to memory, we use R11D as a temporary 
+--register to store the value. For division, we reserves rax and
+--rdx to store quotient and remainder.
 toAsm :: AAsm -> Coloring -> [Inst]
 toAsm (AAsm [assign] ANop [arg]) coloring =
     let assign' = mapToReg assign coloring
@@ -311,6 +315,7 @@ toAsm (AAsm [assign] AModq [src1, src2]) coloring =
 toAsm (ARet _) _ = [Ret]
 toAsm _        _ = error "ill-formed abstract assembly"
 
+--remove everything after return.
 removeDeadcode :: [Inst] -> [Inst]
 removeDeadcode insts = case List.elemIndex Ret insts of
     Just i  -> List.take i insts

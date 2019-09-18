@@ -13,6 +13,8 @@ type Coloring = Map.Map ALoc Int
 
 -- Maximal Cardinality Search
 -- Takes in a graph, output a simplicial elimination ordering of the vertices
+-- PQ based on value of node in graph, each time a node is selected, the
+-- value of the neighbors of the node++.
 mcs :: Graph -> Coloring -> [ALoc]
 mcs graph preColor =
     let
@@ -35,6 +37,7 @@ mcs graph preColor =
         mcs' pq
 
 -- Color the inteference graph using simplicial elimination ordering
+-- precolor rax, rdx first, spill if color of the node > total of registers
 color :: Graph -> [ALoc] -> Coloring -> (Coloring, Int)
 color graph seo preColor = (coloring, maxColor - length regOrder + 3)
     where
@@ -54,6 +57,7 @@ color graph seo preColor = (coloring, maxColor - length regOrder + 3)
         (preColor, 0)
         seo
 
+--case used when temp variable > a fixed number, we spill everything.
 allStackColor :: Int -> (Coloring, Int)
 allStackColor localVar = 
     let
@@ -66,7 +70,7 @@ regOrder :: [Register]
 regOrder =
     [EAX, EDI, ESI, EDX, ECX, R8D, R9D, R10D, R12D, R13D, R14D, R15D, EBX]   -- Reserve R11 for moves to and from the stack when necessary
 
--- Map a variable in abstract assembly to a register / memory location
+-- Map a variable in abstract assembly to a register / memory location(if spill)
 mapToReg :: ALoc -> Coloring -> Operand
 mapToReg reg coloring = if coloringIdx < length regOrder
     then Reg $ regOrder !! coloringIdx
