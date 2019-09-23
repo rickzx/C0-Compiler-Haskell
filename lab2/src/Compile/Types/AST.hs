@@ -12,6 +12,10 @@ import Compile.Types.Ops
 
 type Ident = String
 
+data Type = 
+    Int 
+  | Bool deriving (Eq, Show)
+
 data AST = Block [Stmt] deriving Eq
 data Stmt
   = Decl Decl
