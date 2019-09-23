@@ -25,15 +25,18 @@ tokens :-
   void {\_ -> TokReserved}
   char {\_ -> TokReserved}
   string {\_ -> TokReserved}
-  if {\_ -> TokReserved}
-  else {\_ -> TokReserved}
+
+  if {\_ -> TokIf}
+  else {\_ -> TokElse}
   while {\_ -> TokReserved}
   for {\_ -> TokReserved}
-  true {\_ -> TokReserved}
-  false {\_ -> TokReserved}
-  bool {\_ -> TokReserved}
-  "--"  {\_ -> TokReserved}
-  "++"  {\_ -> TokReserved}
+  true {\_ -> TokBool}
+  false {\_ -> TokBool}
+  bool {\_ -> TokBool}
+
+
+  "--"  {\_ -> TokDecr}
+  "++"  {\_ -> TokIncr}
 
 
   "-"   {\_ -> TokMinus}
@@ -48,6 +51,28 @@ tokens :-
   "/="  {\_ -> TokAsgnop (AsnOp Div)}
   "%="  {\_ -> TokAsgnop (AsnOp Mod)}
 
+  "<<=" {\_ -> TokAsgnop (AsnOp Lshift)}
+  ">>=" {\_ -> TokAsgnop (AsnOp Rshift)}
+  "&="  {\_ -> TokAsgnop (AsnOp And)}
+  "^="  {\_ -> TokAsgnop (AsnOp Xor)}
+  "|="  {\_ -> TokAsgnop (AsnOp Or)}
+
+  "<"   {\_ -> TokLess)}
+  ">"   {\_ -> TokGreater)}
+  ">="  {\_ -> TokGeq)}
+  "<="  {\_ -> TokLeq)}
+  "=="  {\_ -> TokBoolEq)}
+  "!="  {\_ -> TokNotEq)}
+  "&&"  {\_ -> TokBoolAnd}
+  "||"  {\_ -> TokBoolOr}
+  "&"   {\_ -> TokAnd}
+  "|"   {\_ -> TokOr}
+  "^"   {\_ -> TokXor}
+  "<<"  {\_ -> TokLshift}
+  ">>"  {\_ -> TokRshift}
+
+  "!"   {\_ -> TokUnop (Unop Not)}
+  "~"   {\_ -> TokUnop (Unop Cmpl)}
 
   $white+ ;
   0 {\_ -> TokDec 0}
@@ -90,6 +115,23 @@ data Token =
   TokTimes |
   TokDiv |
   TokMod |
+  TokBool |
+  TokPostOp Postop |
+  TokUnop Unop |
+  TokLess |
+  TokGreater |
+  TokGeq |
+  TokLeq |
+  TokBoolEq |
+  TokNotEq |
+  TokBoolAnd |
+  TokBoolOr |
+  TokAnd |
+  TokOr |
+  TokLshift |
+  TokRshift |
+  TokIf|
+  TokElse|
   TokReserved
   deriving (Eq,Show)
 

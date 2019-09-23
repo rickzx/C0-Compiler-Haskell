@@ -23,8 +23,9 @@ data AOp
   deriving Eq
 
 -- For AST
-data Binop = Add | Sub | Mul | Div | Mod deriving Eq
-data Unop = Neg deriving Eq
+data Binop = Add | Sub | Mul | Div | Mod | Lshift
+  | Rshift | And | Xor | Or | BoolAnd | BoolOr deriving Eq
+data Unop = Neg | Not | Cmpl deriving Eq
 data Asnop
   = AsnOp Binop
   | Equal
