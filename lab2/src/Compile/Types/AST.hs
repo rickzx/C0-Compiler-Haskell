@@ -17,21 +17,47 @@ data Type =
   | Bool deriving (Eq, Show)
 
 data AST = Block [Stmt] deriving Eq
+
 data Stmt
-  = Decl Decl
+  = Simp Simp
+  | Block [Stmt]
+  | Control Control
+  | Exp Exp
+  deriving Eq
+
+data Simpopt 
+  = Nop
   | Simp Simp
-  | Retn Exp
   deriving Eq
+
+data Elseopt
+  = Nop
+  | Else Stmt
+  deriving Eq
+
 data Decl
-  = JustDecl { dVar :: Ident }
-  | DeclAsgn { dVar :: Ident, dExp :: Exp }
+  = JustDecl { dVar :: Ident, dType :: Type}
+  | DeclAsgn { dVar :: Ident, dType :: Type, dExp :: Exp}
   deriving Eq
-data Simp = Asgn Ident Asnop Exp deriving Eq
+
+data Simp = Asgn Ident Asnop Exp 
+  | Decl Decl
+  | Exp Exp deriving Eq
+
 data Exp
   = Int Int
+  | Bool Int
   | Ident Ident
   | Binop Binop Exp Exp
   | Unop Unop Exp
+  | Control Control
+  deriving Eq
+
+data Control
+  = Condition { dBool :: Exp, dTrue :: Stmt, dElse :: Elseopt}
+  | For {init :: Simpopt, cond :: Exp, step :: Simpopt, body :: Stmt}
+  | While {cond :: Exp, body :: Stmt}
+  | Retn Exp
   deriving Eq
 
 -- Note to the student: You will probably want to write a new pretty printer
