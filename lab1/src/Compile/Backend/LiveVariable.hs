@@ -49,6 +49,7 @@ computeLive (accset, x : ast) = case x of
             in
                 computeLive (current : updatedNext : rest, ast)
 
+--insert interfere temps into the interfere set for nodes
 addEdge :: (ALoc, ALoc) -> Graph -> Graph
 addEdge (u, v) g = case Map.lookup u g of
     Just sset -> Map.adjust (Set.insert v) u g
@@ -59,6 +60,8 @@ isSameLoc x y = case x of
     ALoc x' -> x' == y
     _       -> False
 
+--build interference graph based on the rule that if it is assigned on line l, it
+--interferes with all the live variables in l+1
 buildInterfere :: [AAsm] -> [Set.Set ALoc] -> Graph -> Int -> Graph
 buildInterfere [] _ g _ = g
 buildInterfere (x : xs) live g i =
@@ -67,6 +70,7 @@ buildInterfere (x : xs) live g i =
         case x of
             AAsm [dest] ANop [src] ->
                 let 
+                    --if nothing there, init an empty set to put neighbor
                     ginit = case Map.lookup dest g of
                         Just _ -> g
                         Nothing -> Map.insert dest Set.empty g
@@ -78,6 +82,7 @@ buildInterfere (x : xs) live g i =
                         ginit
                         liveVars
                 in  buildInterfere xs live newg (i + 1)
+            --special cases for division and mod, add rax and rdx
             AAsm [dest] asnop [_src1, _src2]
                 | asnop == ADiv
                 || asnop == ADivq
@@ -88,7 +93,8 @@ buildInterfere (x : xs) live g i =
                             Just _ -> g
                             Nothing -> Map.insert dest Set.empty g
                         newg = foldl (\g' v -> if dest /= v then addEdge (v, dest) (addEdge (dest, v) g') else g') ginit liveVars
-                        newg' = foldl (\g' v -> addEdge (v, AReg 1) (addEdge (AReg 1, v) (addEdge (v, AReg 0) (addEdge (AReg 0, v) g')))) newg liveVars
+                        newg' = foldl (\g' v -> addEdge (v, AReg 1) (addEdge (AReg 1, v) (addEdge (v, AReg 0) 
+                            (addEdge (AReg 0, v) g')))) newg liveVars
                    in  buildInterfere xs live newg' (i + 1)
             AAsm [dest] _ [_src1, _src2] ->
                 let
@@ -103,6 +109,7 @@ buildInterfere (x : xs) live g i =
                         ginit
                         liveVars
                 in  buildInterfere xs live newg (i + 1)
+            --ignore return and comments
             ARet _ -> g
             _ -> buildInterfere xs live g (i + 1)
 
