@@ -13,21 +13,44 @@ import Compile.Types.Ops
 type Ident = String
 
 data AST = Block [Stmt] deriving Eq
+
 data Stmt
   = Decl Decl
   | Simp Simp
   | Retn Exp
+  | Block [Stmt]
+  | Control Control
+  | Exp Exp
   deriving Eq
+
+data Simpopt
+  = Nop
+  | Simp Simp
+
+data Elseopt
+  = Nop
+  | Else Stmt
+
 data Decl
   = JustDecl { dVar :: Ident }
   | DeclAsgn { dVar :: Ident, dExp :: Exp }
   deriving Eq
+
 data Simp = Asgn Ident Asnop Exp deriving Eq
 data Exp
   = Int Int
+  | Bool Int
   | Ident Ident
   | Binop Binop Exp Exp
   | Unop Unop Exp
+  | Control Control
+  deriving Eq
+
+  --TODO: while and for separate
+data Control
+  = Condition { dBool :: Exp, dTrue :: Stmt, dElse :: Elseopt}
+  | Loop {init :: Simpopt, cond :: Exp, step :: Simpopt, body :: Stmt}
+  | Retn Exp
   deriving Eq
 
 -- Note to the student: You will probably want to write a new pretty printer
