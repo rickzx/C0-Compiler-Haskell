@@ -1,0 +1,11 @@
+// test error
+
+// variable scope
+
+int main() {
+    for (int i = 0; i < 100; i++) {
+        int res = i;
+    }
+
+    return res;
+}

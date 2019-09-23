@@ -1,0 +1,22 @@
+// test error
+
+// test typechecker
+
+int main() {
+    int x = 1000;
+    int y = x + 300;
+
+    int z = (x < y) ? 200 : 300;
+
+    bool a = (x < y) ? false : true;
+
+    bool c = (z > x);
+
+    if (c) {
+        z += x;
+    } else{
+        a += c;
+    }
+
+    return z;
+}

@@ -1,0 +1,16 @@
+// test return 654321
+
+// test reverse integer
+
+int main() {
+    int res = 0;
+    int x = 123456;
+
+    while (x > 0) {
+        int digit = x % 10;
+        res = res * 10 + digit;
+        x /= 10;
+    }
+    
+    return res;
+}

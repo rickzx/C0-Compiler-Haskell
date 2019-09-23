@@ -1,0 +1,25 @@
+// test return 2
+
+// test nested if
+
+int main() {
+    int x = 10;
+
+    if (x > 5) {
+        if (x < 13) {
+            if (x >= 12) {
+                return 0;
+            } else {
+                if (x >=11) {
+                    return 1;
+                } else {
+                    return 2;
+                }
+            }
+        } else {
+            return 3;
+        }
+    } else {
+        return 4;
+    }
+}

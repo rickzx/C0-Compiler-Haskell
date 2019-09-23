@@ -1,0 +1,19 @@
+// test return 1
+
+// primality test
+
+int main() {
+    int toCheck = 719791;
+
+    if (toCheck % 2 == 0) {
+        return 0;
+    }
+
+    for (int i = 3; i < toCheck; i += 2) {
+        if (toCheck % i == 0) {
+            return 0;
+        }
+    }
+
+    return 1;
+}
