@@ -1,0 +1,8 @@
+// test div-by-zero
+
+// test division by zero
+
+int main() {
+    int a = 1000;
+    return (a / ((3 < 5) ? 2 : 0)) / ((3 < 5) ? 0 : 2);
+}

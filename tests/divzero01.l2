@@ -1,0 +1,11 @@
+// test div-by-zero
+
+// shift error
+
+int main() {
+    int x = 10;
+    int y = x << x;
+    int z = y << y;
+    
+    return z;
+}

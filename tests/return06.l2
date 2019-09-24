@@ -1,0 +1,20 @@
+// test return 1242044891
+
+// nth fibonacci
+
+int main() {
+    int prevPrev = 0;
+    int prev = 0;
+    int cur = 1;
+
+    for (int i = 1; i < 10000; i++) {
+
+        prevPrev = prev;
+
+        prev = cur;
+
+        cur = prevPrev + prev;
+
+    }
+    return cur;
+}
