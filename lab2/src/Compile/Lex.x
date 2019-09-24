@@ -25,30 +25,51 @@ tokens :-
   void {\_ -> TokReserved}
   char {\_ -> TokReserved}
   string {\_ -> TokReserved}
-  if {\_ -> TokReserved}
-  else {\_ -> TokReserved}
-  while {\_ -> TokReserved}
-  for {\_ -> TokReserved}
-  true {\_ -> TokReserved}
-  false {\_ -> TokReserved}
-  bool {\_ -> TokReserved}
-  "--"  {\_ -> TokReserved}
-  "++"  {\_ -> TokReserved}
 
+  if {\_ -> TokIf}
+  else {\_ -> TokElse}
+  while {\_ -> TokWhile}
+  for {\_ -> TokFor}
+  true {\_ -> TokTrue}
+  false {\_ -> TokFalse}
 
   "-"   {\_ -> TokMinus}
   "+"   {\_ -> TokPlus}
   "*"   {\_ -> TokTimes}
   "/"   {\_ -> TokDiv}
-  "%"   {\_ -> TokMod}
+  "<"   {\_ -> TokLess}
+  ">"   {\_ -> TokGreater}
+  ">="   {\_ -> TokGeq}
+  "<="   {\_ -> TokLeq}
+  "=="   {\_ -> TokBoolEq}
+  "!="   {\_ -> TokNotEq}
+  "&&"   {\_ -> TokBoolAnd}
+  "||"   {\_ -> TokBoolOr}
+  "&"   {\_ -> TokAnd}
+  "|"   {\_ -> TokOr}
+  "<<"   {\_ -> TokLshift}
+  ">>"   {\_ -> TokRshift}
+  "++"   {\_ -> TokIncr}
+  "--"   {\_ -> TokDecr}
+  "?"   {\_ -> TokIf}
+  ":"   {\_ -> TokElse}
+
+  "!"   {\_ -> TokUnop (Unop Not)}
+  "~"   {\_ -> TokUnop (Unop Cmpl)}
+
   "="   {\_ -> TokAsgnop Equal}
   "+="  {\_ -> TokAsgnop (AsnOp Add)}
   "-="  {\_ -> TokAsgnop (AsnOp Sub)}
   "*="  {\_ -> TokAsgnop (AsnOp Mul)}
   "/="  {\_ -> TokAsgnop (AsnOp Div)}
   "%="  {\_ -> TokAsgnop (AsnOp Mod)}
+  "^="  {\_ -> TokAsgnop (AsnOp Xor)}
+  "|="  {\_ -> TokAsgnop (AsnOp Or)}
+  "&="  {\_ -> TokAsgnop (AsnOp And)}
+  "<<="  {\_ -> TokAsgnop (AsnOp Lshift)}
+  ">>="  {\_ -> TokAsgnop (AsnOp Rshift)}
 
-
+  
   $white+ ;
   0 {\_ -> TokDec 0}
   $decstart $decdigit* {\s -> TokDec (read s)}
@@ -57,6 +78,7 @@ tokens :-
 
   return {\_ -> TokReturn}
   int {\_ -> TokInt}
+  bool {\_ -> TokBool}
 
   $identstart $identletter* {\s -> TokIdent s}
   [\(] {\_ -> TokLParen}
@@ -90,6 +112,28 @@ data Token =
   TokTimes |
   TokDiv |
   TokMod |
+  TokIf |
+  TokWhile |
+  TokFor |
+  TokTrue |
+  TokFalse |
+  TokBool |
+  TokElse |
+  TokUnop Unop |
+  TokLess |
+  TokGreater |
+  TokGeq |
+  TokLeq |
+  TokBoolEq |
+  TokNotEq |
+  TokBoolAnd |
+  TokBoolOr |
+  TokAnd |
+  TokOr |
+  TokLshift |
+  TokRshift |
+  TokIncr |
+  TokDecr |
   TokReserved
   deriving (Eq,Show)
 

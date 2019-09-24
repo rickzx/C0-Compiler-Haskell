@@ -127,6 +127,10 @@ Operation : Exp '-' Exp {Binop Sub $1 $3}
           | Exp '&' Exp {Binop And $1 $3}
           | Exp '|' Exp {Binop Or $1 $3}
           | Exp '^' Exp {Binop Xor $1 $3}
+<<<<<<< HEAD
+=======
+--dont elaborate to conditions yet.
+>>>>>>> cad5147ba4e2b0bd6e02ef80f22e0ed1e193386d
           | Exp '&&' Exp {Control (Condition $1 $3 $1)}
           | Exp '||' Exp {Control (Condition $1 $1 $3)}
           | '-' Exp %prec NEG {Unop Neg $2}
@@ -146,6 +150,11 @@ checkDeclAsgn v op e =
     Equal -> DeclAsgn v e
     _ -> error "Invalid assignment operator on a declaration"
 
+<<<<<<< HEAD
+=======
+(--TODO: this shift doestn avoid register)
+
+>>>>>>> cad5147ba4e2b0bd6e02ef80f22e0ed1e193386d
 checkShiftAsgn :: Lval -> Asnop -> Exp -> Exp
 checkShiftAsgn l1 op e1 =
   if(e1 > 31) then error "Shifting out of bounds" else Asgn l1 op e1

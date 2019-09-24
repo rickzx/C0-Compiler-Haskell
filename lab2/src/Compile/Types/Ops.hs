@@ -31,8 +31,12 @@ data ARelOp
   | Age
 
 -- For AST
-data Binop = Add | Sub | Mul | Div | Mod deriving Eq
-data Unop = Neg deriving Eq
+data Binop = Add | Sub | Mul | Div | Mod 
+  | Xor | And | Lshift | Rshift | BoolAnd | BoolEq | NotEq | BoolOr
+  | And | Or | Leq | Geq | Less | Greater deriving Eq
+  
+data Unop = Neg | Not | Cmpl deriving Eq
+
 data Asnop
   = AsnOp Binop
   | Equal
