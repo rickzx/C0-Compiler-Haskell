@@ -8,10 +8,10 @@ int main(){
     if(x < 10){
         count += 5;
     }
-    if(x & 5 == 5){
+    if((x & 5) == 5){
         count *= 2;
     }
-    if(x << 2 < 10){
+    if((x << 2) < 10){
         count >>= 1;
     }
     return count;

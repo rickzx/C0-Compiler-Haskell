@@ -1,4 +1,4 @@
-//test error
+//test div-by-zero
 
 //test shifting error
 int main(){

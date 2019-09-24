@@ -1,4 +1,4 @@
-//test return 500
+//test return 20
 
 //test unary operations
 
@@ -9,7 +9,7 @@ int main(){
         return 1000;
     }
     else{
-        if(~x > 10){
+        if((~x) > 10){
             return 500;
         }
         return 20;
