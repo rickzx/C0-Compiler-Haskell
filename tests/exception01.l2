@@ -1,0 +1,13 @@
+//test div-by-zero
+
+//test div-by-zero in while loop
+int main(){
+    int x = 1024;
+    int count = 10000;
+    while(x > 0){
+        int temp = x%10;
+        count /= temp;
+        x /= 10;
+    }
+    return count;
+}

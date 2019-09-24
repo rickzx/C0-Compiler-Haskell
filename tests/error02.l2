@@ -1,0 +1,14 @@
+//test error
+
+//test missing return statement from one branch
+int main(){
+    bool y = true;
+    int x = 0;
+    if(y){
+        x += 10;
+        return x%2;
+    }
+    else{
+        x += 20;
+    }
+}

@@ -1,0 +1,18 @@
+//test return 20
+
+//test multiple if statements with no else
+int main(){
+    int x = 5;
+    int count = 0;
+
+    if(x < 10){
+        count += 5;
+    }
+    if(x & 5 == 5){
+        count *= 2;
+    }
+    if(x << 2 < 10){
+        count >>= 1;
+    }
+    return count;
+}
