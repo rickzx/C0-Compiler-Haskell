@@ -1,5 +1,4 @@
-<<<<<<< HEAD
-// test error
+//test error
 
 // variable scope
 
@@ -10,19 +9,3 @@ int main() {
 
     return res;
 }
-=======
-//test error
-
-//test missing return statement from one branch
-int main(){
-    bool y = true;
-    int x = 0;
-    if(y){
-        x += 10;
-        return x%2;
-    }
-    else{
-        x += 20;
-    }
-}
->>>>>>> aebe1d732c7cead1ea6b26f7fdf16b10863d1408
