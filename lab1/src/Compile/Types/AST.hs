@@ -46,10 +46,6 @@ data Exp
   | Control Control
   deriving Eq
 
-<<<<<<< HEAD
-=======
-  --TODO: while and for separate
->>>>>>> cad5147ba4e2b0bd6e02ef80f22e0ed1e193386d
 data Control
   = Condition { dBool :: Exp, dTrue :: Stmt, dElse :: Elseopt}
   | Loop {init :: Simpopt, cond :: Exp, step :: Simpopt, body :: Stmt}
