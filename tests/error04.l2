@@ -3,6 +3,9 @@
 //test shifting error
 int main(){
     int x = 5000;
-    int y = 100;
+    int y = 0;
+    for(int i = 0;  i < 100; i++){
+        y++;
+    }
     return x >> y;
 }
