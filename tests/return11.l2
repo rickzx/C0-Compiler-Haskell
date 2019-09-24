@@ -1,0 +1,18 @@
+//test return 500
+
+//test unary operations
+
+int main(){
+    int x = 10;
+    bool y = true;
+    if(!y){
+        return 1000;
+    }
+    else{
+        if(~x > 10){
+            return 500;
+        }
+        return 20;
+    }
+}
+

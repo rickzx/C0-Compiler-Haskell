@@ -1,0 +1,15 @@
+//test return 15
+
+//test functionality of while loops
+
+int main(){
+    int x = 12345;
+    int s = 0;
+
+    while(x < 0){
+        int t = x%10;
+        s += t;
+        x /= 10;
+    }
+    return s;
+}

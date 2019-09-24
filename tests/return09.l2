@@ -1,0 +1,20 @@
+//test return 0
+
+//test boolean expressions
+int main(){
+    bool i = true;
+    bool j = false;
+    if(j && i){
+        return 10;
+    }
+    if(i){
+        i = false;
+    }
+    else{
+        j = false;
+    }
+    if(i || j){
+        return 5;
+    }
+    return 0;
+}

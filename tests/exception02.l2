@@ -1,0 +1,16 @@
+//test div-by-zero
+
+//test divide by 0 in if else
+
+int main(){
+    int a = 10;
+    int b = 20;
+    if(a > 0){
+        if(b >> 8 > 0){
+            return a;
+        }
+        else{
+            return a % (b >> 8);
+        }
+    }
+}
