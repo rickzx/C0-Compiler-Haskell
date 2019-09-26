@@ -93,11 +93,11 @@ asmGen ast =
         aasms
   in
     if stackVar > 0 then
-    concatMap (\line -> "\t" ++ show line ++ "\n")
+    concatMap (\line -> show line ++ "\n")
     $  [Pushq (Reg RBP), Movq (Reg RSP) (Reg RBP), Subq (Imm (stackVar * 8)) (Reg RSP)]
     ++ insts ++ [Addq (Imm (stackVar * 8)) (Reg RSP), Popq (Reg RBP), Ret]
     else
-    concatMap (\line -> "\t" ++ show line ++ "\n")
+    concatMap (\line -> show line ++ "\n")
     $  [Pushq (Reg RBP), Movq (Reg RSP) (Reg RBP)]
     ++ insts ++ [Popq (Reg RBP), Ret]
 

@@ -20,6 +20,13 @@ data AOp
   | AMod
   | AModq
   | ANop
+  | ABAnd -- Bitwise And
+  | ALAnd -- Logical And
+  | ABOr  -- Bitwise Or
+  | ALOr  -- Logical Or
+  | ABNot -- Bitwise Not
+  | ALnot -- Logical Not
+  | AXor
   deriving Eq
 
 data ARelOp
@@ -31,11 +38,9 @@ data ARelOp
   | Age
 
 -- For AST
-data Binop = Add | Sub | Mul | Div | Mod 
-  | Xor | And | Lshift | Rshift | BoolAnd | BoolEq | NotEq | BoolOr
-  | And | Or | Leq | Geq | Less | Greater deriving Eq
+data Binop = Add | Sub | Mul | Div | Mod deriving Eq
   
-data Unop = Neg | Not | Cmpl deriving Eq
+data Unop = Neg deriving Eq
 
 data Asnop
   = AsnOp Binop
@@ -54,6 +59,13 @@ instance Show AOp where
   show AMod = "%"
   show AModq = "%"
   show ANop = "[nop]"
+  show ABAnd = "&"
+  show ALAnd = "&&"
+  show ABOr = "|"
+  show ALOr = "||"
+  show ABNot = "~"
+  show ALnot = "!"
+  show AXor = "^"
 
 instance Show Binop where
   show Mul = "*"

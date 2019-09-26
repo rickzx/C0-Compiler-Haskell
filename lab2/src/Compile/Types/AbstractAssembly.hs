@@ -17,6 +17,12 @@ data AAsm
       , aOp     :: AOp
       , aArgs   :: [AVal]
       }
+  | ARel
+      {
+        aAssign :: [ALoc]
+      , aRelOp  :: ARelOp
+      , aArgs   :: [AVal]
+      }
   | ARet AVal
   | AControl ACtrl
   | AComment String
@@ -32,13 +38,7 @@ data ALoc
 data ACtrl
   = ALab ALabel
   | AJump ALabel
-  | ACJump 
-        { aRelOp :: ARelOp
-        , aA :: AVal
-        , aB :: AVal
-        , aL1 :: ALabel
-        , aL2 :: ALabel
-        }
+  | ACJump AVal ALabel   -- Conditional Jump, test if AVal is 0
 
 instance Show AAsm where
   show (AAsm [dest] ANop [src]) = show dest ++ " <-- " ++ show src ++ "\n"
@@ -60,7 +60,7 @@ instance Show ALoc where
 instance Show ACtrl where
   show (ALab s) = s ++ ":"
   show (AJump s) = "Jmp " ++ s
-  show (ACJump op a b l1 l2) = "If " ++ show a ++ " " ++ show op ++ " " ++ show b ++ " goto " ++ l1 ++ " else goto " ++ l2
+  show (ACJump v l) = "If !" ++ show v ++ " goto " ++ l
 
 -- A hack to work with an AAsm tool
 testPrintAAsm :: [AAsm] -> String -> String
