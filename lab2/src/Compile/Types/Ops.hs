@@ -25,22 +25,24 @@ data AOp
   | ABOr  -- Bitwise Or
   | ALOr  -- Logical Or
   | ABNot -- Bitwise Not
-  | ALnot -- Logical Not
+  | ALNot -- Logical Not
   | AXor
   deriving Eq
 
 data ARelOp
-  = Aeq
-  | Ane
-  | Alt
-  | Agt
-  | Ale
-  | Age
+  = AEq
+  | ANe
+  | ALt
+  | AGt
+  | ALe
+  | AGe
 
 -- For AST
-data Binop = Add | Sub | Mul | Div | Mod deriving Eq
-  
-data Unop = Neg deriving Eq
+data Binop = Add | Sub | Mul | Div | Mod |
+  BAnd | LAnd | BOr | LOr | BNot | Xor |
+  Eql | Neq | Lt | Gt | Le | Ge deriving Eq
+
+data Unop = Neg | LNot deriving Eq
 
 data Asnop
   = AsnOp Binop
@@ -48,24 +50,24 @@ data Asnop
   deriving Eq
 
 instance Show AOp where
-  show AAdd = "+"
+  show AAdd  = "+"
   show AAddq = "+"
-  show ASub = "-"
+  show ASub  = "-"
   show ASubq = "-"
-  show ADiv = "/"
+  show ADiv  = "/"
   show ADivq = "/"
-  show AMul = "*"
+  show AMul  = "*"
   show AMulq = "*"
-  show AMod = "%"
+  show AMod  = "%"
   show AModq = "%"
-  show ANop = "[nop]"
+  show ANop  = "[nop]"
   show ABAnd = "&"
   show ALAnd = "&&"
-  show ABOr = "|"
-  show ALOr = "||"
+  show ABOr  = "|"
+  show ALOr  = "||"
   show ABNot = "~"
-  show ALnot = "!"
-  show AXor = "^"
+  show ALNot = "!"
+  show AXor  = "^"
 
 instance Show Binop where
   show Mul = "*"
@@ -73,19 +75,39 @@ instance Show Binop where
   show Sub = "-"
   show Div = "/"
   show Mod = "%"
+  show BAnd = "&"
+  show LAnd = "&&"
+  show BOr  = "|"
+  show LOr  = "||"
+  show BNot = "~"
+  show Xor  = "^"
+  show Eql = "="
+  show Neq = "!="
+  show Lt = "<"
+  show Gt = ">"
+  show Le = "<="
+  show Ge = ">="
 
 instance Show Unop where
   show Neg = "-"
+  show LNot = "!"
 
 instance Show Asnop where
   show (AsnOp binop) = (show binop) ++ "="
-  show Equal = "="
+  show Equal         = "="
 
 instance Show ARelOp where
-  show Aeq = "="
-  show Ane = "!="
-  show Alt = "<"
-  show Agt = ">"
-  show Ale = "<="
-  show Age = ">="
+  show AEq = "="
+  show ANe = "!="
+  show ALt = "<"
+  show AGt = ">"
+  show ALe = "<="
+  show AGe = ">="
+
+isRelOp :: Binop -> Bool
+isRelOp op
+  | op == Eql || op == Neq || op == Lt || op == Gt || op == Le || op == Ge
+  = True
+  | otherwise
+  = False
 

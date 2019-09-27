@@ -1,9 +1,7 @@
 module Compile.Backend.AAsm2Asm where
 
 import           Compile.Backend.RegisterAlloc
-import           Compile.Types.Ops
-import           Compile.Types.Assembly
-import           Compile.Types.AbstractAssembly
+import           Compile.Types
 import qualified Data.Map                      as Map
 import qualified Data.List                     as List
 import           Debug.Trace
@@ -388,13 +386,28 @@ toAsm (AAsm [assign] AXor [src1, src2]) coloring =
                 else [Movl src1' assign', Xorl src2' assign']
 toAsm (AControl (ALab  l)) _ = [Label l]
 toAsm (AControl (AJump l)) _ = [Jmp l]
-toAsm (AControl (ACJump v l)) coloring =
+toAsm (AControl (ACJump v l l')) coloring =
     let [v'] = getRegAlloc [v] coloring False
     in  case v' of
-            Mem{}  -> [Movl v' (Reg R11D), Test (Reg R11D) (Reg R11D), Je l]
-            Mem'{} -> [Movl v' (Reg R11D), Test (Reg R11D) (Reg R11D), Je l]
-            _      -> [Test v' v', Je l]
-toAsm (ARel [assign] Aeq [src1, src2]) coloring =
+            Mem{}  -> [Movl v' (Reg R11D), Test (Reg R11D) (Reg R11D), Je l', Jmp l]
+            Mem'{} -> [Movl v' (Reg R11D), Test (Reg R11D) (Reg R11D), Je l', Jmp l]
+            _      -> [Test v' v', Je l', Jmp l]
+toAsm (AControl (ACJump' rop x y l l')) coloring =
+    let
+        asmOp = case rop of
+            AEq -> Je
+            ANe -> Jne
+            ALt -> Jl
+            AGt -> Jg
+            ALe -> Jle
+            AGe -> Jge
+        [x', y'] = getRegAlloc [x, y] coloring False
+    in
+        case x' of
+            Mem{} -> [Movl x' (Reg R11D), Cmp y' (Reg R11D), asmOp l, Jmp l']
+            Mem'{} -> [Movl x' (Reg R11D), Cmp y' (Reg R11D), asmOp l, Jmp l']
+            _ -> [Cmp y' x', asmOp l, Jmp l']
+toAsm (ARel [assign] AEq [src1, src2]) coloring =
     let assign'        = mapToReg assign coloring
         [src1', src2'] = getRegAlloc [src1, src2] coloring False
         asm =
@@ -410,7 +423,7 @@ toAsm (ARel [assign] Aeq [src1, src2]) coloring =
             (_, Mem{}) -> asm
             (_, Mem'{}) -> asm
             _ -> [Cmp src2' src1', Sete (Reg R11B), Movzbl (Reg R11B) assign']
-toAsm (ARel [assign] Ane [src1, src2]) coloring =
+toAsm (ARel [assign] ANe [src1, src2]) coloring =
     let assign'        = mapToReg assign coloring
         [src1', src2'] = getRegAlloc [src1, src2] coloring False
         asm =
@@ -426,7 +439,7 @@ toAsm (ARel [assign] Ane [src1, src2]) coloring =
             (_, Mem{}) -> asm
             (_, Mem'{}) -> asm
             _ -> [Cmp src2' src1', Setne (Reg R11B), Movzbl (Reg R11B) assign']
-toAsm (ARel [assign] Alt [src1, src2]) coloring =
+toAsm (ARel [assign] ALt [src1, src2]) coloring =
     let assign'        = mapToReg assign coloring
         [src1', src2'] = getRegAlloc [src1, src2] coloring False
         asm =
@@ -442,7 +455,7 @@ toAsm (ARel [assign] Alt [src1, src2]) coloring =
             (_, Mem{}) -> asm
             (_, Mem'{}) -> asm
             _ -> [Cmp src2' src1', Setl (Reg R11B), Movzbl (Reg R11B) assign']
-toAsm (ARel [assign] Agt [src1, src2]) coloring =
+toAsm (ARel [assign] AGt [src1, src2]) coloring =
     let assign'        = mapToReg assign coloring
         [src1', src2'] = getRegAlloc [src1, src2] coloring False
         asm =
@@ -458,7 +471,7 @@ toAsm (ARel [assign] Agt [src1, src2]) coloring =
             (_, Mem{}) -> asm
             (_, Mem'{}) -> asm
             _ -> [Cmp src2' src1', Setg (Reg R11B), Movzbl (Reg R11B) assign']
-toAsm (ARel [assign] Ale [src1, src2]) coloring =
+toAsm (ARel [assign] ALe [src1, src2]) coloring =
     let assign'        = mapToReg assign coloring
         [src1', src2'] = getRegAlloc [src1, src2] coloring False
         asm =
@@ -474,7 +487,7 @@ toAsm (ARel [assign] Ale [src1, src2]) coloring =
             (_, Mem{}) -> asm
             (_, Mem'{}) -> asm
             _ -> [Cmp src2' src1', Setle (Reg R11B), Movzbl (Reg R11B) assign']
-toAsm (ARel [assign] Age [src1, src2]) coloring =
+toAsm (ARel [assign] AGe [src1, src2]) coloring =
     let assign'        = mapToReg assign coloring
         [src1', src2'] = getRegAlloc [src1, src2] coloring False
         asm =

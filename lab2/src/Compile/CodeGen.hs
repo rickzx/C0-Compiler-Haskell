@@ -9,11 +9,9 @@
 module Compile.CodeGen where
 
 import Compile.Types
-import Compile.Types.Assembly
 import qualified Control.Monad.State.Strict as State
 import Data.Int
 import qualified Data.Map as Map
-import qualified Data.Set as Set
 import qualified Data.List as List
 import Data.Maybe (mapMaybe)
 import Compile.Backend.LiveVariable

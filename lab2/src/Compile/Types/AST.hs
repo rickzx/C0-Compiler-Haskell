@@ -25,6 +25,8 @@ module Compile.Types.AST where
   data Simp = Asgn Ident Asnop Exp deriving Eq
   data Exp
     = Int Int
+    | T
+    | F
     | Ident Ident
     | Binop Binop Exp Exp
     | Unop Unop Exp
@@ -55,6 +57,8 @@ module Compile.Types.AST where
   instance Show Exp where
     show (Int x) = show x
     show (Ident var) = var
+    show T = "True"
+    show F = "False"
     show (Binop binop expr1 expr2) =
       show expr1 ++ " " ++ show binop ++ " " ++ show expr2
     show (Unop unop expr) = show unop ++ show expr
