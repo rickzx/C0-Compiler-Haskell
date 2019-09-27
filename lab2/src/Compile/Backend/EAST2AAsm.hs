@@ -102,6 +102,8 @@ genEast (ERet expr) = do
 genEast ENop          = return []
 genEast (EDecl _ _ e) = genEast e
 
+
+-- TODO: Add ternary case
 genExp :: EExp -> ALoc -> AllocM [AAsm]
 genExp (EInt n) dest =
   return [AAsm [dest] ANop [AImm $ fromIntegral (fromIntegral n :: Int32)]]

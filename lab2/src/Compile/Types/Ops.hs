@@ -40,9 +40,11 @@ data ARelOp
 -- For AST
 data Binop = Add | Sub | Mul | Div | Mod |
   BAnd | LAnd | BOr | LOr | BNot | Xor |
-  Eql | Neq | Lt | Gt | Le | Ge deriving Eq
+  Eql | Neq | Lt | Gt | Le | Ge | Sal | Sar deriving Eq
 
 data Unop = Neg | LNot deriving Eq
+
+data Postop = Incr | Decr deriving Eq
 
 data Asnop
   = AsnOp Binop
@@ -79,7 +81,6 @@ instance Show Binop where
   show LAnd = "&&"
   show BOr  = "|"
   show LOr  = "||"
-  show BNot = "~"
   show Xor  = "^"
   show Eql = "="
   show Neq = "!="
@@ -87,14 +88,21 @@ instance Show Binop where
   show Gt = ">"
   show Le = "<="
   show Ge = ">="
+  show Sal = "<<"
+  show Sar = ">>"
 
 instance Show Unop where
   show Neg = "-"
   show LNot = "!"
+  show BNot = "~"
 
 instance Show Asnop where
   show (AsnOp binop) = (show binop) ++ "="
   show Equal         = "="
+
+instance Show Postop where
+  show Incr = "++"
+  show Decr = "--"
 
 instance Show ARelOp where
   show AEq = "="
