@@ -32,10 +32,13 @@ data ARelOp
 
 -- For AST
 data Binop = Add | Sub | Mul | Div | Mod 
-  | Xor | And | Lshift | Rshift | BoolAnd | BoolEq | NotEq | BoolOr
-  | And | Or | Leq | Geq | Less | Greater deriving Eq
-  
+  | Xor | And | Lshift | Rshift | Or | Leq 
+  | Geq | Less | Greater | BoolAnd | BoolEq | NotEq | BoolOr
+  deriving Eq
+
 data Unop = Neg | Not | Cmpl deriving Eq
+
+data Postop = Incr | Decr deriving Eq
 
 data Asnop
   = AsnOp Binop
@@ -61,13 +64,32 @@ instance Show Binop where
   show Sub = "-"
   show Div = "/"
   show Mod = "%"
+  show Xor = "^"
+  show And = "&"
+  show Lshift = "<<"
+  show Rshift = ">>"
+  show BoolAnd = "&&"
+  show BoolEq = "=="
+  show NotEq = "!="
+  show BoolOr = "||"
+  show Or = "|"
+  show Leq = "<="
+  show Geq = ">="
+  show Less = "<"
+  show Greater = ">"
 
 instance Show Unop where
   show Neg = "-"
+  show Not = "!"
+  show Cmpl = "~"
 
 instance Show Asnop where
   show (AsnOp binop) = (show binop) ++ "="
   show Equal = "="
+
+instance Show Postop where
+  show Incr = "++"
+  show Decr = "--"
 
 instance Show ARelOp where
   show Aeq = "="

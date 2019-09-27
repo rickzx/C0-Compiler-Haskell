@@ -53,9 +53,10 @@ tokens :-
   "--"   {\_ -> TokDecr}
   "?"   {\_ -> TokIf}
   ":"   {\_ -> TokElse}
+  "^"   {\_ -> TokXor}
 
-  "!"   {\_ -> TokUnop (Unop Not)}
-  "~"   {\_ -> TokUnop (Unop Cmpl)}
+  "!"   {\_ -> TokUnop (Not)}
+  "~"   {\_ -> TokUnop (Cmpl)}
 
   "="   {\_ -> TokAsgnop Equal}
   "+="  {\_ -> TokAsgnop (AsnOp Add)}
@@ -108,6 +109,7 @@ data Token =
   TokInt |
   TokMinus |
   TokAsgnop Asnop |
+  TokUnop Unop |
   TokPlus |
   TokTimes |
   TokDiv |
@@ -119,7 +121,6 @@ data Token =
   TokFalse |
   TokBool |
   TokElse |
-  TokUnop Unop |
   TokLess |
   TokGreater |
   TokGeq |
@@ -134,6 +135,7 @@ data Token =
   TokRshift |
   TokIncr |
   TokDecr |
+  TokXor |
   TokReserved
   deriving (Eq,Show)
 

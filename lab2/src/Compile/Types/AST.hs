@@ -13,25 +13,24 @@ import Compile.Types.Ops
 type Ident = String
 
 data Type = 
-    Int 
-  | Bool deriving (Eq, Show)
+    INTEGER 
+  | BOOLEAN deriving Eq
 
 data AST = Block [Stmt] deriving Eq
 
 data Stmt
   = Simp Simp
-  | Block [Stmt]
-  | Control Control
-  | Exp Exp
+  | Stmts [Stmt]
+  | ControlStmt Control
   deriving Eq
 
 data Simpopt 
-  = Nop
-  | Simp Simp
+  = SimpNop
+  | Opt Simp
   deriving Eq
 
 data Elseopt
-  = Nop
+  = ElseNop
   | Else Stmt
   deriving Eq
 
@@ -40,7 +39,8 @@ data Decl
   | DeclAsgn { dVar :: Ident, dType :: Type, dExp :: Exp}
   deriving Eq
 
-data Simp = Asgn Ident Asnop Exp 
+data Simp = Asgn Ident Asnop Exp
+  | AsgnP Ident Postop
   | Decl Decl
   | Exp Exp deriving Eq
 
@@ -50,12 +50,12 @@ data Exp
   | Ident Ident
   | Binop Binop Exp Exp
   | Unop Unop Exp
-  | Control Control
+  | ControlExp Control
   deriving Eq
 
 data Control
   = Condition { dBool :: Exp, dTrue :: Stmt, dElse :: Elseopt}
-  | For {init :: Simpopt, cond :: Exp, step :: Simpopt, body :: Stmt}
+  | For {initial :: Simpopt, cond :: Exp, step :: Simpopt, body :: Stmt}
   | While {cond :: Exp, body :: Stmt}
   | Retn Exp
   deriving Eq
@@ -65,14 +65,19 @@ data Control
 -- This is a quick and dirty pretty printer.
 -- Once that is written, you may find it helpful for debugging to switch
 -- back to the deriving Show instances.
-
+{-
 instance Show AST where
   show (Block stmts) =
     "int main () {\n" ++ (unlines $ map (\stmt ->"\t" ++ show stmt) stmts) ++ "}\n"
 
 instance Show Stmt where
-  show (Decl d) = show d
+  show (Stmts [Stmt]) = show Stmt
+  show (ControlStmt Control) = show Control
   show (Simp simp) = show simp
+  show (Exp e) = show e
+
+instance Show Control where 
+  show (Condition b t e) = "if " + show b + " then " + show t + " else " + show e
   show (Retn e) = "return " ++ show e ++ ";"
 
 instance Show Decl where
@@ -81,6 +86,10 @@ instance Show Decl where
 
 instance Show Simp where
   show (Asgn lval asnop expr) = lval ++ " " ++ show asnop ++ " " ++ show expr ++ ";"
+-}
+instance Show Type where
+  show INTEGER = "int"
+  show BOOLEAN = "bool"
 
 instance Show Exp where
   show (Int x) = show x

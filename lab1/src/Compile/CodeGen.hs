@@ -6,6 +6,7 @@
 
    Currently just a pseudolanguage with 3-operand instructions and arbitrarily many temps.
 -}
+--TODO: Change this to match our new structures.
 module Compile.CodeGen where
 
 import Compile.Types

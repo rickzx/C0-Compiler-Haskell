@@ -31,6 +31,9 @@ import Compile.Types.AST
   kill    {TokReserved}
 
   while   {TokWhile}
+  '^'     {TokXor}
+  '!'     {TokUnop Not}
+  '~'     {TokUnop Cmpl}
   for     {TokFor}
   true    {TokTrue}
   false   {TokFalse}
@@ -39,7 +42,6 @@ import Compile.Types.AST
   else    {TokElse}
   '?'     {TokIf}
   ':'     {TokElse}
-  unop    {TokUnop $$}
   '<'     {TokLess}
   '>'     {TokGreater}
   '>='    {TokGeq}
@@ -56,7 +58,7 @@ import Compile.Types.AST
   '--'    {TokDecr}
  
 %right '=' '+=' '-=' '*=' '/=' '%=' '&=' '^=' '|=' '<<=' '>>='
-%right '?' ':'
+%right THEN ':' else
 %left '||'
 %left '&&'
 %left '|'
@@ -77,8 +79,8 @@ Block : '{' Stmts '}' {$2}
 Lval  : ident {$1}
       | '(' Lval ')' {$2}
 
-Type  : int {$1}
-      | bool {$1}
+Type  : int {INTEGER}
+      | bool {BOOLEAN}
 
 Decl  : Type ident asgnop Exp {checkDeclAsgn $2 $3 $1 $4}
       | Type ident {JustDecl $2 $1}
@@ -86,23 +88,25 @@ Decl  : Type ident asgnop Exp {checkDeclAsgn $2 $3 $1 $4}
 Stmts : {- Empty -} {[]}
       | Stmt Stmts  {$1 : $2}
 
-Stmt  : Control {Control $1}
+Stmt  : Control {ControlStmt $1}
       | Simp ';' {Simp $1}
-      | '{' Stmts '}' {$2}
+      | '{' Stmts '}' {Stmts $2}
 
 Simp  : Lval asgnop Exp {Asgn $1 $2 $3}
-      | Lval '++' {Asgn $1 (AsnOp Add) (Intconst 1)}
-      | Lval '--' {Asgn $1 (AsnOp Sub) (Intconst 1)}
+      | Lval '++' {AsgnP $1 Incr}
+      | Lval '--' {AsgnP $1 Decr}
       | Decl {Decl $1}
       | Exp {Exp $1}
 
-Simpopt : {- Empty -} {Nop}
-      | Simp {Simp $1}
+Simpopt : {- Empty -} {SimpNop}
+      | Simp {Opt $1}
 
-Elseopt : {- Empty -} {Nop}
-      | else Stmt {Else $2}
+Elseopt : else Stmt {Else $2}
 
 Control : if '(' Exp ')' Stmt Elseopt {Condition $3 $5 $6}
+      | if '(' Exp ')' Stmt %prec THEN {Condition $3 $5 (ElseNop)}
+      | Exp '?' Stmt ':' Elseopt {Condition $1 $3 $5}
+      | Exp '?' Stmt %prec THEN {Condition $1 $3 {ElseNop}}
       | while '(' Exp ')' Stmt {While $3 $5}
       | for '(' Simpopt ';' Exp ';' Simpopt ')' Stmt {For $3 $5 $7 $9}
       | ret Exp ';' {Retn $2}

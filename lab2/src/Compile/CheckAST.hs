@@ -4,6 +4,7 @@
                 Rokhini Prabhu <rokhinip@andrew.cmu.edu>
    Beginnings of a typechecker
 -}
+
 module Compile.CheckAST where
 
 import Control.Monad.State
@@ -16,7 +17,7 @@ import Compile.Types
 -- Note to the student:
 -- When your checker gets larger, you may wish to use something like a record
 -- to make the state a little more explicit. A tuple does not scale.
-
+{-
 type TypeCheckState = (Set.Set Ident, Set.Set Ident)
 
 runExceptState :: ExceptT String (State s) a -> s -> Either String a
@@ -35,7 +36,7 @@ typeCheck (Block stmts) = do
   hasReturn <- or <$> runExceptState (mapM checkStmt stmts) (Set.empty, Set.empty)
   assertMsgE "main does not return" hasReturn
   return ()
-
+{-
 checkStmt :: Stmt -> ExceptT String (State TypeCheckState) Bool
 checkStmt (Decl decl) = do
   _ <- checkDecl decl
@@ -49,15 +50,18 @@ checkStmt (Retn e) = do
   (declared, defined) <- get
   put (declared, Set.union declared defined)
   return True
+-}
 
 checkDecl :: Decl -> ExceptT String (State TypeCheckState) Bool
-checkDecl (JustDecl var) = do
+--TODO: change this
+checkDecl (JustDecl var a) = do
   (declared, defined) <- get
   assertMsg "Variable already declared" (Set.notMember var declared)
   assertMsg "Variable already defined" (Set.notMember var defined)
   put (Set.insert var declared, defined)
   return False
-checkDecl (DeclAsgn var expr) = do
+--TODO:change this 
+checkDecl (DeclAsgn var a expr) = do
   (declared, defined) <- get
   assertMsg "Variable already declared" (Set.notMember var declared)
   assertMsg "Variable already defined" (Set.notMember var defined)
@@ -89,3 +93,4 @@ checkExp (Binop _ exp1 exp2) = do
   checkExp exp1
   checkExp exp2
 checkExp (Unop _ expr) = checkExp expr
+-}
