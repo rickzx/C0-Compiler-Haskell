@@ -21,7 +21,7 @@ eGen :: AST -> EAST
 eGen (Block stmts) = eBlock stmts
 
 eBlock :: [Stmt] -> EAST
-eBlock [] = error "Block should not be empty"
+eBlock [] = ENop
 eBlock [x] = eStmt x
 --give declare precedence
 eBlock (x:l) = case x of 
