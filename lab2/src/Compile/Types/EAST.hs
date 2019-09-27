@@ -3,18 +3,30 @@
 
 module Compile.Types.EAST where
 
-import Compile.Types
+import Compile.Types.AST
+import Compile.Types.Ops
+
+data Type
+    = Integer
+    | Boolean deriving (Eq, Show)
 
 data EAST 
     = ESeq EAST EAST
-    | EAssign Ident EAST --EAST = leaf
-    | EIf EAST EAST EAST --if leaf EAST EAST
-    | EWhile EAST EAST --while leaf EAST EAST
-    | ERet EAST --ret leaf
+    | EAssign Ident EExp
+    | EIf EExp EAST EAST
+    | EWhile EExp EAST
+    | ERet EExp
     | ENop
     | EDecl Ident Type EAST
-    | ELeaf Exp
+    | ELeaf EExp
 
+data EExp
+    = EInt Int
+    | EIdent Ident
+    | EBinop Binop EExp EExp
+    | ETernop EExp EExp EExp
+    | EUnop Unop EExp
+    deriving Eq
 
 --generate our intermediate ast structure
 eGen :: AST -> EAST

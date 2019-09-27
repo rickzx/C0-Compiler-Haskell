@@ -9,11 +9,9 @@
 module Compile.CodeGen where
 
 import Compile.Types
-import Compile.Types.Assembly
 import qualified Control.Monad.State.Strict as State
 import Data.Int
 import qualified Data.Map as Map
-import qualified Data.Set as Set
 import qualified Data.List as List
 import Data.Maybe (mapMaybe)
 import Compile.Backend.LiveVariable
@@ -93,11 +91,11 @@ asmGen ast =
         aasms
   in
     if stackVar > 0 then
-    concatMap (\line -> "\t" ++ show line ++ "\n")
+    concatMap (\line -> show line ++ "\n")
     $  [Pushq (Reg RBP), Movq (Reg RSP) (Reg RBP), Subq (Imm (stackVar * 8)) (Reg RSP)]
     ++ insts ++ [Addq (Imm (stackVar * 8)) (Reg RSP), Popq (Reg RBP), Ret]
     else
-    concatMap (\line -> "\t" ++ show line ++ "\n")
+    concatMap (\line -> show line ++ "\n")
     $  [Pushq (Reg RBP), Movq (Reg RSP) (Reg RBP)]
     ++ insts ++ [Popq (Reg RBP), Ret]
 

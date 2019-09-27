@@ -20,23 +20,29 @@ data AOp
   | AMod
   | AModq
   | ANop
+  | ABAnd -- Bitwise And
+  | ALAnd -- Logical And
+  | ABOr  -- Bitwise Or
+  | ALOr  -- Logical Or
+  | ABNot -- Bitwise Not
+  | ALNot -- Logical Not
+  | AXor
   deriving Eq
 
 data ARelOp
-  = Aeq
-  | Ane
-  | Alt
-  | Agt
-  | Ale
-  | Age
+  = AEq
+  | ANe
+  | ALt
+  | AGt
+  | ALe
+  | AGe
 
 -- For AST
-data Binop = Add | Sub | Mul | Div | Mod 
-  | Xor | And | Lshift | Rshift | Or | Leq 
-  | Geq | Less | Greater | BoolAnd | BoolEq | NotEq | BoolOr
-  deriving Eq
+data Binop = Add | Sub | Mul | Div | Mod |
+  BAnd | LAnd | BOr | LOr | BNot | Xor |
+  Eql | Neq | Lt | Gt | Le | Ge | Sal | Sar deriving Eq
 
-data Unop = Neg | Not | Cmpl deriving Eq
+data Unop = Neg | LNot deriving Eq
 
 data Postop = Incr | Decr deriving Eq
 
@@ -46,17 +52,24 @@ data Asnop
   deriving Eq
 
 instance Show AOp where
-  show AAdd = "+"
+  show AAdd  = "+"
   show AAddq = "+"
-  show ASub = "-"
+  show ASub  = "-"
   show ASubq = "-"
-  show ADiv = "/"
+  show ADiv  = "/"
   show ADivq = "/"
-  show AMul = "*"
+  show AMul  = "*"
   show AMulq = "*"
-  show AMod = "%"
+  show AMod  = "%"
   show AModq = "%"
-  show ANop = "[nop]"
+  show ANop  = "[nop]"
+  show ABAnd = "&"
+  show ALAnd = "&&"
+  show ABOr  = "|"
+  show ALOr  = "||"
+  show ABNot = "~"
+  show ALNot = "!"
+  show AXor  = "^"
 
 instance Show Binop where
   show Mul = "*"
@@ -64,38 +77,45 @@ instance Show Binop where
   show Sub = "-"
   show Div = "/"
   show Mod = "%"
-  show Xor = "^"
-  show And = "&"
-  show Lshift = "<<"
-  show Rshift = ">>"
-  show BoolAnd = "&&"
-  show BoolEq = "=="
-  show NotEq = "!="
-  show BoolOr = "||"
-  show Or = "|"
-  show Leq = "<="
-  show Geq = ">="
-  show Less = "<"
-  show Greater = ">"
+  show BAnd = "&"
+  show LAnd = "&&"
+  show BOr  = "|"
+  show LOr  = "||"
+  show Xor  = "^"
+  show Eql = "="
+  show Neq = "!="
+  show Lt = "<"
+  show Gt = ">"
+  show Le = "<="
+  show Ge = ">="
+  show Sal = "<<"
+  show Sar = ">>"
 
 instance Show Unop where
   show Neg = "-"
-  show Not = "!"
-  show Cmpl = "~"
+  show LNot = "!"
+  show BNot = "~"
 
 instance Show Asnop where
   show (AsnOp binop) = (show binop) ++ "="
-  show Equal = "="
+  show Equal         = "="
 
 instance Show Postop where
   show Incr = "++"
   show Decr = "--"
 
 instance Show ARelOp where
-  show Aeq = "="
-  show Ane = "!="
-  show Alt = "<"
-  show Agt = ">"
-  show Ale = "<="
-  show Age = ">="
+  show AEq = "="
+  show ANe = "!="
+  show ALt = "<"
+  show AGt = ">"
+  show ALe = "<="
+  show AGe = ">="
+
+isRelOp :: Binop -> Bool
+isRelOp op
+  | op == Eql || op == Neq || op == Lt || op == Gt || op == Le || op == Ge
+  = True
+  | otherwise
+  = False
 

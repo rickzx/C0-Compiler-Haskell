@@ -46,7 +46,8 @@ data Simp = Asgn Ident Asnop Exp
 
 data Exp
   = Int Int
-  | Bool Int
+  | T
+  | F
   | Ident Ident
   | Binop Binop Exp Exp
   | Unop Unop Exp
