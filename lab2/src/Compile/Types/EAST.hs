@@ -7,10 +7,10 @@ import Compile.Types
 
 data EAST 
     = ESeq EAST EAST
-    | EAssign Ident EAST
-    | EIf EAST EAST EAST
-    | EWhile EAST EAST
-    | ERet EAST
+    | EAssign Ident EAST --EAST = leaf
+    | EIf EAST EAST EAST --if leaf EAST EAST
+    | EWhile EAST EAST --while leaf EAST EAST
+    | ERet EAST --ret leaf
     | ENop
     | EDecl Ident Type EAST
     | ELeaf Exp
@@ -81,7 +81,7 @@ instance Show EAST where
     show (EDecl ident stype e1) = show "EDecl" ++ "(" ++ ident ++ "  ,  " ++ show stype ++ " , " ++ show e1 ++ ")"
     show (ELeaf e) = show e
 
---example from hw 1 with while loop
+--example from hw 1 with while loop and for loop
 exAST :: AST
 exAST = Block
     [   Simp (Decl $ DeclAsgn ("x") INTEGER (Int 7)),
