@@ -6,10 +6,6 @@ module Compile.Types.EAST where
 import Compile.Types.AST
 import Compile.Types.Ops
 
-data Type
-    = Integer
-    | Boolean deriving (Eq, Show)
-
 data EAST 
     = ESeq EAST EAST
     | EAssign Ident EExp
@@ -37,10 +33,10 @@ eBlock [] = ENop
 eBlock [x] = eStmt x
 --give declare precedence
 eBlock (x:l) = case x of 
-    ControlStmt (Retn r) -> ERet (ELeaf (pExp r))
+    ControlStmt (Retn r) -> ERet (pExp r)
     Simp (Decl d) -> case d of 
         JustDecl var tp -> EDecl var tp (eBlock l)
-        DeclAsgn var tp expr -> EDecl var tp (ESeq (EAssign var (ELeaf (pExp expr)) (eBlock l)))
+        DeclAsgn var tp expr -> EDecl var tp (ESeq (EAssign var (pExp expr)) (eBlock l))
     _ -> ESeq (eStmt x) (eBlock l)
 
 pExp :: Exp -> EExp
@@ -57,29 +53,29 @@ eStmt x = case x of
     Simp s -> eSimp s
     Stmts b -> eBlock b
     ControlStmt c -> case c of 
-        Condition b t el -> EIf (ELeaf (pExp b)) (eStmt t) (eElse el)
+        Condition b t el -> EIf (pExp b) (eStmt t) (eElse el)
         --declaration still need to be prioritized
         For initr condi stepi bodyi -> case initr of
             Opt (Decl (JustDecl var tp)) -> error "cant just declare in a loop"
-            Opt (Decl (DeclAsgn var tp expr)) -> EDecl var tp (ESeq (EAssign var (ELeaf (pExp expr)))
-                (EWhile (ELeaf (pExp condi)) (ESeq (eStmt bodyi) (eSimpopt stepi))))
-            _ -> ESeq (eSimpopt initr) (EWhile (ELeaf (pExp condi)) (ESeq (eStmt bodyi) 
+            Opt (Decl (DeclAsgn var tp expr)) -> EDecl var tp (ESeq (EAssign var (pExp expr))
+                (EWhile (pExp condi) (ESeq (eStmt bodyi) (eSimpopt stepi))))
+            _ -> ESeq (eSimpopt initr) (EWhile (pExp condi) (ESeq (eStmt bodyi) 
                 (eSimpopt stepi)))
-        While condi bodyi -> EWhile (ELeaf (pExp condi)) (eStmt bodyi)
-        Retn ret -> ERet (ELeaf (pExp ret))
+        While condi bodyi -> EWhile (pExp condi) (eStmt bodyi)
+        Retn ret -> ERet (pExp ret)
 
 eSimp :: Simp -> EAST
 eSimp simp = case simp of
     Asgn i asop expr -> let
         expression = case asop of 
-            Equal -> ELeaf (pExp expr)
-            AsnOp b -> ELeaf (pExp (Binop b (Ident i) expr))
+            Equal -> pExp expr
+            AsnOp b -> pExp (Binop b (Ident i) expr)
         in EAssign i expression
-    AsgnP i pos -> if pos == Incr then EAssign i (ELeaf(pExp (Binop Add (Ident i) (Int 1))))
-        else EAssign i (ELeaf(pExp (Binop Sub(Ident i) (Int 1))))
+    AsgnP i pos -> if pos == Incr then EAssign i (pExp (Binop Add (Ident i) (Int 1)))
+        else EAssign i (pExp (Binop Sub(Ident i) (Int 1)))
     Decl d -> case d of 
         JustDecl var tp -> EDecl var tp ENop
-        DeclAsgn var tp expr -> EDecl var tp (EAssign var (ELeaf (pExp expr)))
+        DeclAsgn var tp expr -> EDecl var tp (EAssign var (pExp expr))
     Exp expr -> ELeaf (pExp expr)
 
 eSimpopt :: Simpopt -> EAST
@@ -107,20 +103,20 @@ instance Show EExp where
     show (EIdent id) = id
     show (EBinop b expr1 expr2) = show expr1 ++ " " ++ show b ++ " " ++ show expr2
     show (ETernop expr1 expr2 expr3) = show expr1 ++ " ? " ++ show expr2 ++ " :" ++ show expr3 
-    show (EUnop u expr1) = show unop ++ show expr1
+    show (EUnop u expr1) = show u ++ show expr1
     
 --example from hw 1 with while loop and for loop
 exAST :: AST
 exAST = Block
     [   Simp (Decl $ DeclAsgn ("x") INTEGER (Int 7)),
-        ControlStmt (While (Binop NotEq (Ident "x") (Int 5)) 
+        ControlStmt (While (Binop Neq (Ident "x") (Int 5)) 
             (Stmts[
                 Simp (Decl $ DeclAsgn ("z") INTEGER (Binop Mul (Ident "x") (Ident "x"))),
                 Simp (Asgn ("y") (AsnOp Add) (Ident "z")),
                 Simp (AsgnP ("x") (Decr))
                 ])),
         ControlStmt (For {initial = (Opt (Decl $ DeclAsgn "w" INTEGER (Int 1))),
-                cond = (Binop NotEq (Ident "w") (Int 5)), step = (Opt $ AsgnP ("w") (Incr)),
+                cond = (Binop Neq (Ident "w") (Int 5)), step = (Opt $ AsgnP ("w") (Incr)),
                 body = (Simp (AsgnP ("y") (Incr)))}),
         ControlStmt (Retn (Ident "y"))
     ]

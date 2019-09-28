@@ -39,7 +39,7 @@ data ARelOp
 
 -- For AST
 data Binop = Add | Sub | Mul | Div | Mod |
-  BAnd | LAnd | BOr | LOr | BNot | Xor |
+  BAnd | LAnd | BOr | LOr | Xor |
   Eql | Neq | Lt | Gt | Le | Ge | Sal | Sar deriving Eq
 
 data Unop = Neg | LNot | BNot deriving Eq

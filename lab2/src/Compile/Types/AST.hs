@@ -60,7 +60,7 @@ data Control
   | While {cond :: Exp, body :: Stmt}
   | Retn Exp
   deriving Eq
-
+{-
 -- Note to the student: You will probably want to write a new pretty printer
 -- using the module Text.PrettyPrint.HughesPJ from the pretty package
 -- This is a quick and dirty pretty printer.
@@ -88,7 +88,7 @@ instance Show Decl where
 
 instance Show Simp where
   show (Asgn lval asnop expr) = lval ++ " " ++ show asnop ++ " " ++ show expr ++ ";"
-
+-}
 instance Show Type where
   show INTEGER = "int"
   show BOOLEAN = "bool"
