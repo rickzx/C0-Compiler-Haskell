@@ -1618,8 +1618,8 @@ happyNewToken action sts stk (tk:tks) =
 	TokReserved -> cont 34;
 	TokWhile -> cont 35;
 	TokXor -> cont 36;
-	TokUnop Not -> cont 37;
-	TokUnop Cmpl -> cont 38;
+	TokUnop LNot -> cont 37;
+	TokUnop BNot -> cont 38;
 	TokFor -> cont 39;
 	TokTrue -> cont 40;
 	TokFalse -> cont 41;
@@ -1683,13 +1683,13 @@ parseError t = error ("Parse Error " ++ (show t))
 checkSimpAsgn :: Exp -> Asnop -> Exp -> Simp
 checkSimpAsgn id op e =
     case id of
-        Ident a -> Asgn id op e
+        Ident a -> Asgn a op e
         _ -> error "Invalid assignment to non variables"
 
 checkSimpAsgnP :: Exp -> Postop -> Simp
 checkSimpAsgnP id op =
     case id of  
-        Ident a -> AsgnP id op
+        Ident a -> AsgnP a op
         _ -> error "Invalid postop assignment to non variables"
 
 checkDeclAsgn :: Ident -> Asnop -> Type -> Exp -> Decl
