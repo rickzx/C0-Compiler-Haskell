@@ -32,8 +32,8 @@ import Compile.Types.AST
 
   while   {TokWhile}
   '^'     {TokXor}
-  '!'     {TokUnop Not}
-  '~'     {TokUnop Cmpl}
+  '!'     {TokUnop LNot}
+  '~'     {TokUnop BNot}
   for     {TokFor}
   true    {TokTrue}
   false   {TokFalse}
@@ -146,13 +146,13 @@ parseError t = error ("Parse Error " ++ (show t))
 checkSimpAsgn :: Exp -> Asnop -> Exp -> Simp
 checkSimpAsgn id op e =
     case id of
-        Ident a -> Asgn id op e
+        Ident a -> Asgn a op e
         _ -> error "Invalid assignment to non variables"
 
 checkSimpAsgnP :: Exp -> Postop -> Simp
 checkSimpAsgnP id op =
     case id of  
-        Ident a -> AsgnP id op
+        Ident a -> AsgnP a op
         _ -> error "Invalid postop assignment to non variables"
 
 checkDeclAsgn :: Ident -> Asnop -> Type -> Exp -> Decl

@@ -212,7 +212,6 @@ genBinOp Mul  = AMul
 genBinOp Mod  = AMod
 genBinOp BAnd = ABAnd
 genBinOp BOr  = ABOr
-genBinOp BNot = ABNot
 genBinOp Xor  = AXor
 genBinOp o    = error $ "Operator not found: " ++ show o
 
@@ -230,10 +229,10 @@ testGenEast :: IO ()
 testGenEast = do
   let east = EDecl
         "x"
-        Integer
+        INTEGER
         (EDecl
           "y"
-          Integer
+          INTEGER
           (ESeq (EIf (EInt 1) (EAssign "x" (EInt 1)) (EAssign "x" (EInt 2)))
                 (ERet (EBinop Add (EIdent "x") (EIdent "y")))
           )

@@ -44,7 +44,7 @@ compile job = do
   s <- hGetContents inputHandle
   res <- runExceptT $ do
     let ast = parseTokens $ lexProgram s
-    liftEIO $ typeCheck ast
+    -- liftEIO $ typeCheck ast
     case jobOutFormat job of
       TC -> liftEIO (Right ()) -- By now, we should have thrown any typechecking errors
       Asm -> writeIOString (jobOut job) $ addHeader (asmGen ast)

@@ -55,8 +55,8 @@ tokens :-
   ":"   {\_ -> TokElse}
   "^"   {\_ -> TokXor}
 
-  "!"   {\_ -> TokUnop (Not)}
-  "~"   {\_ -> TokUnop (Cmpl)}
+  "!"   {\_ -> TokUnop (LNot)}
+  "~"   {\_ -> TokUnop (BNot)}
 
   "="   {\_ -> TokAsgnop Equal}
   "+="  {\_ -> TokAsgnop (AsnOp Add)}
@@ -65,10 +65,10 @@ tokens :-
   "/="  {\_ -> TokAsgnop (AsnOp Div)}
   "%="  {\_ -> TokAsgnop (AsnOp Mod)}
   "^="  {\_ -> TokAsgnop (AsnOp Xor)}
-  "|="  {\_ -> TokAsgnop (AsnOp Or)}
-  "&="  {\_ -> TokAsgnop (AsnOp And)}
-  "<<="  {\_ -> TokAsgnop (AsnOp Lshift)}
-  ">>="  {\_ -> TokAsgnop (AsnOp Rshift)}
+  "|="  {\_ -> TokAsgnop (AsnOp BOr)}
+  "&="  {\_ -> TokAsgnop (AsnOp BAnd)}
+  "<<="  {\_ -> TokAsgnop (AsnOp Sal)}
+  ">>="  {\_ -> TokAsgnop (AsnOp Sar)}
 
   
   $white+ ;
