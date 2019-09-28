@@ -51,7 +51,7 @@ data Exp
   | Ident Ident
   | Binop Binop Exp Exp
   | Unop Unop Exp
-  | ControlExp Control
+  | Ternop Exp Exp Exp -- e1 ? e2 : e3
   deriving Eq
 
 data Control
@@ -66,7 +66,8 @@ data Control
 -- This is a quick and dirty pretty printer.
 -- Once that is written, you may find it helpful for debugging to switch
 -- back to the deriving Show instances.
-{-
+
+--TODO: Change this to match our new structures
 instance Show AST where
   show (Block stmts) =
     "int main () {\n" ++ (unlines $ map (\stmt ->"\t" ++ show stmt) stmts) ++ "}\n"
@@ -87,7 +88,7 @@ instance Show Decl where
 
 instance Show Simp where
   show (Asgn lval asnop expr) = lval ++ " " ++ show asnop ++ " " ++ show expr ++ ";"
--}
+
 instance Show Type where
   show INTEGER = "int"
   show BOOLEAN = "bool"
@@ -97,4 +98,6 @@ instance Show Exp where
   show (Ident var) = var
   show (Binop binop expr1 expr2) =
     show expr1 ++ " " ++ show binop ++ " " ++ show expr2
+  show (Ternop expr1 expr2 expr3) = 
+    show expr1 ++ " ? " ++ show expr2 ++ " :" ++ show expr3
   show (Unop unop expr) = show unop ++ show expr

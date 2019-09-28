@@ -56,9 +56,10 @@ import Compile.Types.AST
   '>>'    {TokRshift}
   '++'    {TokIncr}
   '--'    {TokDecr}
- 
+
 %right '=' '+=' '-=' '*=' '/=' '%=' '&=' '^=' '|=' '<<=' '>>='
-%right THEN ':' else
+%right '?' ':'
+%right THEN else
 %left '||'
 %left '&&'
 %left '|'
@@ -105,15 +106,14 @@ Elseopt : else Stmt {Else $2}
 
 Control : if '(' Exp ')' Stmt Elseopt {Condition $3 $5 $6}
       | if '(' Exp ')' Stmt %prec THEN {Condition $3 $5 (ElseNop)}
-      | Exp '?' Stmt ':' Elseopt {Condition $1 $3 $5}
-      | Exp '?' Stmt %prec THEN {Condition $1 $3 {ElseNop}}
       | while '(' Exp ')' Stmt {While $3 $5}
       | for '(' Simpopt ';' Exp ';' Simpopt ')' Stmt {For $3 $5 $7 $9}
       | ret Exp ';' {Retn $2}
 
 Exp : '(' Exp ')' {$2}
-    | true {Int 1}
-    | false {Int 0}
+    | Exp '?' Exp ':' Exp {Ternop $1 $3 $5}
+    | true {T}
+    | false {F}
     | Intconst {$1}
     | ident {Ident $1}
     | Operation {$1}
@@ -123,20 +123,20 @@ Operation : Exp '-' Exp {Binop Sub $1 $3}
           | Exp '*' Exp {Binop Mul $1 $3}
           | Exp '/' Exp {Binop Div $1 $3}
           | Exp '%' Exp {Binop Mod $1 $3}
-          | Exp '<<' Exp {Binop Lshift $1 $3}
-          | Exp '>>' Exp {Binop Rshift $1 $3}
-          | Exp '&' Exp {Binop And $1 $3}
-          | Exp '|' Exp {Binop Or $1 $3}
+          | Exp '<<' Exp {Binop Sal $1 $3}
+          | Exp '>>' Exp {Binop Sar $1 $3}
+          | Exp '&' Exp {Binop BAnd $1 $3}
+          | Exp '|' Exp {Binop LOr $1 $3}
           | Exp '^' Exp {Binop Xor $1 $3}
-          | Exp '&&' Exp {Binop BoolAnd $1 $3}
-          | Exp '<' Exp {Binop Less $1 $3}
-          | Exp '<=' Exp {Binop Leq $1 $3}
-          | Exp '>' Exp {Binop Greater $1 $3}
-          | Exp '>=' Exp {Binop Geq $1 $3}
-          | Exp '==' Exp {Binop BoolEq $1 $3}
-          | Exp '!=' Exp {Binop NotEq $1 $3}
-          | '!' Exp {Unop Not $2}
-          | '~' Exp {Unop Cmpl $2}
+          | Exp '&&' Exp {Binop LAnd $1 $3}
+          | Exp '<' Exp {Binop Lt $1 $3}
+          | Exp '<=' Exp {Binop Le $1 $3}
+          | Exp '>' Exp {Binop Gt $1 $3}
+          | Exp '>=' Exp {Binop Ge $1 $3}
+          | Exp '==' Exp {Binop Eql $1 $3}
+          | Exp '!=' Exp {Binop Neq $1 $3}
+          | '!' Exp {Unop LNot $2}
+          | '~' Exp {Unop BNot $2}
           | '-' Exp %prec NEG {Unop Neg $2}
 
 Intconst  : dec {checkDec $1}

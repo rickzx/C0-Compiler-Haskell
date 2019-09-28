@@ -42,7 +42,7 @@ data Binop = Add | Sub | Mul | Div | Mod |
   BAnd | LAnd | BOr | LOr | BNot | Xor |
   Eql | Neq | Lt | Gt | Le | Ge | Sal | Sar deriving Eq
 
-data Unop = Neg | LNot deriving Eq
+data Unop = Neg | LNot | BNot deriving Eq
 
 data Postop = Incr | Decr deriving Eq
 
