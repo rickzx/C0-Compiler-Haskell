@@ -77,9 +77,6 @@ Program : tokmain Block {Block $2}
 
 Block : '{' Stmts '}' {$2}
 
-Lval  : ident {$1}
-      | '(' Lval ')' {$2}
-
 Type  : int {INTEGER}
       | bool {BOOLEAN}
 
@@ -93,9 +90,9 @@ Stmt  : Control {ControlStmt $1}
       | Simp ';' {Simp $1}
       | '{' Stmts '}' {Stmts $2}
 
-Simp  : Lval asgnop Exp {Asgn $1 $2 $3}
-      | Lval '++' {AsgnP $1 Incr}
-      | Lval '--' {AsgnP $1 Decr}
+Simp  : Exp asgnop Exp {checkSimpAsgn $1 $2 $3}
+      | Exp '++' {checkSimpAsgnP $1 Incr}
+      | Exp '--' {checkSimpAsgnP $1 Decr}
       | Decl {Decl $1}
       | Exp {Exp $1}
 
@@ -145,6 +142,18 @@ Intconst  : dec {checkDec $1}
 {
 parseError :: [Token] -> a
 parseError t = error ("Parse Error " ++ (show t))
+
+checkSimpAsgn :: Exp -> Asnop -> Exp -> Simp
+checkSimpAsgn id op e =
+    case id of
+        Ident a -> Asgn id op e
+        _ -> error "Invalid assignment to non variables"
+
+checkSimpAsgnP :: Exp -> Postop -> Simp
+checkSimpAsgnP id op =
+    case id of  
+        Ident a -> AsgnP id op
+        _ -> error "Invalid postop assignment to non variables"
 
 checkDeclAsgn :: Ident -> Asnop -> Type -> Exp -> Decl
 checkDeclAsgn v op tp e =
