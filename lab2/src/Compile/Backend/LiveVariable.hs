@@ -126,25 +126,6 @@ singleVarLive a ancesset pr ancest livel = if ancesset == Set.empty then livel
                         newlivel = Map.insert line (Set.insert a somelivel) liveset
                         in
                             singleVarLive a newances pr ancest newlivel 
-{-
-    else let
-        (defset, _, _) = pr Map.! linenum
-        currlive = livel Map.! linenum
-        in
-            --if the ancestor has the variable in the liveset, we know we have looked 
-            --everything before its ancestor, we just need to return livelist
-            if Set.member a defset || Set.member a currlive then livel
-            else
-                Set.foldr g livel ancesset 
-                where 
-                    g :: Int -> Livelist -> Livelist
-                    g line liveset = let
-                        newances = Maybe.fromMaybe Set.empty (Map.lookup line ancest) 
-                        somelivel = Maybe.fromMaybe Set.empty (Map.lookup line liveset)
-                        newlivel = Map.insert line (Set.insert a somelivel) liveset
-                        in
-                            singleVarLive a line newances pr ancest newlivel 
--}    
 
 --compute liveness based on each individual variable from lecture notes
 --l is initialized as a list of empty sets
@@ -253,7 +234,19 @@ buildInterfere ((idx, x) : xs) live pr g =
                         ginit
                         liveVars
                 in  buildInterfere xs live pr newg
-            ARet _ -> g
+            ARel [dest] _ [_src1, _src2] ->
+                let
+                    ginit = case Map.lookup dest g of
+                        Just _ -> g
+                        Nothing -> Map.insert dest Set.empty g
+                    newg = foldl
+                        (\g' v -> if dest /= v
+                            then addEdge (v, dest) (addEdge (dest, v) g')
+                            else g'
+                        )
+                        ginit
+                        liveVars
+                in  buildInterfere xs live pr newg
             _ -> buildInterfere xs live pr g
 
 
@@ -324,7 +317,10 @@ testInterfereNew =
     in
         do{
             print exAASM;
-            print processed;
+            print "______________________________";
             print liveness;
-            print (buildInterfere processed liveness pred Map.empty)
+            print "______________________________";
+            print pred;
+            print "______________________________";
+            print (buildInterfere (processed) liveness pred Map.empty)
         }
