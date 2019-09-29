@@ -27,6 +27,8 @@ data AOp
   | ABNot -- Bitwise Not
   | ALNot -- Logical Not
   | AXor
+  | ASal
+  | ASar
   deriving Eq
 
 data ARelOp
