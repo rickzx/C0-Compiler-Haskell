@@ -12,9 +12,9 @@ type Graph = Map.Map ALoc (Set.Set ALoc)
 --(def set, successor list, use set)
 type Pred = Map.Map Int (Set.Set ALoc, [Int], Set.Set ALoc)
 --A map maps from the linenumber to the set of possible predecessors to linenumber
-type Ancestor = Map.Map Int Set.Set Int
+type Ancestor = Map.Map Int (Set.Set Int)
 --line num to corresponding live variables
-type Livelist = Map.Map Int Set.Set ALoc
+type Livelist = Map.Map Int (Set.Set ALoc)
 
 --given a list of AVal, we just care about the temps, not the
 --constants.
@@ -28,14 +28,11 @@ getLoc (x : rest) = case x of
 --Stop at first return statment seen
 
 --reverserAAsm accumulate original -> reversed result
-reverseAAsm :: [AAsm] -> [AAsm] -> [AAsm]
+reverseAAsm :: [(Int, AAsm)] -> [(Int, AAsm)] -> [(Int, AAsm)]
 reverseAAsm = foldl (flip (:))
 
 --compute live list for a straight line of code
---TODO: 
-{-for if else statement and loop, do a general tree stucture
-    of the code by breaking control into segments, for each segment, 
-    we do the single line livelist computes-}
+
 addLineNum :: [AAsm] -> [(Int, AAsm)]
 addLineNum = zip [0 ..] 
 
@@ -44,22 +41,21 @@ findlabels :: [(Int, AAsm)] -> Map.Map ALabel Int -> Map.Map ALabel Int
 findlabels [] mapping = mapping
 findlabels ((idx, x):xs) mapping = 
     case x of
-        AControl ALab l -> 
+        AControl (ALab l) -> 
             let newmap = Map.insert l idx mapping
             in findlabels xs newmap
         _ -> findlabels xs mapping 
 
-findlableIdx :: ALabel -> Map.Map ALabel Int -> Int
-findlabelIdx l mapping = 
-    case Map.lookup l mapping of 
-        Just a -> a
-        Nothing -> error "can't find the label index"
+--TODO: make this an useful error message instead of just -1
+findlabelIdx :: ALabel -> Map.Map ALabel Int -> Int
+findlabelIdx l mapping = Maybe.fromMaybe (-1) (Map.lookup l mapping)
+
 
 --compute the predicate facts needed about liveness, for each line, we need
 --the use set, def set, and succ set. 
 -- return (def set, succ list, use set)
 computePredicate :: [(Int, AAsm)] -> Map.Map ALabel Int -> Pred -> Pred
-computePredicate [] mapping pr = pr
+computePredicate [] _ pr = pr
 computePredicate ((idx, x):xs) mapping pr =
     case x of
         AComment _ -> computePredicate xs mapping (Map.insert idx (Set.empty, [idx+1], Set.empty) pr)
@@ -67,24 +63,24 @@ computePredicate ((idx, x):xs) mapping pr =
             ALoc a -> let linemap = Map.insert idx (Set.empty, [], Set.singleton a) pr
                 in computePredicate xs mapping linemap
             AImm _ -> computePredicate xs mapping (Map.insert idx (Set.empty, [], Set.empty) pr)
-        AAsm assign op args -> 
-            let linemap = Map.insert idx (Set.fromList assign, [idx+1], getLoc aArgs) pr
+        AAsm assign _ args -> 
+            let linemap = Map.insert idx (Set.fromList assign, [idx+1], getLoc args) pr
             in computePredicate xs mapping linemap
-        ARel assign op args ->
-            let linemap = Map.insert idx (Set.fromList assign, [idx+1], getLoc aArgs) pr
+        ARel assign _ args ->
+            let linemap = Map.insert idx (Set.fromList assign, [idx+1], getLoc args) pr
             in computePredicate xs mapping linemap
         AControl c -> case c of
             ALab _ -> computePredicate xs mapping (Map.insert idx (Set.empty, [idx+1], Set.empty) pr)
             AJump l -> let
-                labelidx = findlableIdx l mapping
+                labelidx = findlabelIdx l mapping
                 in computePredicate xs mapping (Map.insert idx (Set.empty, [labelidx], Set.empty) pr)
             ACJump val l1 l2 -> let
-                label1 = findlableIdx l1 mapping
-                label2 = findlableIdx l2 mapping
+                label1 = findlabelIdx l1 mapping
+                label2 = findlabelIdx l2 mapping
                 in computePredicate xs mapping (Map.insert idx (Set.empty, [label1, label2], getLoc [val]) pr)
             ACJump' _ val1 val2 l1 l2 -> let
-                label1 = findlableIdx l1 mapping
-                label2 = findlableIdx l2 mapping
+                label1 = findlabelIdx l1 mapping
+                label2 = findlabelIdx l2 mapping
                 in computePredicate xs mapping (Map.insert idx (Set.empty, [label1, label2], getLoc [val1, val2]) pr)
 
 createOrUpdate :: Ancestor -> Int -> Int -> Ancestor
@@ -95,43 +91,60 @@ createOrUpdate ances key value =
 
 --compute the ancestor list from the succ list
 findAncestor :: Pred -> Ancestor
-findAncestor = Map.foldlwithkey f Map.empty 
+findAncestor = Map.foldlWithKey f Map.empty 
                 where 
                     f :: Ancestor -> Int -> (Set.Set ALoc, [Int], Set.Set ALoc)
                          -> Ancestor
-                    f ances k (_, [], _) = ances
-                    f ances k (_, x:xs, _) = let
+                    f ances _ (s1, [], s2) = ances
+                    f ances k (s1, x:xs, s2) = let
                         newances = createOrUpdate ances x k
                         in
-                            f newances k (_, xs, _)
+                            f newances k (s1, xs, s2)
 
-linelive :: Livelist -> ALoc -> Int -> Livelist
+--check whether the variable is already in the livelist of the line, if it is
+--then it must also be in all of its predecessors so we dont have to compute again
+linelive :: Livelist -> ALoc -> Int -> (Livelist, Bool)
 linelive livel var idx = let 
-    curr = livel Map.(!) idx
+    curr = Maybe.fromMaybe Set.empty (Map.lookup idx livel)
     in
-        if Set.member var curr then livel
-        else Map.insert linenum (Set.insert var curr) livel
+        if Set.member var curr then (livel , False)
+        else (Map.insert idx (Set.insert var curr) livel , True)
 
 singleVarLive :: ALoc -> Set.Set Int -> Pred -> Ancestor -> Livelist -> Livelist
---ALoc -> line num -> ancestor list -> predicate -> livelist
-singleVarLive a ancesset pr ancest livel = if ancessset == Set.empty then livel
+--ALoc -> ancestor list -> predicate -> livelist
+singleVarLive a ancesset pr ancest livel = if ancesset == Set.empty then livel
+    else Set.foldr g livel ancesset
+         where 
+            g :: Int -> Livelist -> Livelist
+            g line liveset = let
+                (defset, _, _) = pr Map.! line
+                currlive = Maybe.fromMaybe Set.empty (Map.lookup line livel)
+                in if Set.member a defset || Set.member a currlive then livel
+                   else let
+                        newances = Maybe.fromMaybe Set.empty (Map.lookup line ancest) 
+                        somelivel = Maybe.fromMaybe Set.empty (Map.lookup line liveset)
+                        newlivel = Map.insert line (Set.insert a somelivel) liveset
+                        in
+                            singleVarLive a newances pr ancest newlivel 
+{-
     else let
-        (defset, succlist, useset) = pr Map.(!) linenum
+        (defset, _, _) = pr Map.! linenum
+        currlive = livel Map.! linenum
         in
             --if the ancestor has the variable in the liveset, we know we have looked 
             --everything before its ancestor, we just need to return livelist
-            if Set.member a useset then livel
+            if Set.member a defset || Set.member a currlive then livel
             else
                 Set.foldr g livel ancesset 
                 where 
                     g :: Int -> Livelist -> Livelist
                     g line liveset = let
                         newances = Maybe.fromMaybe Set.empty (Map.lookup line ancest) 
-                        somelivel = Maybe.fromMaybe Set.empty (Map.lookup a livel)
-                        newlivel = Map.insert line (Set.insert a somelivel)
+                        somelivel = Maybe.fromMaybe Set.empty (Map.lookup line liveset)
+                        newlivel = Map.insert line (Set.insert a somelivel) liveset
                         in
-                            singleVarLive line newances pr ancest newlivel 
-    
+                            singleVarLive a line newances pr ancest newlivel 
+-}    
 
 --compute liveness based on each individual variable from lecture notes
 --l is initialized as a list of empty sets
@@ -140,26 +153,29 @@ singleVarLive a ancesset pr ancest livel = if ancessset == Set.empty then livel
 --we only increment i if there is no more used variable to look at at the line i
 --ances is the list of predessors we use to look upwards
 computeLive :: Int -> Int -> Pred -> Ancestor -> Livelist -> Livelist
-computeLive 0 varidx pr ances livel = livel
+computeLive 0 _ _ _ livel = livel
 computeLive linenum varidx pr ances livel = let
-    (defset, succlist, useset) = pr Map.(!) linenum 
+    (_, _, useset) = pr Map.! linenum 
     size = Set.size useset
     --precondition: varidx < size useset
     --this shouldnt be empty, since only line 0 would have zero ancestors
-    ancesset = Maybe.fromMaybe Set.empty (Map.lookup livenum ances)
+    ancesset = Maybe.fromMaybe Set.empty (Map.lookup linenum ances)
     in
         if ancesset == Set.empty then livel
         --find liveness to the one above
         else if varidx > size - 1 then computeLive (linenum-1) 0 pr ances livel
         else let 
                 var = Set.elemAt varidx useset
-                newlivl = linelive var
-
-                livelist = singleVarLive var ancesset pr ances newlivl 
-                in
-                    if varidx == size - 1 then computeLive (linenum - 1) 0 pr livelist
-                    else computeLive linenum (varidx+1) pr ances livelist
+                (newlivl, keepgoing) = linelive livel var linenum
+             in
+                if not keepgoing then computeLive linenum (varidx+1) pr ances livel
+                else let
+                    livelist = singleVarLive var ancesset pr ances newlivl 
+                    in
+                        if varidx == size - 1 then computeLive (linenum - 1) 0 pr ances livelist
+                        else computeLive linenum (varidx+1) pr ances livelist
 --TODO: after computed liveness, we need to also check the condition where variable gets declared but never used, so do another iteration to check just this
+--TODO：Or do we..?
 
 
 addEdge :: (ALoc, ALoc) -> Graph -> Graph
@@ -173,18 +189,18 @@ isSameLoc x y = case x of
     _       -> False
 
 combinelive :: [Int] -> Livelist -> Set.Set ALoc
-combinelive l live = List.foldl h (Set.empty) l
+combinelive l live = foldl h (Set.empty) l
     where
         h :: Set.Set ALoc -> Int -> Set.Set ALoc
-        h set1 idx = Set.union set1 (live Map.(!) idx)
+        h set1 idx = Set.union set1 (live Map.! idx)
 
---build interference graph, we can just care about the predicate relationship for each line, but
+--build interference graph, we can just care about the succlist relationship for each line, but
 --we do need to case on div, mod (rax, rdx) and shift (rcx) for special register allocation.
 buildInterfere :: [(Int, AAsm)] -> Livelist -> Pred -> Graph -> Graph
-buildInterfere [] _ _ g _ = g
+buildInterfere [] _ _ g = g
 buildInterfere ((idx, x) : xs) live pr g =
     let 
-        (defset, succlist, useset) = pr Map.(!) idx
+        (_, succlist, _) = pr Map.! idx
         liveVars = combinelive succlist live
     in
         case x of
@@ -213,6 +229,7 @@ buildInterfere ((idx, x) : xs) live pr g =
                         newg = foldl (\g' v -> if dest /= v then addEdge (v, dest) (addEdge (dest, v) g') else g') ginit liveVars
                         newg' = foldl (\g' v -> addEdge (v, AReg 1) (addEdge (AReg 1, v) (addEdge (v, AReg 0) (addEdge (AReg 0, v) g')))) newg liveVars
                    in  buildInterfere xs live pr newg'
+            --new case for shifts
             AAsm [dest] asnop [_src1, _src2]
                 | asnop == ASal
                 || asnop == ASar
@@ -239,54 +256,6 @@ buildInterfere ((idx, x) : xs) live pr g =
             ARet _ -> g
             _ -> buildInterfere xs live pr g
 
-{-
-buildInterfere :: [AAsm] -> [Set.Set ALoc] -> Graph -> Int -> Graph
-buildInterfere [] _ g _ = g
-buildInterfere (x : xs) live g i =
-    let liveVars = live !! (i + 1)
-    in
-        case x of
-            AAsm [dest] ANop [src] ->
-                let 
-                    ginit = case Map.lookup dest g of
-                        Just _ -> g
-                        Nothing -> Map.insert dest Set.empty g
-                    newg = foldl
-                        (\g' v -> if not (isSameLoc src v) && dest /= v
-                            then addEdge (v, dest) (addEdge (dest, v) g')
-                            else g'
-                        )
-                        ginit
-                        liveVars
-                in  buildInterfere xs live newg (i + 1)
-            AAsm [dest] asnop [_src1, _src2]
-                | asnop == ADiv
-                || asnop == ADivq
-                || asnop == AMod
-                || asnop == AModq
-                -> let
-                        ginit = case Map.lookup dest g of
-                            Just _ -> g
-                            Nothing -> Map.insert dest Set.empty g
-                        newg = foldl (\g' v -> if dest /= v then addEdge (v, dest) (addEdge (dest, v) g') else g') ginit liveVars
-                        newg' = foldl (\g' v -> addEdge (v, AReg 1) (addEdge (AReg 1, v) (addEdge (v, AReg 0) (addEdge (AReg 0, v) g')))) newg liveVars
-                   in  buildInterfere xs live newg' (i + 1)
-            AAsm [dest] _ [_src1, _src2] ->
-                let
-                    ginit = case Map.lookup dest g of
-                        Just _ -> g
-                        Nothing -> Map.insert dest Set.empty g
-                    newg = foldl
-                        (\g' v -> if dest /= v
-                            then addEdge (v, dest) (addEdge (dest, v) g')
-                            else g'
-                        )
-                        ginit
-                        liveVars
-                in  buildInterfere xs live newg (i + 1)
-            ARet _ -> g
-            _ -> buildInterfere xs live g (i + 1)
--}
 
 --example from Written 1
 exAASM :: [AAsm]
@@ -329,13 +298,33 @@ exAASM =
 
 
 testLive :: IO ()
-testLive = do
-    print exAASM
-    print (computeLive ([], reverseAAsm [] exAASM))
+testLive = let
+    processed = reverseAAsm [] (addLineNum exAASM)
+    labels = findlabels processed (Map.empty)
+    pred = computePredicate processed labels (Map.empty)
+    ancestors = findAncestor pred
+    size = case processed of 
+        [] -> 0
+        (idx, x):xs -> idx
+    liveness = computeLive size 0 pred ancestors (Map.empty)
+    in
+        print liveness
 
 testInterfereNew :: IO ()
-testInterfereNew = do
-    let (livelist, _) = computeLive ([], reverseAAsm [] exAASM)
-    print exAASM
-    print livelist
-    print (buildInterfere exAASM livelist Map.empty 0)
+testInterfereNew = 
+    let
+        processed = reverseAAsm [] (addLineNum exAASM)
+        labels = findlabels processed (Map.empty)
+        pred = computePredicate processed labels (Map.empty)
+        ancestors = findAncestor pred
+        size = case processed of 
+            [] -> 0
+            (idx, x):xs -> idx
+        liveness = computeLive size 0 pred ancestors (Map.empty)
+    in
+        do{
+            print exAASM;
+            print processed;
+            print liveness;
+            print (buildInterfere processed liveness pred Map.empty)
+        }
