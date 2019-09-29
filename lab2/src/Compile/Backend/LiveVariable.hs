@@ -246,6 +246,19 @@ buildInterfere ((idx, x) : xs) live pr g =
                 in  buildInterfere xs live pr newg
             _ -> buildInterfere xs live pr g
 
+computerInterfere :: [AAsm] -> Graph
+computerInterfere aasm = 
+    let
+        processed = reverseAAsm [] (addLineNum loopAASM)
+        labels = findlabels processed (Map.empty)
+        pred = computePredicate processed labels (Map.empty)
+        ancestors = findAncestor pred
+        size = case processed of 
+            [] -> 0
+            (idx, x):xs -> idx
+        liveness = computeLive size 0 pred ancestors (Map.empty)  
+    in
+        buildInterfere (processed) liveness pred Map.empty
 
 --example from Written 1
 exAASM :: [AAsm]
