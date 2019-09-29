@@ -34,7 +34,7 @@ asmGen east =
           (livelist, _) = computeLive([], reverseAAsm [] aasms)
           graph = buildInterfere aasms livelist Map.empty 0
 
-          precolor = Map.fromList [(AReg 0, 0), (AReg 1, 3)]
+          precolor = Map.fromList [(AReg 0, 0), (AReg 1, 3), (AReg 2, 4)]
           seo = mcs graph precolor
         in 
           color graph seo precolor

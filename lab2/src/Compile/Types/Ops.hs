@@ -29,8 +29,6 @@ data AOp
   | ASal
   | ASar
   | AXor
-  | ASal
-  | ASar
   deriving Eq
 
 data ARelOp
