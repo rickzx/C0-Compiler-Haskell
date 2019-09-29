@@ -12,10 +12,10 @@ data Inst
     | Imull Operand Operand
     | Idivq Operand
     | Idivl Operand
-    | Salq Int Operand
-    | Sall Int Operand
-    | Sarq Int Operand
-    | Sarl Int Operand
+    | Salq Operand Operand
+    | Sall Operand Operand
+    | Sarq Operand Operand
+    | Sarl Operand Operand
     | Negq Operand
     | Negl Operand
     | Pushq Operand

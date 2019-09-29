@@ -20,14 +20,13 @@ import Compile.Backend.AAsm2Asm
 import Compile.Backend.RegisterAlloc
 import Debug.Trace
 
-codeGen :: AST -> ([AAsm], Int)
-codeGen ast = 
-  aasmGen $ eGen ast
+codeGen :: EAST -> ([AAsm], Int)
+codeGen = aasmGen
 
-asmGen :: AST -> String
-asmGen ast = 
+asmGen :: EAST -> String
+asmGen east =
   let
-    (aasms, localVar) = aasmGen $ eGen ast
+    (aasms, localVar) = aasmGen east
 
     (coloring, stackVar) = if localVar > 500 then allStackColor localVar 
       else

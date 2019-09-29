@@ -21,7 +21,8 @@ import Control.Monad.Trans.Except
 import Compile.Types
 import Compile.Lexer
 import Compile.Parser
-import Compile.CheckAST
+import Compile.Frontend.Elaborate
+import Compile.Frontend.CheckEAST
 import Compile.CodeGen
 import Data.Maybe (fromMaybe)
 import System.Environment
@@ -43,12 +44,14 @@ compile job = do
   hSetEncoding inputHandle utf8
   s <- hGetContents inputHandle
   res <- runExceptT $ do
-    let ast = parseTokens $ lexProgram s
-    -- liftEIO $ typeCheck ast
+    let 
+      ast = parseTokens $ lexProgram s
+      east = eGen ast
+    liftEIO $ checkEAST east
     case jobOutFormat job of
       TC -> liftEIO (Right ()) -- By now, we should have thrown any typechecking errors
-      Asm -> writeIOString (jobOut job) $ addHeader (asmGen ast)
-      Abs -> writeString (jobOut job) $ testPrintAAsm (fst $ codeGen ast) (jobOut job)
+      Asm -> writeIOString (jobOut job) $ addHeader (asmGen east)
+      Abs -> writeString (jobOut job) $ testPrintAAsm (fst $ codeGen east) (jobOut job)
   case res of
     Left msg -> error msg
     Right () -> return ()

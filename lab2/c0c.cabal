@@ -62,13 +62,14 @@ Executable c0c
   other-modules:
       Args
     , Compile
-    , Compile.CheckAST
     , Compile.CodeGen
     , Compile.Lexer
     , Compile.Parser
     , Compile.Types
     , Compile.Types.AST
     , Compile.Types.AbstractAssembly
+    , Compile.Frontend.CheckEAST
+    , Compile.Frontend.Elaborate
     , Compile.Backend.RegisterAlloc
     , Compile.Backend.AAsm2Asm
     , Compile.Backend.LiveVariable
