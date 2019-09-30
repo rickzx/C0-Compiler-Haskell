@@ -11,7 +11,6 @@ eBlock [] = ENop
 eBlock [x] = eStmt x
 --give declare precedence
 eBlock (x:l) = case x of
-    ControlStmt (Retn r) -> ERet (pExp r)
     Simp (Decl d) -> case d of
         JustDecl var tp -> EDecl var tp (eBlock l)
         DeclAsgn var tp expr -> EDecl var tp (ESeq (EAssign var (pExp expr)) (eBlock l))
@@ -33,8 +32,9 @@ eStmt x = case x of
     ControlStmt c -> case c of
         Condition b t el -> EIf (pExp b) (eStmt t) (eElse el)
         --declaration still need to be prioritized
+        For _initr _condi (Opt (Decl _)) _bodyi -> error "Declaration not meaningful as step of for-loop"
         For initr condi stepi bodyi -> case initr of
-            Opt (Decl (JustDecl var tp)) -> error "cant just declare in a loop"
+            Opt (Decl (JustDecl var tp)) -> EDecl var tp (EWhile (pExp condi) (ESeq (eStmt bodyi) (eSimpopt stepi)))
             Opt (Decl (DeclAsgn var tp expr)) -> EDecl var tp (ESeq (EAssign var (pExp expr))
                 (EWhile (pExp condi) (ESeq (eStmt bodyi) (eSimpopt stepi))))
             _ -> ESeq (eSimpopt initr) (EWhile (pExp condi) (ESeq (eStmt bodyi)
@@ -65,25 +65,6 @@ eElse :: Elseopt -> EAST
 eElse eopt = case eopt of
     ElseNop -> ENop
     Else stmt -> eStmt stmt
-
-instance Show EAST where
-    show (ESeq e1 e2) = show "ESeq" ++ "(" ++ show e1 ++ " , "  ++ show e2 ++ ")"
-    show (EAssign ident leaf) = show "EAssign" ++ "(" ++ ident ++ " , " ++ show leaf ++ ")"
-    show (EIf leaf e1 e2) = show "Eif" ++ "(" ++ show leaf ++ " , " ++ show e1 ++ " , " ++ show e2 ++ ")"
-    show (EWhile leaf e1) = show "EWhile" ++ "(" ++ show leaf ++ " , " ++ show e1 ++ ")"
-    show (ERet leaf) = show "ERet" ++ "(" ++ show leaf ++ ")"
-    show ENop = show "NOP"
-    show (EDecl ident stype e1) = show "EDecl" ++ "(" ++ ident ++ "  ,  " ++ show stype ++ " , " ++ show e1 ++ ")"
-    show (ELeaf e) = show e
-
-instance Show EExp where
-    show (EInt a) = show a
-    show (EIdent id) = id
-    show ET = "True"
-    show EF = "False"
-    show (EBinop b expr1 expr2) = show expr1 ++ " " ++ show b ++ " " ++ show expr2
-    show (ETernop expr1 expr2 expr3) = show expr1 ++ " ? " ++ show expr2 ++ " : " ++ show expr3
-    show (EUnop u expr1) = show u ++ show expr1
 
 --example from hw 1 with while loop and for loop
 exAST :: AST

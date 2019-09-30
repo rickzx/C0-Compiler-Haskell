@@ -84,7 +84,7 @@ genEast (EWhile expr e) = do
     return $ [AControl $ ALab l1] ++ cmp ++ [AControl $ ALab l2] ++ gen ++ [AControl $ AJump l1, AControl $ ALab l3]
 genEast (ERet expr) = do
     gen <- genExp expr (AReg 0)
-    return $ gen ++ [ARet (ALoc $ AReg 0)]
+    return $ gen ++ [AControl $ AJump "RET"]
 genEast ENop = return []
 genEast (EDecl _ _ e) = genEast e
 genEast (ELeaf e) = do
@@ -92,6 +92,7 @@ genEast (ELeaf e) = do
     genExp e (ATemp n)
 
 genExp :: EExp -> ALoc -> AllocM [AAsm]
+-- genExp e _ | trace ("genExp " ++ show e ++ "\n") False = undefined
 genExp (EInt n) dest = return [AAsm [dest] ANop [AImm $ fromIntegral (fromIntegral n :: Int32)]]
 genExp (EIdent var) dest = do
     allocmap <- State.gets variables
@@ -117,7 +118,7 @@ genExp expr@(EBinop binop exp1 exp2) dest
             [AControl $ ALab l2, AAsm [dest] ANop [AImm $ fromIntegral (0 :: Int32)], AControl $ AJump l3] ++
             [AControl $ ALab l3]
     | binop == Sal || binop == Sar = do
-        let checker = EBinop LAnd (EBinop Le (EInt 0) exp2) (EBinop Lt expr (EInt 32))
+        let checker = EBinop LAnd (EBinop Le (EInt 0) exp2) (EBinop Lt exp2 (EInt 32))
             newOp =
                 case binop of
                     Sal -> Sal'
@@ -140,8 +141,8 @@ genExp (EUnop unop expr) dest =
             cmp <- genCmp expr l1 l2
             return $
                 cmp ++
-                [AControl $ ALab l1, AAsm [dest] ANop [AImm $ fromIntegral (1 :: Int32)], AControl $ AJump l3] ++
-                [AControl $ ALab l2, AAsm [dest] ANop [AImm $ fromIntegral (0 :: Int32)], AControl $ AJump l3] ++
+                [AControl $ ALab l1, AAsm [dest] ANop [AImm $ fromIntegral (0 :: Int32)], AControl $ AJump l3] ++
+                [AControl $ ALab l2, AAsm [dest] ANop [AImm $ fromIntegral (1 :: Int32)], AControl $ AJump l3] ++
                 [AControl $ ALab l3]
         BNot -> do
             n <- getNewUniqueID
@@ -172,6 +173,7 @@ genExp (ETernop e1 e2 e3) dest =
                 gen1 ++ [AControl $ AJump l3, AControl $ ALab l2] ++ gen2 ++ [AControl $ AJump l3, AControl $ ALab l3]
 
 genCmp :: EExp -> ALabel -> ALabel -> AllocM [AAsm]
+-- genCmp e _ _ | trace ("genCmp " ++ show e ++ "\n") False = undefined
 genCmp (EBinop op e1 e2) l l'
     | isRelOp op = do
         n <- getNewUniqueID
@@ -181,7 +183,7 @@ genCmp (EBinop op e1 e2) l l'
         return $ gen1 ++ gen2 ++ [AControl $ ACJump' (genRelOp op) (ALoc $ ATemp n) (ALoc $ ATemp n') l l']
     | op == LAnd = do
         l2 <- fmap show getNewUniqueLabel
-        gen1 <- genCmp e1 l2 l
+        gen1 <- genCmp e1 l2 l'
         gen2 <- genCmp e2 l l'
         return $ gen1 ++ [AControl $ ALab l2] ++ gen2
     | op == LOr = do

@@ -40,8 +40,8 @@ import Compile.Types.AST
   bool    {TokBool}
   if      {TokIf}
   else    {TokElse}
-  '?'     {TokIf}
-  ':'     {TokElse}
+  '?'     {TokTIf}
+  ':'     {TokTElse}
   '<'     {TokLess}
   '>'     {TokGreater}
   '>='    {TokGeq}
@@ -123,9 +123,10 @@ Operation : Exp '-' Exp {Binop Sub $1 $3}
           | Exp '<<' Exp {Binop Sal $1 $3}
           | Exp '>>' Exp {Binop Sar $1 $3}
           | Exp '&' Exp {Binop BAnd $1 $3}
-          | Exp '|' Exp {Binop LOr $1 $3}
+          | Exp '|' Exp {Binop BOr $1 $3}
           | Exp '^' Exp {Binop Xor $1 $3}
           | Exp '&&' Exp {Binop LAnd $1 $3}
+          | Exp '||' Exp {Binop LOr $1 $3}
           | Exp '<' Exp {Binop Lt $1 $3}
           | Exp '<=' Exp {Binop Le $1 $3}
           | Exp '>' Exp {Binop Gt $1 $3}

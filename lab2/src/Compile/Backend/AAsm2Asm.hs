@@ -165,26 +165,32 @@ toAsm (AAsm [assign] ASal [src1, src2]) coloring =
     let assign' = mapToReg assign coloring
         [src1', src2'] = getRegAlloc [src1, src2] coloring False
      in case (assign', src1') of
-            (Mem {}, Mem {}) -> [Movl src1' (Reg R11D), Movl src1' assign', Movl src2' (Reg ECX), Sall (Reg CL) assign']
+            (Mem {}, Mem {}) ->
+                [Movl src2' (Reg ECX), Movl src1' (Reg R11D), Movl (Reg R11D) assign', Sall (Reg CL) assign']
             (Mem' {}, Mem {}) ->
-                [Movl src1' (Reg R11D), Movl src1' assign', Movl src2' (Reg ECX), Sall (Reg CL) assign']
+                [Movl src2' (Reg ECX), Movl src1' (Reg R11D), Movl (Reg R11D) assign', Sall (Reg CL) assign']
             (Mem {}, Mem' {}) ->
-                [Movl src1' (Reg R11D), Movl src1' assign', Movl src2' (Reg ECX), Sall (Reg CL) assign']
+                [Movl src2' (Reg ECX), Movl src1' (Reg R11D), Movl (Reg R11D) assign', Sall (Reg CL) assign']
             (Mem' {}, Mem' {}) ->
-                [Movl src1' (Reg R11D), Movl src1' assign', Movl src2' (Reg ECX), Sall (Reg CL) assign']
-            _ -> [Movl src1' assign', Movl src2' (Reg ECX), Sall (Reg CL) assign']
+                [Movl src2' (Reg ECX), Movl src1' (Reg R11D), Movl (Reg R11D) assign', Sall (Reg CL) assign']
+            (_, Reg ECX) ->
+                [Movl (Reg ECX) (Reg R11D), Movl src2' (Reg ECX), Movl (Reg R11D) assign', Sall (Reg CL) assign']
+            _ -> [Movl src2' (Reg ECX), Movl src1' assign', Sall (Reg CL) assign']
 toAsm (AAsm [assign] ASar [src1, src2]) coloring =
     let assign' = mapToReg assign coloring
         [src1', src2'] = getRegAlloc [src1, src2] coloring False
      in case (assign', src1') of
-            (Mem {}, Mem {}) -> [Movl src1' (Reg R11D), Movl src1' assign', Movl src2' (Reg ECX), Sarl (Reg CL) assign']
+            (Mem {}, Mem {}) ->
+                [Movl src2' (Reg ECX), Movl src1' (Reg R11D), Movl (Reg R11D) assign', Sarl (Reg CL) assign']
             (Mem' {}, Mem {}) ->
-                [Movl src1' (Reg R11D), Movl src1' assign', Movl src2' (Reg ECX), Sarl (Reg CL) assign']
+                [Movl src2' (Reg ECX), Movl src1' (Reg R11D), Movl (Reg R11D) assign', Sarl (Reg CL) assign']
             (Mem {}, Mem' {}) ->
-                [Movl src1' (Reg R11D), Movl src1' assign', Movl src2' (Reg ECX), Sarl (Reg CL) assign']
+                [Movl src2' (Reg ECX), Movl src1' (Reg R11D), Movl (Reg R11D) assign', Sarl (Reg CL) assign']
             (Mem' {}, Mem' {}) ->
-                [Movl src1' (Reg R11D), Movl src1' assign', Movl src2' (Reg ECX), Sarl (Reg CL) assign']
-            _ -> [Movl src1' assign', Movl src2' (Reg ECX), Sarl (Reg CL) assign']
+                [Movl src2' (Reg ECX), Movl src1' (Reg R11D), Movl (Reg R11D) assign', Sarl (Reg CL) assign']
+            (_, Reg ECX) ->
+                [Movl (Reg ECX) (Reg R11D), Movl src2' (Reg ECX), Movl (Reg R11D) assign', Sarl (Reg CL) assign']
+            _ -> [Movl src2' (Reg ECX), Movl src1' assign', Sarl (Reg CL) assign']
 toAsm (AControl (ALab l)) _ = [Label l]
 toAsm (AControl (AJump l)) _ = [Jmp l]
 toAsm (AControl (ACJump v l l')) coloring =
@@ -303,14 +309,7 @@ toAsm (ARel [assign] AGe [src1, src2]) coloring =
             (_, Mem {}) -> asm
             (_, Mem' {}) -> asm
             _ -> [Cmp src2' src1', Setge (Reg R11B), Movzbl (Reg R11B) assign']
-toAsm (ARet _) _ = [Ret]
 toAsm _ _ = error "ill-formed abstract assembly"
-
-removeDeadcode :: [Inst] -> [Inst]
-removeDeadcode insts =
-    case List.elemIndex Ret insts of
-        Just i -> List.take i insts
-        Nothing -> insts
 
 printAsm :: [AAsm] -> String
 printAsm aasms =
@@ -369,4 +368,4 @@ printAsm aasms =
             Movl op1 op2 -> op1 /= op2
             Movq op1 op2 -> op1 /= op2
             _ -> True
-    insts = removeDeadcode $ foldl (\l aasm -> l ++ List.filter nonTrivial (toAsm aasm coloring)) [] aasms
+    insts = foldl (\l aasm -> l ++ List.filter nonTrivial (toAsm aasm coloring)) [] aasms

@@ -188,11 +188,11 @@ instance Show Inst where
     show Cdq = "\tcdq"
     show Cqto = "\tcqto"
     show Ret = "\tretq"
-    show (Andl x1 x2) = "\tandl" ++ show x1 ++ ", " ++ show x2 
-    show (Orl x1 x2) = "\torl" ++ show x1 ++ ", " ++ show x2 
-    show (Xorl x1 x2) = "\txorl" ++ show x1 ++ ", " ++ show x2 
-    show (Notl x) = "\tnotl" ++ show x
-    show (Label s) = "." ++ s ++ ":"
+    show (Andl x1 x2) = "\tandl " ++ show x1 ++ ", " ++ show x2 
+    show (Orl x1 x2) = "\torl " ++ show x1 ++ ", " ++ show x2 
+    show (Xorl x1 x2) = "\txorl " ++ show x1 ++ ", " ++ show x2 
+    show (Notl x) = "\tnotl " ++ show x
+    show (Label s) = ".L" ++ s ++ ":"
     show (Cmp x1 x2) = "\tcmpl " ++ show x1 ++ ", " ++ show x2 
     show (Test x1 x2) = "\ttestl " ++ show x1 ++ ", " ++ show x2 
     show (Sete x) = "\tsete " ++ show x
@@ -201,13 +201,13 @@ instance Show Inst where
     show (Setge x) = "\tsetge " ++ show x
     show (Setl x) = "\tsetl " ++ show x
     show (Setle x) = "\tsetle " ++ show x
-    show (Jmp label) = "\tjmp " ++ label
-    show (Je label) = "\tje " ++ label
-    show (Jne label) = "\tjne " ++ label
-    show (Jl label) = "\tjl " ++ label
-    show (Jle label) = "\tjle " ++ label
-    show (Jg label) = "\tjg " ++ label
-    show (Jge label) = "\tjge " ++ label
+    show (Jmp label) = "\tjmp .L" ++ label
+    show (Je label) = "\tje .L" ++ label
+    show (Jne label) = "\tjne .L" ++ label
+    show (Jl label) = "\tjl .L" ++ label
+    show (Jle label) = "\tjle .L" ++ label
+    show (Jg label) = "\tjg .L" ++ label
+    show (Jge label) = "\tjge .L" ++ label
     show (Movzbl x1 x2) = "\tmovzbl " ++ show x1 ++ ", " ++ show x2 
 
 

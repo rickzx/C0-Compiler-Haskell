@@ -37,6 +37,7 @@ tokens :-
   "+"   {\_ -> TokPlus}
   "*"   {\_ -> TokTimes}
   "/"   {\_ -> TokDiv}
+  "%"   {\_ -> TokMod}
   "<"   {\_ -> TokLess}
   ">"   {\_ -> TokGreater}
   ">="   {\_ -> TokGeq}
@@ -51,8 +52,8 @@ tokens :-
   ">>"   {\_ -> TokRshift}
   "++"   {\_ -> TokIncr}
   "--"   {\_ -> TokDecr}
-  "?"   {\_ -> TokIf}
-  ":"   {\_ -> TokElse}
+  "?"   {\_ -> TokTIf}
+  ":"   {\_ -> TokTElse}
   "^"   {\_ -> TokXor}
 
   "!"   {\_ -> TokUnop (LNot)}
@@ -121,6 +122,8 @@ data Token =
   TokFalse |
   TokBool |
   TokElse |
+  TokTIf |
+  TokTElse |
   TokLess |
   TokGreater |
   TokGeq |

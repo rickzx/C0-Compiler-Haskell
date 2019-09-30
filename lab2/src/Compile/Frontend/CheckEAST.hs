@@ -8,6 +8,7 @@ import qualified Data.Set as Set
 
 import Compile.Types
 import LiftIOE
+import Debug.Trace
 
 type TypeCheckState = (Set.Set Ident, Set.Set Ident)
 
@@ -18,7 +19,7 @@ assertMsg _ True = return ()
 assertMsg s False = throwE s
 
 checkEAST :: EAST -> Either String ()
-checkEAST east = evalState (runExceptT typeCheck) initialState
+checkEAST east = (trace $ "EAST: " ++ show east ++ "\n") evalState (runExceptT typeCheck) initialState
   where
     initialState = (Set.empty, Set.empty)
     typeCheck = do
@@ -69,9 +70,11 @@ checkInit (EIf e et1 et2) = do
     put (declared, Set.intersection defined1 defined2)
     return $ t1 && t2
 checkInit (EWhile e et) = do
+    s0 <- get
     t <- checkUse e
     assertMsg "Variable used before initialization" t
     _ <- checkInit et
+    put s0
     return False
 checkInit (ERet e) = do
     t <- checkUse e
@@ -81,9 +84,11 @@ checkInit (ERet e) = do
     return True
 checkInit ENop = return False
 checkInit (EDecl x _t et) = do
-    t <- checkInit et
     (declared, defined) <- get
-    put (Set.insert x declared, Set.delete x defined)
+    put (Set.insert x declared, defined)
+    t <- checkInit et
+    (_, defined') <- get
+    put (declared, Set.delete x defined')
     return t
 checkInit (ELeaf _e) = return False
 
@@ -149,9 +154,13 @@ synthType ctx expr =
                         _ <- throwE "Tycon mismatch"
                         return Nothing
             | op == Eql || op == Neq -> do
-                _ <- synthType ctx e1
-                _ <- synthType ctx e2
-                return $ Just BOOLEAN
+                t1 <- synthType ctx e1
+                t2 <- synthType ctx e2
+                if t1 == t2
+                    then return $ Just BOOLEAN
+                    else do
+                        _ <- throwE "Tycon mismatch"
+                        return Nothing
             | op == LAnd || op == LOr -> do
                 t1 <- synthType ctx e1
                 t2 <- synthType ctx e2

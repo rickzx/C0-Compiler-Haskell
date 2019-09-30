@@ -3,6 +3,7 @@ module Compile.Backend.RegisterAlloc where
 import qualified Data.Map                      as Map
 import qualified Data.Set                      as Set
 import qualified Data.PQueue.Max               as PQ
+import qualified Data.Maybe                    as Maybe
 import qualified Control.Monad.State.Strict    as State
 
 import           Compile.Types.AbstractAssembly
@@ -71,7 +72,7 @@ mapToReg :: ALoc -> Coloring -> Operand
 mapToReg reg coloring = if coloringIdx < length regOrder
     then Reg $ regOrder !! coloringIdx
     else Mem' ((coloringIdx - length regOrder + 1) * 8) RSP
-    where coloringIdx = coloring Map.! reg
+    where coloringIdx = Maybe.fromMaybe 0 (Map.lookup reg coloring)
 
 -- 64 bit version of mapToReg
 mapToReg64 :: ALoc -> Coloring -> Operand
