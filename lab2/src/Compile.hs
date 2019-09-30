@@ -26,6 +26,7 @@ import Compile.Frontend.CheckEAST
 import Compile.CodeGen
 import Data.Maybe (fromMaybe)
 import System.Environment
+import Compile.Frontend.EASTOptimize
 
 import LiftIOE
 
@@ -48,10 +49,12 @@ compile job = do
       ast = parseTokens $ lexProgram s
       east = eGen ast
     liftEIO $ checkEAST east
+    let
+        optEast = optEAST east
     case jobOutFormat job of
       TC -> liftEIO (Right ()) -- By now, we should have thrown any typechecking errors
-      Asm -> writeIOString (jobOut job) $ addHeader (asmGen east)
-      Abs -> writeString (jobOut job) $ testPrintAAsm (fst $ codeGen east) (jobOut job)
+      Asm -> writeIOString (jobOut job) $ addHeader (asmGen optEast)
+      Abs -> writeString (jobOut job) $ testPrintAAsm (fst $ codeGen optEast) (jobOut job)
   case res of
     Left msg -> error msg
     Right () -> return ()
