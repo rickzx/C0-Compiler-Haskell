@@ -172,7 +172,9 @@ combinelive :: [Int] -> Livelist -> Set.Set ALoc
 combinelive l live = foldl h (Set.empty) l
     where
         h :: Set.Set ALoc -> Int -> Set.Set ALoc
-        h set1 idx = Set.union set1 (live Map.! idx)
+        h set1 idx = let
+            unioned = Maybe.fromMaybe Set.empty (Map.lookup idx live) in
+            Set.union set1 unioned
 
 --build interference graph, we can just care about the succlist relationship for each line, but
 --we do need to case on div, mod (rax, rdx) and shift (rcx) for special register allocation.
@@ -249,7 +251,7 @@ buildInterfere ((idx, x) : xs) live pr g =
 computerInterfere :: [AAsm] -> Graph
 computerInterfere aasm = 
     let
-        processed = reverseAAsm [] (addLineNum loopAASM)
+        processed = reverseAAsm [] (addLineNum aasm)
         labels = findlabels processed (Map.empty)
         pred = computePredicate processed labels (Map.empty)
         ancestors = findAncestor pred
@@ -322,9 +324,17 @@ loopAASM =
         ARet (ALoc (AReg 0))
     ]
 
+smallAAsm :: [AAsm]
+smallAAsm = 
+    [
+        AAsm [ATemp 0] ANop [AImm 1],
+        AAsm [AReg 0] ANop [AImm 1],
+        ARet (ALoc (AReg 0))
+    ]
+
 testLive :: IO ()
 testLive = let
-    processed = reverseAAsm [] (addLineNum loopAASM)
+    processed = reverseAAsm [] (addLineNum smallAAsm)
     labels = findlabels processed (Map.empty)
     pred = computePredicate processed labels (Map.empty)
     ancestors = findAncestor pred
@@ -343,7 +353,7 @@ testLive = let
 testInterfereNew :: IO ()
 testInterfereNew = 
     let
-        processed = reverseAAsm [] (addLineNum loopAASM)
+        processed = reverseAAsm [] (addLineNum smallAAsm)
         labels = findlabels processed (Map.empty)
         pred = computePredicate processed labels (Map.empty)
         ancestors = findAncestor pred
