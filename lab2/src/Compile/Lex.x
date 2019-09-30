@@ -37,6 +37,7 @@ tokens :-
   "+"   {\_ -> TokPlus}
   "*"   {\_ -> TokTimes}
   "/"   {\_ -> TokDiv}
+  "%"   {\_ -> TokMod}
   "<"   {\_ -> TokLess}
   ">"   {\_ -> TokGreater}
   ">="   {\_ -> TokGeq}

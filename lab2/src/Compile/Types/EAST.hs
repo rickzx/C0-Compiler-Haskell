@@ -56,7 +56,7 @@ eStmt x = case x of
         Condition b t el -> EIf (pExp b) (eStmt t) (eElse el)
         --declaration still need to be prioritized
         For initr condi stepi bodyi -> case initr of
-            Opt (Decl (JustDecl var tp)) -> error "cant just declare in a loop"
+            Opt (Decl (JustDecl var tp)) -> EDecl var tp (EWhile (pExp condi) (ESeq (eStmt bodyi) (eSimpopt stepi)))
             Opt (Decl (DeclAsgn var tp expr)) -> EDecl var tp (ESeq (EAssign var (pExp expr))
                 (EWhile (pExp condi) (ESeq (eStmt bodyi) (eSimpopt stepi))))
             _ -> ESeq (eSimpopt initr) (EWhile (pExp condi) (ESeq (eStmt bodyi) 

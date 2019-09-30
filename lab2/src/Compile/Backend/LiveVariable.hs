@@ -119,7 +119,7 @@ singleVarLive a ancesset pr ancest livel = if ancesset == Set.empty then livel
             g :: Int -> Livelist -> Livelist
             g line liveset = let
                 (defset, _, _) = pr Map.! line
-                currlive = Maybe.fromMaybe Set.empty (Map.lookup line livel)
+                currlive = Maybe.fromMaybe Set.empty (Map.lookup line liveset)
                 in if Set.member a defset || Set.member a currlive then liveset
                    else let
                         newances = Maybe.fromMaybe Set.empty (Map.lookup line ancest) 
@@ -143,14 +143,14 @@ computeLive linenum varidx pr ances livel = let
     --this shouldnt be empty, since only line 0 would have zero ancestors
     ancesset = Maybe.fromMaybe Set.empty (Map.lookup linenum ances)
     in
-        if ancesset == Set.empty then livel
+        if ancesset == Set.empty || varidx > size - 1 then computeLive (linenum-1) 0 pr ances livel
         --find liveness to the one above
-        else if varidx > size - 1 then computeLive (linenum-1) 0 pr ances livel
+        --else if varidx > size - 1 then computeLive (linenum-1) 0 pr ances livel
         else let 
                 var = Set.elemAt varidx useset
                 (newlivl, keepgoing) = linelive livel var linenum
              in
-                if not keepgoing then computeLive linenum (varidx+1) pr ances livel 
+                if not keepgoing then computeLive linenum (varidx+1) pr ances newlivl
                 else
                     let
                         livelist = singleVarLive var ancesset pr ances newlivl 
