@@ -19,7 +19,8 @@ assertMsg _ True = return ()
 assertMsg s False = throwE s
 
 checkEAST :: EAST -> Either String ()
-checkEAST east = (trace $ "EAST: " ++ show east ++ "\n") evalState (runExceptT typeCheck) initialState
+-- (trace $ "EAST: " ++ show east ++ "\n") 
+checkEAST east = evalState (runExceptT typeCheck) initialState
   where
     initialState = (Set.empty, Set.empty)
     typeCheck = do
