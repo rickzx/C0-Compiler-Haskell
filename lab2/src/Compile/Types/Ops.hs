@@ -87,7 +87,7 @@ instance Show Binop where
   show BOr  = "|"
   show LOr  = "||"
   show Xor  = "^"
-  show Eql = "="
+  show Eql = "=="
   show Neq = "!="
   show Lt = "<"
   show Gt = ">"
