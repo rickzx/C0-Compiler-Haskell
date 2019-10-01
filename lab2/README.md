@@ -61,11 +61,11 @@ From this information we have, we created a map of predecessor set for each line
 Now, we computed the live variable by the method of going through each used variable on each line adding it to the line's useset. We look upwards until we reached the end (no predecessors), found the variable being in the def set, or found the variable is in the liveset of one of its predecessors (which means we have already did all the predecessors of this line before). After we reached the very top (line 1) of our IR, we know we have looked through all the possible ways of variable being live, and we are done.
 
 In terms of interference, the rule for L1 remains the same, but we need to change l+1 to successor list. Thus we implemented interference graph by the following rule below:
-
+```
 l: x <- exp
 live(any(l' in succ(l)), u)  =>  interfere(x, u)
 x != u
-
+```
 Coloring and register allocation remains the same, we just needed to consider the special case where we have lshift or rshift, which we need to precolor rcx by the assembly rule.
 
 ## Abstract Assembly -> Assembly
