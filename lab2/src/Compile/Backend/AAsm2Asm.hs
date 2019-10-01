@@ -4,6 +4,7 @@ import Compile.Backend.RegisterAlloc
 import Compile.Types
 import qualified Data.List as List
 import qualified Data.Map as Map
+import Debug.Trace
 
 getRegAlloc :: [AVal] -> Coloring -> Bool -> [Operand]
 getRegAlloc [] _ _ = []
@@ -17,6 +18,7 @@ getRegAlloc (x:xs) c is64 =
     getRegAlloc xs c is64
 
 toAsm :: AAsm -> Coloring -> [Inst]
+-- toAsm e _ | trace ("toAsm " ++ show e ++ "\n") False = undefined
 toAsm (AAsm [assign] ANop [arg]) coloring =
     let assign' = mapToReg assign coloring
         [arg'] = getRegAlloc [arg] coloring False

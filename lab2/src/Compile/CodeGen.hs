@@ -28,7 +28,7 @@ asmGen east =
   let
     (aasms, localVar) = aasmGen east
 
-    (coloring, stackVar) = if localVar > 500 then allStackColor localVar
+    (coloring, stackVar) = if localVar > 200 then allStackColor localVar
       else
         let
           graph = computerInterfere aasms
@@ -46,10 +46,7 @@ asmGen east =
         _            -> True
 
     -- (trace $ show coloring ++ "\n\n" ++ show aasms)
-    insts = foldl
-        (\l aasm -> l ++ List.filter nonTrivial (toAsm aasm coloring))
-        []
-        aasms
+    insts = concatMap (\x -> List.filter nonTrivial (toAsm x coloring)) aasms
   in
     if stackVar > 0 then
     concatMap (\line -> show line ++ "\n")
