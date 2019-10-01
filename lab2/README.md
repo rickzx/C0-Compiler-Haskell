@@ -1,4 +1,4 @@
-Design Decisions for L2
+#Design Decisions for L2
 
 In L2, we modified our L1 compiler so that it will handle codes involving control flow as well as adding more operations involving both integer types and boolean types. In order to do so, we have modified all aspects of the compiler to compile
 our new language as specified in the steps below.
