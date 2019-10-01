@@ -3,6 +3,10 @@
 In L2, we modified our L1 compiler so that it will handle codes involving control flow as well as adding more operations involving both integer types and boolean types. In order to do so, we have modified all aspects of the compiler to compile
 our new language as specified in the steps below.
 
+## Overall Workflow
+
+**C0 Code** ---Lexer/Parser---> **AST** ---Elaboration---> **EAST** ---TypeChecking & Optimization--> **EAST** ---Translation---> **Abstract Assembly** ---Live Analysis & Register Allocation---> **Assembly** ---CodeGen---> **x86-64**
+
 ## Lexing and Parsing
 
 For Lexing, we added the tokens used in our new language that represents our control flow (if, while) and other arithmetic and boolean operations that we did not have before(<=,>, >> etc.). We also added the boolean type.
@@ -48,6 +52,14 @@ data EExp
 
 ## Typechecking
 
+Typechecking consists of three parts:
+
+**Static Type Checking**: Check that the static semantics of statements and expressions are satisfied. This is done by maintaining a typing context, and recursively check that the static semantics are met. If typing violations are found, the compiler will raise `Tycon mismatch`.
+
+**Proper Return Checking**: Check that all finite control flow paths through the program starting at the beginning of each function, end with an explicit `return` statement. If violations are found, the compiler will raise `Main does not return`.
+
+**Checking Variable Initialization**: Check that along all control flow paths, any variable is defined before use. This is done by maintaing a set of declared variables and a set of defined variables of a scope.  If violations are found, the compiler will raise `Variable used before initialization`.
+
 ## Constant Folding Optimizations
 After Typechecking, we went through another iteration of our EAST to simplify statements that only contains constants. Specifically, when a binop expression having only constants, we simplify the binop expression by evaluating it directly.
 
@@ -68,36 +80,65 @@ x != u
 ```
 Coloring and register allocation remains the same, we just needed to consider the special case where we have lshift or rshift, which we need to precolor rcx by the assembly rule.
 
+## EAST -> Abstract Assembly
+
+We follow the dynamic semantics in (http://www.cs.cmu.edu/afs/cs/academic/class/15411-f19/www/lec/09b-irtrees.pdf).
+
+We use the `State` monad to keep track of the fresh variables and labels.
+
+```
+data Alloc =
+    Alloc
+        { variables :: Map.Map String Int
+    -- ^ Map from source variable names to unique variable ids.
+        , uniqueIDCounter :: Int
+    -- ^ Value greater than any id in the map.
+        , uniqueLabelCounter :: Int
+    -- ^ Next label to generate.
+        }
+```
+
+We define several types of abstract assembly constructors to handle control flows:
+
+```
+data ACtrl
+  = ALab ALabel   -- Label
+  | AJump ALabel    -- Direct Jump
+  | ACJump AVal ALabel ALabel   -- Conditional Jump, if x then l1 else l2
+  | ACJump' ARelOp AVal AVal ALabel ALabel  -- Conditional Jump, if (x ? y) then l1 else l2
+```
+
 ## Abstract Assembly -> Assembly
 
 ### Define Assembly
 
-For L2 compiler, we define the following data type for x86-64 assembly, which is sufficient for generating result for straight-line code.
+For L2 compiler, we add in `Jmp, Je, Label, Cmp ...` to handle control flow. We also add in some new x86 instructions for boolean and int types.
 
 ```
 data  Inst
-= Movq Operand Operand
-| Movl Operand Operand
+= Movl Operand Operand
 | Movabsq Int Operand
-| Addq Operand Operand
 | Addl Operand Operand
-| Subq Operand Operand
 | Subl Operand Operand
-| Imulq Operand Operand
 | Imull Operand Operand
-| Idivq Operand
 | Idivl Operand
-| Salq Int Operand
 | Sall Int Operand
-| Sarq Int Operand
 | Sarl Int Operand
-| Negq Operand
 | Negl Operand
 | Pushq Operand
 | Popq Operand
 | Cdq
 | Cqto
 | Ret
+| Andl Operand Operand
+| Orl Operand Operand
+| Xorl Operand Operand
+| Notl Operand
+| Label String
+| Cmp Operand Operand
+| Jmp String
+| Je String
+...
 
 data  Operand
 = Imm Int
@@ -126,7 +167,9 @@ The code generation from abstract assembly to assembly is based on pattern-match
 
 - For `Idiv / Imod`, we need to reserve `%RAX` and `RDX` for this special use case. Since we have already made `%RAX` and `RDX` interfere with the operands, and precolored `%RAX` and `RDX` with the desired registers, we are sure that moving operands into `%RAX` and `RDX` is safe.
 
+- Similarly, for `Sall / Sarl`, we need to reserve `RCX` for the special use case.
+
 To make the generated x86 assembly more compact, the compiler will
 
 - Remove trivial instructions, e.g. `Movq %RAX %RAX`
-- Remove unreachable code blocks, e.g. everything after `Ret`
+- Remove unreachable code blocks
