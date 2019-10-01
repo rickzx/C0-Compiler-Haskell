@@ -23,10 +23,11 @@ codeGen = aasmGen
 asmGen :: EAST -> String
 asmGen east =
   let
-    (aasms, _) = aasmGen east
+    (aasms, localVar) = aasmGen east
 
-    -- if localVar > 200 then allStackColor localVar
-    (coloring, stackVar) = let
+    (coloring, stackVar) = if localVar > 200 then allStackColor localVar
+      else
+        let
           graph = computerInterfere aasms
 
           -- (trace $ "Interference graph: " ++ show graph ++ "\n\n")
