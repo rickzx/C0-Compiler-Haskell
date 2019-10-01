@@ -6,7 +6,6 @@ import qualified Data.Set as Set
 import Debug.Trace
 
 import Compile.Types
-import Compile.Types.Ops
 
 type Graph = Map.Map ALoc (Set.Set ALoc)
 
@@ -101,7 +100,7 @@ findAncestor :: Pred -> Ancestor
 findAncestor = Map.foldlWithKey f Map.empty
   where
     f :: Ancestor -> Int -> (Set.Set ALoc, [Int], Set.Set ALoc) -> Ancestor
-    f ances _ (s1, [], s2) = ances
+    f ances _ (_s1, [], _s2) = ances
     f ances k (s1, x:xs, s2) =
         let newances = createOrUpdate ances x k
          in f newances k (s1, xs, s2)
@@ -162,7 +161,7 @@ computeLive linenum varidx pr ances livel =
 addEdge :: (ALoc, ALoc) -> Graph -> Graph
 addEdge (u, v) g =
     case Map.lookup u g of
-        Just sset -> Map.adjust (Set.insert v) u g
+        Just _sset -> Map.adjust (Set.insert v) u g
         Nothing -> Map.insert u (Set.singleton v) g
 
 isSameLoc :: AVal -> ALoc -> Bool
@@ -273,17 +272,17 @@ buildInterfere ((idx, x):xs) live pr g =
 computerInterfere :: [AAsm] -> Graph
 computerInterfere aasm =
     let processed = reverseAAsm [] (addLineNum aasm)
-        labels = findlabels processed (Map.empty)
-        pred = computePredicate processed labels (Map.empty)
-        ancestors = findAncestor pred
+        labels = findlabels processed Map.empty
+        predec = computePredicate processed labels Map.empty
+        ancestors = findAncestor predec
         size =
             case processed of
                 [] -> 0
-                (idx, x):xs -> idx
-        liveness = computeLive size 0 pred ancestors (Map.empty)
+                (idx, _):_xs -> idx
+        liveness = computeLive size 0 predec ancestors Map.empty
      in 
         -- (trace $ "Predicate: " ++ show pred ++ "\n\n" ++ "Ancestors :" ++ show ancestors ++ "\n\n" ++ "Liveness: " ++ show liveness ++ "\n")
-        buildInterfere processed liveness pred Map.empty
+        buildInterfere processed liveness predec Map.empty
 
 --example from Written 1
 exAASM :: [AAsm]
@@ -333,35 +332,35 @@ whileAASM = [AAsm [ATemp 0] ANop [AImm 1], AAsm [AReg 0] ANop [AImm 1], ARet (AL
 testLive :: IO ()
 testLive =
     let processed = reverseAAsm [] (addLineNum whileAASM)
-        labels = findlabels processed (Map.empty)
-        pred = computePredicate processed labels (Map.empty)
-        ancestors = findAncestor pred
+        labels = findlabels processed Map.empty
+        predec = computePredicate processed labels Map.empty
+        ancestors = findAncestor predec
         size =
             case processed of
                 [] -> 0
-                (idx, x):xs -> idx
-        liveness = computeLive size 0 pred ancestors (Map.empty)
+                (idx, _):_xs -> idx
+        liveness = computeLive size 0 predec ancestors Map.empty
      in do print ancestors
            print "__________________________"
-           print pred
+           print predec
            print "__________________________"
            print liveness
 
 testInterfereNew :: IO ()
 testInterfereNew =
     let processed = reverseAAsm [] (addLineNum whileAASM)
-        labels = findlabels processed (Map.empty)
-        pred = computePredicate processed labels (Map.empty)
-        ancestors = findAncestor pred
+        labels = findlabels processed Map.empty
+        predec = computePredicate processed labels Map.empty
+        ancestors = findAncestor predec
         size =
             case processed of
                 [] -> 0
-                (idx, x):xs -> idx
-        liveness = computeLive size 0 pred ancestors (Map.empty)
+                (idx, _):_xs -> idx
+        liveness = computeLive size 0 predec ancestors Map.empty
      in do print whileAASM
            print "______________________________"
            print liveness
            print "______________________________"
-           print pred
+           print predec
            print "______________________________"
-           print (buildInterfere (processed) liveness pred Map.empty)
+           print (buildInterfere processed liveness predec Map.empty)

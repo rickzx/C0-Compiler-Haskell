@@ -96,6 +96,8 @@ instance Show Type where
 instance Show Exp where
   show (Int x) = show x
   show (Ident var) = var
+  show T = "True"
+  show F = "False"
   show (Binop binop expr1 expr2) =
     show expr1 ++ " " ++ show binop ++ " " ++ show expr2
   show (Ternop expr1 expr2 expr3) = 

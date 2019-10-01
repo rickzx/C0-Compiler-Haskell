@@ -4,7 +4,6 @@ import qualified Data.Map                      as Map
 import qualified Data.Set                      as Set
 import qualified Data.PQueue.Max               as PQ
 import qualified Data.Maybe                    as Maybe
-import qualified Control.Monad.State.Strict    as State
 
 import           Compile.Types.AbstractAssembly
 import           Compile.Types.Assembly

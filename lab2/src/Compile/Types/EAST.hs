@@ -38,7 +38,7 @@ instance Show EAST where
 
 instance Show EExp where
     show (EInt a) = show a
-    show (EIdent id) = id
+    show (EIdent x) = x
     show ET = "True"
     show EF = "False"
     show (EBinop b expr1 expr2) = show expr1 ++ " " ++ show b ++ " " ++ show expr2

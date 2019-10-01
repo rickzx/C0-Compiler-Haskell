@@ -70,6 +70,7 @@ Executable c0c
     , Compile.Types.AbstractAssembly
     , Compile.Frontend.CheckEAST
     , Compile.Frontend.Elaborate
+    , Compile.Frontend.EASTOptimize
     , Compile.Backend.RegisterAlloc
     , Compile.Backend.AAsm2Asm
     , Compile.Backend.LiveVariable

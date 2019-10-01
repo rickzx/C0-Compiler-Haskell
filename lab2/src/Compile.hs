@@ -36,9 +36,6 @@ writeString file s = liftIOE $ writeFile file s
 writeIOString :: FilePath -> IO String -> ExceptT String IO ()
 writeIOString file s = liftIOE $ s >>= writeFile file
 
-writer :: Show a => FilePath -> a -> ExceptT String IO ()
-writer file obj = writeString file (show obj)
-
 compile :: Job -> IO ()
 compile job = do
   inputHandle <- openFile (jobSource job) ReadMode

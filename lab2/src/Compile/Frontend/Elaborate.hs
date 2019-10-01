@@ -20,7 +20,7 @@ pExp :: Exp -> EExp
 pExp (Int a) = EInt a
 pExp T = ET
 pExp F = EF
-pExp (Ident id) = EIdent id
+pExp (Ident x) = EIdent x
 pExp (Binop b expr1 expr2) = EBinop b (pExp expr1) (pExp expr2)
 pExp (Ternop expr1 expr2 expr3) = ETernop (pExp expr1) (pExp expr2) (pExp expr3)
 pExp (Unop u expr1) = EUnop u (pExp expr1)

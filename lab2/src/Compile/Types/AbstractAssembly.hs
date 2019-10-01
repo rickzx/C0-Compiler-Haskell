@@ -64,6 +64,7 @@ instance Show ALoc where
   show (AReg 0) = "%eax"
   show (AReg 1) = "%edx"
   show (AReg 2) = "%ecx"
+  show (AReg _) = "%ill-formed"
   show (ATemp n) = "%t" ++ (show n)
 
 instance Show ACtrl where
