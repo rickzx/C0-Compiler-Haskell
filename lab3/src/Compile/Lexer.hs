@@ -1,11 +1,6 @@
 {-# OPTIONS_GHC -fno-warn-unused-binds -fno-warn-missing-signatures #-}
-<<<<<<< HEAD
-{-# LANGUAGE CPP #-}
-{-# LINE 1 "Lex.x" #-}
-=======
 {-# LANGUAGE CPP,MagicHash #-}
 {-# LINE 1 "src/Compile/Lex.x" #-}
->>>>>>> master
 
 module Compile.Lexer where
 
@@ -830,11 +825,7 @@ alex_actions = array (0 :: Int, 133)
   , (0,alex_action_65)
   ]
 
-<<<<<<< HEAD
-{-# LINE 96 "Lex.x" #-}
-=======
 {-# LINE 96 "src/Compile/Lex.x" #-}
->>>>>>> master
 
 -- Each action has type :: String -> Token
 -- The token type:
@@ -955,13 +946,8 @@ alex_action_32 = \_ -> TokLshift
 alex_action_33 = \_ -> TokRshift
 alex_action_34 = \_ -> TokIncr
 alex_action_35 = \_ -> TokDecr
-<<<<<<< HEAD
-alex_action_36 = \_ -> TokIf
-alex_action_37 = \_ -> TokElse
-=======
 alex_action_36 = \_ -> TokTIf
 alex_action_37 = \_ -> TokTElse
->>>>>>> master
 alex_action_38 = \_ -> TokXor
 alex_action_39 = \_ -> TokUnop (LNot)
 alex_action_40 = \_ -> TokUnop (BNot)
