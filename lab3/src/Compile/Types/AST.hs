@@ -14,9 +14,16 @@ type Ident = String
 
 data Type = 
     INTEGER 
-  | BOOLEAN deriving Eq
+  | BOOLEAN 
+  | VOID
+  | Ident desc deriving Eq
 
-data AST = Block [Stmt] deriving Eq
+data AST = Program [Gdecl] deriving Eq
+
+data Gdecl =
+    Fdecl {rtype :: Type, name :: Ident, parameters :: [Ident]}
+  | Fdefn {rtype :: Type, name :: Ident, parameters :: [Ident], block :: [Stmt]}
+  | Typedef {rtype :: Type, name :: Ident}
 
 data Stmt
   = Simp Simp
@@ -44,6 +51,8 @@ data Simp = Asgn Ident Asnop Exp
   | Decl Decl
   | Exp Exp deriving Eq
 
+data Arglist = Args [Exp] deriving Eq
+
 data Exp
   = Int Int
   | T
@@ -52,12 +61,15 @@ data Exp
   | Binop Binop Exp Exp
   | Unop Unop Exp
   | Ternop Exp Exp Exp -- e1 ? e2 : e3
+  | Function Arglist
   deriving Eq
 
 data Control
   = Condition { dBool :: Exp, dTrue :: Stmt, dElse :: Elseopt}
   | For {initial :: Simpopt, cond :: Exp, step :: Simpopt, body :: Stmt}
   | While {cond :: Exp, body :: Stmt}
+  | Assert {cond :: Exp}
+  | Void
   | Retn Exp
   deriving Eq
 {-

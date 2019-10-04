@@ -88,6 +88,7 @@ tokens :-
   [\{] {\_ -> TokLBrace}
   [\}] {\_ -> TokRBrace}
   [\;] {\_ -> TokSemi}
+  [\,] {\_ -> TokComma}
 
   -- comments
   \/\/.*\n ;
@@ -139,6 +140,7 @@ data Token =
   TokIncr |
   TokDecr |
   TokXor |
+  TokComma |
   TokReserved
   deriving (Eq,Show)
 
