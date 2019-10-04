@@ -77,7 +77,6 @@ import Compile.Types.AST
 %right NEG '~' '!' '++' '--'
 %%
 
---TODO
 Program : {- Empty -} {[]}
       | Gdecl Program {$1 : $2}
 
@@ -132,7 +131,6 @@ Control : if '(' Exp ')' Stmt Elseopt {Condition $3 $5 $6}
       | ret Exp ';' {Retn $2}
       | ret ';' {Void}
 
---TODO
 Exp : '(' Exp ')' {$2}
     | Exp '?' Exp ':' Exp {Ternop $1 $3 $5}
     | true {T}
@@ -140,7 +138,7 @@ Exp : '(' Exp ')' {$2}
     | Intconst {$1}
     | ident {Ident $1}
     | Operation {$1}
-    | ident Arglist {Function Arglist}
+    | ident Arglist {Function $2}
 
 ArglistFollow : {- Empty -} {[]}
     | ',' Exp ArglistFollow {$2 : $3}
