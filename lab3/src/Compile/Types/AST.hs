@@ -51,8 +51,6 @@ data Simp = Asgn Ident Asnop Exp
   | Decl Decl
   | Exp Exp deriving Eq
 
-data Arglist = Args [Exp] deriving Eq
-
 data Exp
   = Int Int
   | T
@@ -61,7 +59,7 @@ data Exp
   | Binop Binop Exp Exp
   | Unop Unop Exp
   | Ternop Exp Exp Exp -- e1 ? e2 : e3
-  | Function Arglist
+  | Function [Exp]
   deriving Eq
 
 data Control
