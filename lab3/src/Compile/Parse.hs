@@ -1766,11 +1766,12 @@ happyReduction_46 (HappyAbsSyn24  happy_var_1)
 happyReduction_46 _  = notHappyAtAll 
 
 happyReduce_47 = happySpecReduce_2  21 happyReduction_47
-happyReduction_47 _
+happyReduction_47 (HappyAbsSyn23  happy_var_2)
 	_
 	 =  HappyAbsSyn21
-		 (Function Arglist
+		 (Function happy_var_2
 	)
+happyReduction_47 _ _  = notHappyAtAll 
 
 happyReduce_48 = happySpecReduce_0  22 happyReduction_48
 happyReduction_48  =  HappyAbsSyn22
