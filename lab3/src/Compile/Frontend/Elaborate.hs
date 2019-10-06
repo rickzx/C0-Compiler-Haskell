@@ -99,7 +99,7 @@ eElse eopt tmap = case eopt of
     ElseNop -> ENop
     Else stmt -> eStmt stmt tmap
 
-
+--compute the factorial of a number example.
 exAST :: AST
 exAST =
   Program
