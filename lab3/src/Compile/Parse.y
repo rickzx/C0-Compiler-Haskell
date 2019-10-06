@@ -86,7 +86,7 @@ Gdecl : Fdecl {Fdecl $1}
 
 Fdecl : Type ident Paramlist {$1 $2 $3}
 Fdefn : Type ident Paramlist Block {$1 $2 $3 $4}
-Param : Type ident {$1 $2}
+Param : Type ident {（$1，$2）}
 
 ParamlistFollow : {- Empty -} {[]}
       | ',' Param ParamlistFollow {$2 : $3}
@@ -100,7 +100,7 @@ Block : '{' Stmts '}' {$2}
 
 Type  : int {INTEGER}
       | bool {BOOLEAN}
-      | ident {Ident ident}
+      | ident {DEF ident}
       | void {VOID}
 
 Decl  : Type ident asgnop Exp {checkDeclAsgn $2 $3 $1 $4}
@@ -138,7 +138,7 @@ Exp : '(' Exp ')' {$2}
     | Intconst {$1}
     | ident {Ident $1}
     | Operation {$1}
-    | ident Arglist {Function $2}
+    | ident Arglist {Function $1 $2}
 
 ArglistFollow : {- Empty -} {[]}
     | ',' Exp ArglistFollow {$2 : $3}

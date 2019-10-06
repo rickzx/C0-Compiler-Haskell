@@ -16,14 +16,16 @@ data Type =
     INTEGER 
   | BOOLEAN 
   | VOID
-  | Ident desc deriving Eq
+  | NONE --for debug
+  | DEF Ident deriving Eq
 
 data AST = Program [Gdecl] deriving Eq
 
 data Gdecl =
-    Fdecl {rtype :: Type, name :: Ident, parameters :: [Ident]}
-  | Fdefn {rtype :: Type, name :: Ident, parameters :: [Ident], block :: [Stmt]}
+    Fdecl {rtype :: Type, name :: Ident, parameters :: [(Type, Ident)]}
+  | Fdefn {rtype :: Type, name :: Ident, parameters :: [(Type, Ident)], block :: [Stmt]}
   | Typedef {rtype :: Type, name :: Ident}
+  deriving Eq
 
 data Stmt
   = Simp Simp
@@ -59,7 +61,7 @@ data Exp
   | Binop Binop Exp Exp
   | Unop Unop Exp
   | Ternop Exp Exp Exp -- e1 ? e2 : e3
-  | Function [Exp]
+  | Function Ident [Exp]
   deriving Eq
 
 data Control
@@ -102,6 +104,9 @@ instance Show Simp where
 instance Show Type where
   show INTEGER = "int"
   show BOOLEAN = "bool"
+  show VOID = "void"
+  show NONE = "error"
+  show (DEF a) = "def" ++ a
 
 instance Show Exp where
   show (Int x) = show x
@@ -113,3 +118,8 @@ instance Show Exp where
   show (Ternop expr1 expr2 expr3) = 
     show expr1 ++ " ? " ++ show expr2 ++ " :" ++ show expr3
   show (Unop unop expr) = show unop ++ show expr
+  show (Function identi exprlist) = 
+      identi ++ "(" ++ (foldr redu_fn "" exprlist) ++ ")"
+      where 
+        redu_fn :: Exp -> String -> String
+        redu_fn e stri = show e ++ "," ++ stri
