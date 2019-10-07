@@ -2,8 +2,6 @@ module Compile.Backend.AAsm2Asm where
 
 import Compile.Backend.RegisterAlloc
 import Compile.Types
-import qualified Data.List as List
-import qualified Data.Map as Map
 import Debug.Trace
 
 getRegAlloc :: [AVal] -> Coloring -> Bool -> [Operand]
@@ -311,63 +309,5 @@ toAsm (ARel [assign] AGe [src1, src2]) coloring =
             (_, Mem {}) -> asm
             (_, Mem' {}) -> asm
             _ -> [Cmp src2' src1', Setge (Reg R11B), Movzbl (Reg R11B) assign']
+toAsm (ACall fun xs) _ = [Xorl (Reg EAX) (Reg EAX), Call fun]
 toAsm _ _ = error "ill-formed abstract assembly"
-
-printAsm :: [AAsm] -> String
-printAsm aasms =
-    concatMap (\line -> "\t" ++ show line ++ "\n") $
-    [Pushq (Reg RBP), Movq (Reg RSP) (Reg RBP), Subq (Imm (stackVar * 8)) (Reg RSP)] ++
-    insts ++ [Addq (Imm (stackVar * 8)) (Reg RSP), Popq (Reg RBP), Ret]
-  where
-    coloring =
-        Map.fromList
-            [ (AReg 0, 0)
-            , (ATemp 0, 1)
-            , (ATemp 1, 2)
-            , (ATemp 2, 3)
-            , (ATemp 3, 4)
-            , (ATemp 4, 5)
-            , (ATemp 5, 6)
-            , (ATemp 6, 7)
-            , (ATemp 7, 8)
-            , (ATemp 8, 9)
-            , (ATemp 9, 10)
-            , (ATemp 10, 11)
-            , (ATemp 11, 12)
-            , (ATemp 12, 13)
-            , (ATemp 13, 14)
-            , (ATemp 14, 15)
-            , (ATemp 15, 16)
-            , (ATemp 16, 17)
-            , (ATemp 17, 18)
-            , (ATemp 18, 19)
-            , (ATemp 19, 20)
-            , (ATemp 20, 21)
-            , (ATemp 21, 22)
-            , (ATemp 22, 23)
-            , (ATemp 23, 24)
-            , (ATemp 24, 25)
-            , (ATemp 25, 26)
-            , (ATemp 26, 27)
-            , (ATemp 27, 28)
-            , (ATemp 28, 29)
-            , (ATemp 29, 30)
-            , (ATemp 30, 31)
-            , (ATemp 31, 32)
-            , (ATemp 32, 33)
-            , (ATemp 33, 34)
-            , (ATemp 34, 35)
-            , (ATemp 35, 36)
-            , (ATemp 36, 37)
-            , (ATemp 37, 38)
-            , (ATemp 38, 39)
-            , (ATemp 39, 40)
-            , (ATemp 40, 41)
-            ]
-    stackVar = 25
-    nonTrivial asm =
-        case asm of
-            Movl op1 op2 -> op1 /= op2
-            Movq op1 op2 -> op1 /= op2
-            _ -> True
-    insts = foldl (\l aasm -> l ++ List.filter nonTrivial (toAsm aasm coloring)) [] aasms

@@ -26,6 +26,8 @@ data Inst
     | Orl Operand Operand
     | Xorl Operand Operand
     | Notl Operand
+    | Fun String
+    | Call String
     | Label String
     | Cmp Operand Operand
     | Test Operand Operand
@@ -209,6 +211,8 @@ instance Show Inst where
     show (Jg label) = "\tjg .L" ++ label
     show (Jge label) = "\tjge .L" ++ label
     show (Movzbl x1 x2) = "\tmovzbl " ++ show x1 ++ ", " ++ show x2 
+    show (Call f) = "\tcall" ++ f
+    show (Fun f) = f ++ ":"
 
 
 toReg64 :: Register -> Register

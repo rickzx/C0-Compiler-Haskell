@@ -1,6 +1,7 @@
 module Compile.Backend.EAST2AAsm where
 
 import Compile.Types
+import Control.Monad
 import qualified Control.Monad.State.Strict as State
 import Data.Int
 import qualified Data.Map as Map
@@ -38,9 +39,9 @@ aasmGen :: EAST -> ([AAsm], Int)
 aasmGen east = State.evalState assemM initialState
   where
     initialState =
-        Alloc {variables = Map.fromList $ zip decls [0 ..], uniqueIDCounter = length decls, uniqueLabelCounter = 0}
-      where
-        decls = getDecls east
+        Alloc {variables = Map.empty, 
+                uniqueIDCounter = 0, 
+                uniqueLabelCounter = 0}
     assemM :: AllocM ([AAsm], Int)
     assemM = do
         eastAssm <- genEast east
@@ -64,6 +65,20 @@ genEast (EAssign x expr) = do
     allocMap <- State.gets variables
     let tmpNum = ATemp $ allocMap Map.! x
     genExp expr tmpNum
+genEast (EDef fn t e) = do
+    gen <- genEast e
+    Alloc _v uid ulab <- State.get
+    let args = map fst t
+        decls = args ++ getDecls e
+        v' = Map.fromList $ zip decls [uid ..]
+        uid' = uid + length decls
+    State.put $ Alloc v' uid' ulab
+    let (inReg, inStk) = splitAt 6 (map (\a -> ATemp $ v' Map.! a) args)
+        movArg = map (\(i, tmp) -> AAsm [tmp] ANop [ALoc $ argRegs !! i]) $ zip [0..] inReg
+    return $ [AFun fn inStk] ++ movArg ++ gen
+genEast (EAssert expr) = do
+    let trans = EIf expr ENop (ELeaf $ EFunc "_c0_abort" [])
+    genEast trans
 genEast (EIf expr e1 e2) = do
     l1 <- fmap show getNewUniqueLabel
     l2 <- fmap show getNewUniqueLabel
@@ -82,14 +97,27 @@ genEast (EWhile expr e) = do
     cmp <- genCmp expr l2 l3
     gen <- genEast e
     return $ [AControl $ ALab l1] ++ cmp ++ [AControl $ ALab l2] ++ gen ++ [AControl $ AJump l1, AControl $ ALab l3]
-genEast (ERet expr) = do
-    gen <- genExp expr (AReg 0)
-    return $ gen ++ [AControl $ AJump "RET"]
+genEast (ERet expr) = 
+    case expr of
+        Just e -> do 
+                gen <- genExp e (AReg 0)
+                return $ gen ++ [AControl $ AJump "RET"]
+        Nothing -> return [AControl $ AJump "RET"]
 genEast ENop = return []
 genEast (EDecl _ _ e) = genEast e
-genEast (ELeaf e) = do
-    n <- getNewUniqueID
-    genExp e (ATemp n)
+genEast (ELeaf e) = genSideEffect e
+
+genSideEffect :: EExp -> AllocM [AAsm]
+genSideEffect (EFunc fn args) = do
+    let argLen = length args
+    ids <- replicateM argLen getNewUniqueID
+    let tmpVars = map ATemp ids
+    gens <- mapM (\(i, e) -> genExp e (tmpVars !! i)) $ zip [0..] args
+    let gen = join gens
+    let (inReg, inStk) = splitAt 6 tmpVars
+        movArg = map (\(i, tmp) -> AAsm [argRegs !! i] ANop [ALoc tmp]) $ zip [0..] inReg
+    return $ gen ++ movArg ++ [ACall fn inStk]
+genSideEffect _ = error "Expression has no side effect."
 
 genExp :: EExp -> ALoc -> AllocM [AAsm]
 -- genExp e _ | trace ("genExp " ++ show e ++ "\n") False = undefined
@@ -171,6 +199,7 @@ genExp (ETernop e1 e2 e3) dest =
                 cmp ++
                 [AControl $ ALab l1] ++
                 gen1 ++ [AControl $ AJump l3, AControl $ ALab l2] ++ gen2 ++ [AControl $ AJump l3, AControl $ ALab l3]
+    
 
 genCmp :: EExp -> ALabel -> ALabel -> AllocM [AAsm]
 -- genCmp e _ _ | trace ("genCmp " ++ show e ++ "\n") False = undefined
@@ -221,6 +250,9 @@ genRelOp Le = ALe
 genRelOp Ge = AGe
 genRelOp o = error $ "Operator is not a RelOp: " ++ show o
 
+argRegs :: [ALoc]
+argRegs = [AReg 1, AReg 2, AReg 3, AReg 4, AReg 5, AReg 6]
+
 testGenEast :: IO ()
 testGenEast = do
     let east =
@@ -232,7 +264,7 @@ testGenEast = do
                      INTEGER
                      (ESeq
                           (EIf (EInt 1) (EAssign "x" (EInt 1)) (EAssign "x" (EInt 2)))
-                          (ERet (EBinop Add (EIdent "x") (EIdent "y")))))
+                          (ERet $ Just (EBinop Add (EIdent "x") (EIdent "y")))))
         (aasms, _) = aasmGen east
     putStr $ show $ getDecls east
     putStr "\n"

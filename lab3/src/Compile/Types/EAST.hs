@@ -5,25 +5,30 @@ module Compile.Types.EAST where
 
 import Compile.Types.AST
 import Compile.Types.Ops
+import qualified Data.Maybe as Maybe
 
+--EX: add : int * int -> int.
 data EAST 
     = ESeq EAST EAST
     | EAssign Ident EExp
+    | EDef Ident [(Ident, Type)] EAST
     | EIf EExp EAST EAST
     | EWhile EExp EAST
-    | ERet EExp
+    | EAssert EExp
+    | ERet (Maybe.Maybe EExp) -- must be function return type
     | ENop
-    | EDecl Ident Type EAST
+    | EDecl Ident Type EAST --last item of type is the return type, if only 1 item, its variable decl
     | ELeaf EExp
-    
+
 data EExp
     = EInt Int
     | ET
-    | EF
+    | EF 
     | EIdent Ident
     | EBinop Binop EExp EExp
     | ETernop EExp EExp EExp
     | EUnop Unop EExp
+    | EFunc Ident [EExp]
     deriving Eq
 
 instance Show EAST where
@@ -35,6 +40,7 @@ instance Show EAST where
     show ENop = show "NOP"
     show (EDecl ident stype e1) = show "EDecl" ++ "(" ++ ident ++ "  ,  " ++ show stype ++ " , " ++ show e1 ++ ")"
     show (ELeaf e) = show e
+    show (EAssert e) = "EAssert" ++ "(" ++ show e ++ ")"
 
 instance Show EExp where
     show (EInt a) = show a
@@ -44,3 +50,8 @@ instance Show EExp where
     show (EBinop b expr1 expr2) = show expr1 ++ " " ++ show b ++ " " ++ show expr2
     show (ETernop expr1 expr2 expr3) = show expr1 ++ " ? " ++ show expr2 ++ " : " ++ show expr3
     show (EUnop u expr1) = show u ++ show expr1
+    show (EFunc iden exprlist) = 
+        iden ++ "(" ++ (foldr redu_fn "" exprlist) ++ ")"
+        where 
+            redu_fn :: EExp -> String -> String
+            redu_fn e stri = show e ++ "," ++ stri

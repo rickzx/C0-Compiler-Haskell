@@ -14,7 +14,9 @@ type Ident = String
 
 data Type = 
     INTEGER 
-  | BOOLEAN deriving Eq
+  | BOOLEAN 
+  | VOID
+  | ARROW [Type] Type deriving Eq
 
 data AST = Block [Stmt] deriving Eq
 
