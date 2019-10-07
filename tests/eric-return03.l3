@@ -1,0 +1,23 @@
+//test return 10
+
+//compute binomial coefficient
+
+int binom(int n, int k){
+    int count = 0;
+    int operand = n;
+    int res = 1;
+    while(count < k){
+        res *= operand;
+        operand--;
+        count++;
+    }
+    while(count > 0){
+        res /= count;
+        count--;
+    }
+    return res;
+}
+
+int main(){
+    return binom(5, 2);
+}

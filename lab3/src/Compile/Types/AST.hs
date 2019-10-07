@@ -17,7 +17,8 @@ data Type =
   | BOOLEAN 
   | VOID
   | NONE --for debug
-  | DEF Ident deriving Eq
+  | DEF Ident
+  | ARROW [Type] Type deriving Eq
 
 data AST = Program [Gdecl] deriving Eq
 

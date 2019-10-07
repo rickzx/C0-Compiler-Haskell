@@ -13,6 +13,7 @@ eGen (Program l) = eGdeclist l Map.empty
 --types of parameters to make Fdecl to generate the function type
 --else, if its typedef we just map the new type to its new name
 --else, we use decl, and does the assign op to assign decl to the block
+--TODO: change this to throw error instead of NONE
 findtp :: Typemap -> Type -> Type
 findtp tmap (DEF str) = Maybe.fromMaybe NONE (Map.lookup str tmap)
 findtp tmap tp = tp
