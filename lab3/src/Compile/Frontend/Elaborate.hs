@@ -7,7 +7,7 @@ import qualified Data.Maybe as Maybe
 type Typemap = Map.Map Ident Type
 
 --map each function to its corresponding type, last type of the array is return type.
-type Fnmap = Map.Map Ident [Type]
+type Fnmap = Map.Map Ident [(Type, Ident)]
 
 --generate our intermediate ast structure
 --(EAST, declared function map, defined function map)
@@ -20,9 +20,9 @@ eGen (Program l) = let
 findFunc :: ([Gdecl], Fnmap, Fnmap, Typemap) -> ([Gdecl], Fnmap, Fnmap, Typemap)
 findFunc ([], dec, def, tmap) = ([], dec, def, tmap)
 findFunc (x:xs, dec, def, tmap) = case x of
-    Fdecl rtp nme param -> let types = extractParam param rtp tmap in
+    Fdecl rtp nme param -> let types = extractParam param (rtp,nme) tmap in
             findFunc(xs, Map.insert nme types dec, def, tmap)
-    Fdefn rtp nme param blk -> let types = extractParam param rtp tmap in
+    Fdefn rtp nme param blk -> let types = extractParam param (rtp,nme) tmap in
             findFunc(xs, Map.insert nme types dec, Map.insert nme types def, tmap)
     Typedef rtp nme -> findFunc(xs, dec, def, Map.insert nme rtp tmap)
 
@@ -35,18 +35,18 @@ findtp :: Typemap -> Type -> Type
 findtp tmap (DEF str) = Maybe.fromMaybe NONE (Map.lookup str tmap)
 findtp tmap tp = tp
 
-extractParam :: [(Type, Ident)] -> Type -> Typemap -> [Type]
-extractParam [] t tmap = [VOID, findtp tmap t]
-extractParam l t tmap = foldr f [findtp tmap t] l
+extractParam :: [(Type, Ident)] -> (Type, Ident) -> Typemap -> [(Type, Ident)]
+extractParam [] (t,n) tmap = [(VOID, ""), (findtp tmap t, n)]
+extractParam l (t,n) tmap = foldr f [(findtp tmap t, n)] l
     where 
-        f :: (Type, Ident) -> [Type] -> [Type]
-        f (ty, _) curr = (findtp tmap ty): curr
+        f :: (Type, Ident) -> [(Type, Ident)] -> [(Type, Ident)]
+        f (ty, name) curr = (findtp tmap ty, name): curr
 
 eGdeclist :: [Gdecl] -> Typemap -> EAST
 eGdeclist [] _ = ENop --end of the file
 eGdeclist (x:xs) tmap = case x of
-    Fdecl rtp nme param -> EDef nme (extractParam param rtp tmap) (eGdeclist xs tmap)
-    Fdefn rtp nme param blk -> EDef nme (extractParam param rtp tmap)
+    Fdecl rtp nme param -> EDef nme (extractParam param (rtp,nme) tmap) (eGdeclist xs tmap)
+    Fdefn rtp nme param blk -> EDef nme (extractParam param (rtp,nme) tmap)
         (ESeq (EAssign nme (eBlock blk tmap)) (eGdeclist xs tmap))
     Typedef rtp nme -> eGdeclist xs tmap --we handled typedef in findFunc already
 

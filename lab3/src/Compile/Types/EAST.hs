@@ -11,7 +11,7 @@ import qualified Data.Maybe as Maybe
 data EAST 
     = ESeq EAST EAST
     | EAssign Ident EAST -- single variable assign
-    | EDef Ident [Type] EAST -- for function decl
+    | EDef Ident [(Type, Ident)] EAST -- last item of the type ident list is (return type, function name)
     | EIf EExp EAST EAST
     | EWhile EExp EAST
     | EAssert EExp
