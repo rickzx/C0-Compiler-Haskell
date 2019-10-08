@@ -16,5 +16,6 @@ yay wedidit(int m, int n){
 }
 
 int main(){
-
+    yay hooray = wedidit(5, 123);
+    return hooray;
 }

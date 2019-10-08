@@ -1,0 +1,8 @@
+//test error
+easytest main(){
+    easytest whatisthistest = 0;
+    if(whatisthistest(whatisthistest, whatisthistest) > 10){
+        return 5;
+    }
+    return 102343;
+}

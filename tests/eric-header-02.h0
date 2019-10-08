@@ -1,0 +1,6 @@
+typedef int easytest;
+typedef hardtest easytest;
+typedef goodtest hardtest;
+
+int whatisthistest(easytest test1, hardtest test2);
+goodtest thisisbadtest(hardtest test3, bool ok);

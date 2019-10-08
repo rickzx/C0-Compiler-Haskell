@@ -1,9 +1,10 @@
 //test div-by-zero
+
 int iReturnZero(){
     return 0;
 }
 
-typedef curiosity bool;
+typedef bool curiosity;
 curiosity iReturnTrue(){
     return 9999999 > 1234567;
 }

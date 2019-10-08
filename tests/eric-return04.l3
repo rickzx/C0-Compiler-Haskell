@@ -1,0 +1,20 @@
+//test return 1024
+
+//try out recursive function calls, compute powers of x
+
+int computePower(int x, int n){
+    int left;
+    int right;
+    if(n == 1){
+        return x;
+    }
+    if(n == 2){
+        return x * x;
+    }
+    left = computePower(x, n/2);
+    right = computePower(x, n - n/2);
+    return left * right;
+}
+int main(){
+    return computePower(2, 10);
+}

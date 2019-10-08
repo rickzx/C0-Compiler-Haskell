@@ -1,0 +1,5 @@
+typedef int yay;
+typedef bool nope;
+
+yay wedidit(yay hehe, yay hoho);
+nope wefailed(nope sad, nope cry);
