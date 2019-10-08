@@ -11,7 +11,7 @@ curiosity iReturnTrue(){
 int main(){
     int x = 5;
     if(iReturnTrue()){
-        x /= iReturnZero()
+        x /= iReturnZero();
     }
     int result = iReturnZero();
     return result;

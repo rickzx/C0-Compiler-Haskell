@@ -1,14 +1,20 @@
-//test return 80
+//test return 125
+//Ackermann function A(3, 4) with 411 interface
 
-//15411 interface
+int ackermann(int m, int n)
+{
+    if (m <= 0) {
+    	return ftoi(fadd(itof(n), itof(1)));
+	}
+    
+    if (n <= 0) {
+    	return ackermann(ftoi(itof(m) - itof(1)), 1);
+	}
 
-int main(){
-    fpt x = 12345;
-    fpt res = 0;
-    fpt y = 10;
-    while(fdiv(x, y) > 0){
-        fadd(res, fmul(y, 2));
-        x = fdiv(x, y);
-    }
-    return res;
+    return ackermann(m - 1, ackermann(m, n - 1));
+}
+ 
+int main()
+{
+    return ackermann(3, 4);
 }
