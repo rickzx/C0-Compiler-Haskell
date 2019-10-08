@@ -1,4 +1,4 @@
-//test return 125
+//test typecheck
 //Ackermann function A(3, 4) with 411 interface
 
 int ackermann(int m, int n)
