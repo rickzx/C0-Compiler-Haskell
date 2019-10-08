@@ -1,4 +1,4 @@
-//return 4536
+//test return 4536
 
 bool compare_function(int a1, int a2, int b1, int b2){
     if(a1 > b1 || a2 > b2){

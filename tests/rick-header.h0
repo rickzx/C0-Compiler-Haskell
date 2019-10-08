@@ -1,0 +1,4 @@
+typedef int fpt;
+
+fpt fadd(fpt x, fpt y);
+int abs(int i);

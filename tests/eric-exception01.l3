@@ -5,6 +5,7 @@ int count(int param){
     int res = 5;
     while(temp > 0){
         res += 5;
+        temp -= 1;
     }
     return res;
 }

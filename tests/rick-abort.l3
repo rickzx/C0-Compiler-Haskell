@@ -1,0 +1,10 @@
+//test abort
+
+bool haha(int x, int y) {
+	return ((x << y) & (y << x) * 2) > x;
+}
+
+int main() {
+	assert(haha(5, 8));
+	return 0;
+}

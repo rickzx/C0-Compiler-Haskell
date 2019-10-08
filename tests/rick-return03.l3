@@ -1,0 +1,42 @@
+//test return 6899
+//1000th happy number
+
+int sumOfSquare(int n)
+{
+	int sum = 0;
+	
+	while (n > 0) {
+		int x = n % 10;
+		sum += x * x;
+		n /= 10;
+	}
+
+	return sum;
+}
+ 
+bool happy(int n)
+{
+	int cur = n;
+
+	while (cur != 1 && cur != 4) {
+		cur = sumOfSquare(cur);
+	}
+
+	return (cur == 1);
+}
+ 
+int main()
+{
+	int found = 0;
+	int curr = 0;
+	int res;
+
+	while (found < 1000) {
+		curr += 1;
+		if (happy(curr)) {
+			found += 1;
+		}
+	}
+
+	return curr;
+}
