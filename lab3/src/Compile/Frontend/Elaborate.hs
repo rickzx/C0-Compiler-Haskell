@@ -5,9 +5,26 @@ import qualified Data.Map as Map
 import qualified Data.Maybe as Maybe
 
 type Typemap = Map.Map Ident Type
+
+--map each function to its corresponding type, last type of the array is return type.
+type Fnmap = Map.Map Ident [Type]
+
 --generate our intermediate ast structure
-eGen :: AST -> EAST
-eGen (Program l) = eGdeclist l Map.empty
+--(EAST, declared function map, defined function map)
+eGen :: AST -> (EAST, Fnmap, Fnmap)
+eGen (Program l) = let
+    (_, funcdecl, funcdef, tpemap) = findFunc (l, Map.empty, Map.empty, Map.empty)
+    in
+    (eGdeclist l tpemap,  funcdecl, funcdef)
+
+findFunc :: ([Gdecl], Fnmap, Fnmap, Typemap) -> ([Gdecl], Fnmap, Fnmap, Typemap)
+findFunc ([], dec, def, tmap) = ([], dec, def, tmap)
+findFunc (x:xs, dec, def, tmap) = case x of
+    Fdecl rtp nme param -> let types = extractParam param rtp tmap in
+            findFunc(xs, Map.insert nme types dec, def, tmap)
+    Fdefn rtp nme param blk -> let types = extractParam param rtp tmap in
+            findFunc(xs, Map.insert nme types dec, Map.insert nme types def, tmap)
+    Typedef rtp nme -> findFunc(xs, dec, def, Map.insert nme rtp tmap)
 
 --different case of decl, its function decl, we extract the
 --types of parameters to make Fdecl to generate the function type
@@ -28,13 +45,10 @@ extractParam l t tmap = foldr f [findtp tmap t] l
 eGdeclist :: [Gdecl] -> Typemap -> EAST
 eGdeclist [] _ = ENop --end of the file
 eGdeclist (x:xs) tmap = case x of
-    Fdecl rtp nme param -> EDecl nme (extractParam param rtp tmap) (eGdeclist xs tmap)
-    Fdefn rtp nme param blk -> EDecl nme (extractParam param rtp tmap)
+    Fdecl rtp nme param -> EDef nme (extractParam param rtp tmap) (eGdeclist xs tmap)
+    Fdefn rtp nme param blk -> EDef nme (extractParam param rtp tmap)
         (ESeq (EAssign nme (eBlock blk tmap)) (eGdeclist xs tmap))
-    Typedef rtp nme -> let 
-        newmap = Map.insert nme rtp tmap 
-        in
-            eGdeclist xs newmap
+    Typedef rtp nme -> eGdeclist xs tmap --we handled typedef in findFunc already
 
 
 eBlock :: [Stmt] -> Typemap -> EAST
@@ -43,8 +57,8 @@ eBlock [x] tmap = eStmt x tmap
 --give declare precedence
 eBlock (x:l) tmap = case x of
     Simp (Decl d) -> case d of
-        JustDecl var tp -> EDecl var [findtp tmap tp] (eBlock l tmap)
-        DeclAsgn var tp expr -> EDecl var [findtp tmap tp] (ESeq (EAssign var (ELeaf $ pExp expr)) (eBlock l tmap))
+        JustDecl var tp -> EDecl var (findtp tmap tp) (eBlock l tmap)
+        DeclAsgn var tp expr -> EDecl var (findtp tmap tp) (ESeq (EAssign var (ELeaf $ pExp expr)) (eBlock l tmap))
     _ -> ESeq (eStmt x tmap) (eBlock l tmap)
 
 pExp :: Exp -> EExp
@@ -66,8 +80,8 @@ eStmt x tmap = case x of
         --declaration still need to be prioritized
         For _initr _condi (Opt (Decl _)) _bodyi -> error "Declaration not meaningful as step of for-loop"
         For initr condi stepi bodyi -> case initr of
-            Opt (Decl (JustDecl var tp)) -> EDecl var [findtp tmap tp] (EWhile (pExp condi) (ESeq (eStmt bodyi tmap) (eSimpopt stepi tmap)))
-            Opt (Decl (DeclAsgn var tp expr)) -> EDecl var [findtp tmap tp] (ESeq (EAssign var (ELeaf $ pExp expr))
+            Opt (Decl (JustDecl var tp)) -> EDecl var (findtp tmap tp) (EWhile (pExp condi) (ESeq (eStmt bodyi tmap) (eSimpopt stepi tmap)))
+            Opt (Decl (DeclAsgn var tp expr)) -> EDecl var (findtp tmap tp) (ESeq (EAssign var (ELeaf $ pExp expr))
                 (EWhile (pExp condi) (ESeq (eStmt bodyi tmap) (eSimpopt stepi tmap))))
             _ -> ESeq (eSimpopt initr tmap) (EWhile (pExp condi) (ESeq (eStmt bodyi tmap)
                 (eSimpopt stepi tmap)))
@@ -86,8 +100,8 @@ eSimp simp tmap = case simp of
     AsgnP i pos -> if pos == Incr then EAssign i (ELeaf $ pExp (Binop Add (Ident i) (Int 1)))
         else EAssign i (ELeaf $ pExp (Binop Sub(Ident i) (Int 1)))
     Decl d -> case d of
-        JustDecl var tp -> EDecl var [findtp tmap tp] ENop
-        DeclAsgn var tp expr -> EDecl var [findtp tmap tp] (EAssign var (ELeaf $ pExp expr))
+        JustDecl var tp -> EDecl var (findtp tmap tp) ENop
+        DeclAsgn var tp expr -> EDecl var (findtp tmap tp) (EAssign var (ELeaf $ pExp expr))
     Exp expr -> ELeaf (pExp expr)
 
 eSimpopt :: Simpopt -> Typemap -> EAST
@@ -130,4 +144,14 @@ exAST =
         ]
     ]
 testEAST :: IO ()
-testEAST = print $ eGen exAST 
+testEAST = 
+    let
+        (east, declmap, defmap) = eGen exAST
+    in
+        do{
+            print east;
+            print "____________________________________";
+            print declmap;
+            print "____________________________________";
+            print defmap;
+        }
