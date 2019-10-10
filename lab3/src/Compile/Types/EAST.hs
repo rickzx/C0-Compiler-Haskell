@@ -11,7 +11,7 @@ import qualified Data.Maybe as Maybe
 data EAST 
     = ESeq EAST EAST
     | EAssign Ident EAST -- single variable assign
-    | EDef Ident [(Type, Ident)] EAST -- last item of the type ident list is (return type, function name)
+    | EDef Ident [(Type, Ident)] Type EAST -- Arg type list -> return type
     | EIf EExp EAST EAST
     | EWhile EExp EAST
     | EAssert EExp
@@ -40,7 +40,7 @@ instance Show EAST where
     show ENop = show "NOP"
     show (EDecl ident stype e1) = show "EDecl" ++ "(" ++ ident ++ "  ,  " ++ show stype ++ " , " ++ show e1 ++ ")"
     show (ELeaf e) = show e
-    show (EDef ident types east) = show "EDef" ++ "(" ++ ident ++ "  ,  " ++ show types ++ " , " ++ show east ++ ")"
+    show (EDef ident types rtype east) = show "EDef" ++ "(" ++ ident ++ "  ,  " ++ show types ++ " -> " ++ show rtype ++ " , " ++ show east ++ ")"
     show (EAssert e) = show "EAssert" ++ "(" ++ show e ++ ")"
 
 instance Show EExp where
