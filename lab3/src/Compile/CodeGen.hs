@@ -20,31 +20,35 @@ import Debug.Trace
 codeGen :: EAST -> ([AAsm], Int)
 codeGen e = ([], 1)
     
-
 asmGen :: EAST -> String
 asmGen east =
-  let
-    (aasms, localVar) = codeGen east
+    let
+        eastGen = aasmGen east
+    in
+        concatMap (\(fn, (aasms, lv)) -> generateFunc (fn, aasms, lv))  eastGen  
 
-    (coloring, stackVar) = if localVar > 200 then allStackColor localVar
-      else
-        let
-          graph = computerInterfere aasms
+generateFunc :: (String, [AAsm], Int) -> String
+generateFunc (fn, aasms, localVar) =
+    let
+        (coloring, stackVar, _calleeSaved) = if localVar > 200 then allStackColor localVar else
+            let
+              graph = computerInterfere aasms
+    
+              -- (trace $ "Interference graph: " ++ show graph ++ "\n\n")
+              precolor = Map.fromList [(AReg 0, 0), (AReg 1, 3), (AReg 2, 4), 
+                                        (AReg 3, 1), (AReg 4, 2), (AReg 5, 5), (AReg 6, 6)]
+              
+              seo = mcs graph precolor
+            in
+              color graph seo precolor
 
-          -- (trace $ "Interference graph: " ++ show graph ++ "\n\n")
-          precolor = Map.fromList [(AReg 0, 0), (AReg 1, 3), (AReg 2, 4)]
-          
-          seo = mcs graph precolor
-        in
-          color graph seo precolor
+        nonTrivial asm = case asm of
+            Movl op1 op2 -> op1 /= op2
+            Movq op1 op2 -> op1 /= op2
+            _            -> True
 
-    nonTrivial asm = case asm of
-        Movl op1 op2 -> op1 /= op2
-        Movq op1 op2 -> op1 /= op2
-        _            -> True
-
-    -- (trace $ show coloring ++ "\n\n" ++ show aasms)
-    insts = concatMap (\x -> List.filter nonTrivial (toAsm x coloring)) aasms
+        -- (trace $ show coloring ++ "\n\n" ++ show aasms)
+        insts = concatMap (\x -> List.filter nonTrivial (toAsm x coloring)) aasms
   in
     if stackVar > 0 then
     concatMap (\line -> show line ++ "\n")

@@ -15,6 +15,14 @@ getRegAlloc (x:xs) c is64 =
          AImm v -> Imm v) :
     getRegAlloc xs c is64
 
+getRegAlloc' :: [ALoc] -> Coloring -> Bool -> [Operand]
+getRegAlloc' [] _ _ = []
+getRegAlloc' (x:xs) c is64 =
+    (if is64
+         then mapToReg64 x c
+         else mapToReg x c) :
+    getRegAlloc' xs c is64
+
 toAsm :: AAsm -> Coloring -> [Inst]
 -- toAsm e _ | trace ("toAsm " ++ show e ++ "\n") False = undefined
 toAsm (AAsm [assign] ANop [arg]) coloring =
@@ -309,5 +317,21 @@ toAsm (ARel [assign] AGe [src1, src2]) coloring =
             (_, Mem {}) -> asm
             (_, Mem' {}) -> asm
             _ -> [Cmp src2' src1', Setge (Reg R11B), Movzbl (Reg R11B) assign']
-toAsm (ACall fun xs) _ = [Xorl (Reg EAX) (Reg EAX), Call fun]
+toAsm (ACall fun stks) coloring = 
+    let
+        stks' = getRegAlloc' stks coloring False
+        pushStks = map Pushq stks'
+        popStks = map Popq (reverse stks')
+    in
+        pushStks ++ [Xorl (Reg EAX) (Reg EAX), Call fun] ++ popStks
+toAsm (AFun _fn stks) coloring =
+    let
+        stks' = getRegAlloc' stks coloring False
+        movStks' = concatMap (\(i, s) -> case s of
+            Mem {} -> [Movl (Mem' (i * 8) RSP) (Reg R11D), Movl (Reg R11D) s]
+            Mem' {} -> [Movl (Mem' (i * 8) RSP) (Reg R11D), Movl (Reg R11D) s]
+            _ -> [Movl (Mem' (i * 8) RSP) s]) $ zip [1..] stks'
+        
+    in
+        movStks'
 toAsm _ _ = error "ill-formed abstract assembly"

@@ -35,8 +35,8 @@ mcs graph preColor =
         mcs' pq
 
 -- Color the inteference graph using simplicial elimination ordering
-color :: Graph -> [ALoc] -> Coloring -> (Coloring, Int)
-color graph seo preColor = (coloring, maxColor - length regOrder + 3)
+color :: Graph -> [ALoc] -> Coloring -> (Coloring, Int, [Register])
+color graph seo preColor = (coloring, maxColor - length regOrder + 3, calleeSaved)
     where
     lowestColor c =
         let colors = Set.fromList $ Map.elems c
@@ -53,14 +53,15 @@ color graph seo preColor = (coloring, maxColor - length regOrder + 3)
         )
         (preColor, 0)
         seo
+    calleeSaved = if maxColor <= 7 then [] else drop 7 (take maxColor regOrder) 
 
-allStackColor :: Int -> (Coloring, Int)
+allStackColor :: Int -> (Coloring, Int, [Register])
 allStackColor localVar = 
     let
         vars = map ATemp [0..localVar]
         l = zip vars [0..]
     in
-        (Map.union (Map.fromList [(AReg 0, 0), (AReg 1, 3)]) (Map.fromList $ map (\(loc, i) -> (loc, i + length regOrder)) l), localVar + 3)
+        (Map.union (Map.fromList [(AReg 0, 0), (AReg 1, 3)]) (Map.fromList $ map (\(loc, i) -> (loc, i + length regOrder)) l), localVar + 3, [])
 
 regOrder :: [Register]
 regOrder =
@@ -105,7 +106,7 @@ test :: IO ()
 test = do
     let preColor = Map.fromList [(ATemp 0, 0), (ATemp 2, 1)]
     let seo      = mcs testGraph2 preColor
-    let coloring = fst $ color testGraph2 seo preColor
+    let (coloring, _, _) = color testGraph2 seo preColor
     print seo
     print coloring
     print (mapToReg (ATemp 0) coloring)

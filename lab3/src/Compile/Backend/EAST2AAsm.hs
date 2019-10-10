@@ -16,7 +16,7 @@ data Alloc =
     -- ^ Value greater than any id in the map.
         , uniqueLabelCounter :: Int
     -- ^ Next label to generate.
-        , genFunctions :: Map.Map Ident ([AAsm], Int)
+        , genFunctions :: [(Ident, ([AAsm], Int))]
         , currentFunction :: String
         }
 
@@ -38,20 +38,20 @@ getNewUniqueLabel = do
     let lab = "L" ++ show currentCount
     return lab
 
-aasmGen :: EAST -> Map.Map Ident ([AAsm], Int)
+aasmGen :: EAST -> [(Ident, ([AAsm], Int))]
 aasmGen east = State.evalState assemM initialState
   where
     initialState =
         Alloc {variables = Map.empty, 
                 uniqueIDCounter = 0, 
                 uniqueLabelCounter = 0,
-                genFunctions = Map.empty,
+                genFunctions = [],
                 currentFunction = ""}
-    assemM :: AllocM (Map.Map Ident ([AAsm], Int))
+    assemM :: AllocM [(Ident, ([AAsm], Int))]
     assemM = do
         _genAAsm <- genEast east
         Alloc _ _ _ genf _ <- State.get
-        return genf
+        return (reverse genf)
 
 -- Get the decls from a sequence of stmts.
 getDecls :: EAST -> [Ident]
@@ -70,8 +70,8 @@ genEast (EAssign x expr) = do
     allocMap <- State.gets variables
     let tmpNum = ATemp $ allocMap Map.! x
     genExp expr tmpNum
-genEast (EDef fn t e) = do
-    let args = map fst (tail t)
+genEast (EDef fn t _ret e) = do
+    let args = map fst t
         decls = args ++ getDecls e
         v' = Map.fromList $ zip decls [0 ..]
     State.modify' $ \(Alloc _vs _counter lab genf _cf) -> Alloc v' 0 lab genf fn
@@ -79,7 +79,7 @@ genEast (EDef fn t e) = do
         movArg = map (\(i, tmp) -> AAsm [tmp] ANop [ALoc $ argRegs !! i]) $ zip [0..] inReg
     gen <- genEast e
     let funGen = [AFun fn inStk] ++ movArg ++ gen
-    State.modify' $ \(Alloc vs counter lab genf cf) -> Alloc vs counter lab (Map.insert fn (funGen, counter) genf) cf
+    State.modify' $ \(Alloc vs counter lab genf cf) -> Alloc vs counter lab ((fn, (funGen, counter)) : genf) cf
     return funGen
 genEast (EAssert expr) = do
     let trans = EIf expr ENop (ELeaf $ EFunc "_c0_abort" [])
@@ -273,12 +273,12 @@ testGenEast = do
     let east =
             ESeq (
             EDecl "f" (ARROW [INTEGER] INTEGER) (
-                EDef "f" [("f", INTEGER), ("x", INTEGER)] (
+                EDef "f" [("x", INTEGER)] INTEGER (
                     ERet (Just $ EInt 1)
                 )
             ))
             (EDecl "g" (ARROW [INTEGER] INTEGER) (
-                EDef "g" [("g", INTEGER), ("x", INTEGER)] (
+                EDef "g" [("x", INTEGER)] INTEGER (
                     ERet (Just $ EFunc "f" [EIdent "x"])
                 )
             ))
@@ -289,7 +289,7 @@ testGenRecursion :: IO()
 testGenRecursion = do
     let east =
             EDecl "fact" (ARROW [INTEGER] INTEGER) (
-                EDef "fact" [("fact", INTEGER), ("x", INTEGER)] (
+                EDef "fact" [("x", INTEGER)] INTEGER (
                     EIf (EBinop Eql (EIdent "x") (EInt 0)) (
                         ERet (Just $ EInt 1)
                     ) (
@@ -298,5 +298,6 @@ testGenRecursion = do
                 )
             )
         funs = aasmGen east
+    putStr $ show east
     putStr "\n"
     putStr $ show funs

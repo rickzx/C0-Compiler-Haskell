@@ -94,6 +94,8 @@ instance Show Simp where
 instance Show Type where
   show INTEGER = "int"
   show BOOLEAN = "bool"
+  show VOID = "void"
+  show (ARROW args res) = show args ++ " -> " ++ show res
 
 instance Show Exp where
   show (Int x) = show x
