@@ -1,0 +1,14 @@
+//test error
+
+//using undeclared functions
+
+bool dosomething(int x);
+int main(){
+    int x = 123456;
+    for(int i = 0; i < 12345677; i++){
+        if(dosomething(x)){
+            return 21345;
+        }
+    }
+    return 100;
+}

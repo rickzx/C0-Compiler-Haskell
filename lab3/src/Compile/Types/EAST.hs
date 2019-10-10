@@ -10,8 +10,8 @@ import qualified Data.Maybe as Maybe
 --EX: add : int * int -> int.
 data EAST 
     = ESeq EAST EAST
-    | EAssign Ident EExp
-    | EDef Ident [(Ident, Type)] Type EAST
+    | EAssign Ident EExp -- single variable assign
+    | EDef Ident Type EAST -- Arg type list -> return type
     | EIf EExp EAST EAST
     | EWhile EExp EAST
     | EAssert EExp
@@ -40,8 +40,8 @@ instance Show EAST where
     show ENop = show "NOP"
     show (EDecl ident stype e1) = show "EDecl" ++ "(" ++ ident ++ "  ,  " ++ show stype ++ " , " ++ show e1 ++ ")"
     show (ELeaf e) = show e
-    show (EAssert e) = "EAssert" ++ "(" ++ show e ++ ")"
-    show (EDef f args ret e) = show "EDef(" ++ f ++ show args ++ " : " ++ show ret ++ ", " ++ show e ++ ")"
+    show (EDef ident types east) = show "EDef" ++ "(" ++ ident ++ "  :  " ++ show types ++ " , " ++ show east ++ ")"
+    show (EAssert e) = show "EAssert" ++ "(" ++ show e ++ ")"
 
 instance Show EExp where
     show (EInt a) = show a

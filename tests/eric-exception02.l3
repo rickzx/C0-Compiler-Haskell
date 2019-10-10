@@ -1,0 +1,18 @@
+//test div-by-zero
+
+int iReturnZero(){
+    return 0;
+}
+
+typedef bool curiosity;
+curiosity iReturnTrue(){
+    return 9999999 > 1234567;
+}
+int main(){
+    int x = 5;
+    if(iReturnTrue()){
+        x /= iReturnZero();
+    }
+    int result = iReturnZero();
+    return result;
+}

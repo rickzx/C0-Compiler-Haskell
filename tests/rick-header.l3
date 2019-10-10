@@ -1,0 +1,5 @@
+//test typecheck
+
+int main() {
+	return fadd(3, abs(-5));
+}

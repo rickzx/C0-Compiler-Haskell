@@ -1,0 +1,16 @@
+//test abort
+
+int count(int param){
+    int temp = param;
+    int res = 5;
+    while(temp > 0){
+        res += 5;
+        temp -= 1;
+    }
+    return res;
+}
+int main(){
+    int hi = count(5);
+    assert(hi < 0);
+    return 0;
+}

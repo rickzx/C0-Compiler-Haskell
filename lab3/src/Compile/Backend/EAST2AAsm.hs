@@ -70,8 +70,9 @@ genEast (EAssign x expr) = do
     allocMap <- State.gets variables
     let tmpNum = ATemp $ allocMap Map.! x
     genExp expr tmpNum
-genEast (EDef fn t _ret e) = do
-    let args = map fst t
+genEast (EDef fn t e) = do
+    let ARROW ts _r = t
+        args = map fst ts
         decls = args ++ getDecls e
         v' = Map.fromList $ zip decls [0 ..]
     State.modify' $ \(Alloc _vs _counter lab genf _cf) -> Alloc v' 0 lab genf fn
@@ -272,13 +273,13 @@ testGenEast :: IO ()
 testGenEast = do
     let east =
             ESeq (
-            EDecl "f" (ARROW [INTEGER] INTEGER) (
-                EDef "f" [("x", INTEGER)] INTEGER (
+            EDecl "f" (ARROW [("x", INTEGER)] INTEGER) (
+                EDef "f" (ARROW [("x", INTEGER)] INTEGER) (
                     ERet (Just $ EInt 1)
                 )
             ))
-            (EDecl "g" (ARROW [INTEGER] INTEGER) (
-                EDef "g" [("x", INTEGER)] INTEGER (
+            (EDecl "g" (ARROW [("x", INTEGER)] INTEGER) (
+                EDef "g" (ARROW [("x", INTEGER)] INTEGER) (
                     ERet (Just $ EFunc "f" [EIdent "x"])
                 )
             ))
@@ -288,8 +289,8 @@ testGenEast = do
 testGenRecursion :: IO()
 testGenRecursion = do
     let east =
-            EDecl "fact" (ARROW [INTEGER] INTEGER) (
-                EDef "fact" [("x", INTEGER)] INTEGER (
+            EDecl "fact" (ARROW [("x", INTEGER)] INTEGER) (
+                EDef "fact" (ARROW [("x", INTEGER)] INTEGER) (
                     EIf (EBinop Eql (EIdent "x") (EInt 0)) (
                         ERet (Just $ EInt 1)
                     ) (

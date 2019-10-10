@@ -1,0 +1,8 @@
+//test typecheck
+int main(){
+    assert(5 == wedidit(6784, 7194));
+    if(wefailed(true, false)){
+        return 1;
+    }
+    return wedidit(42424, 3987);
+}

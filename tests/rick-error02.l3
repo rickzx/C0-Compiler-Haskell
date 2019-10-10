@@ -1,0 +1,10 @@
+//test error
+
+void haha(int x) {
+	return (x + 10 << x);
+}
+
+int main() {
+	haha(3);
+	return 0;
+}

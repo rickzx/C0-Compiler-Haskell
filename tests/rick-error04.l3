@@ -1,0 +1,16 @@
+//test error
+
+int f(int x, int y);
+int f(int a, int b);
+typedef int haha;
+
+int f(haha a, haha b);
+
+haha f(int a, haha b) {
+	haha haha = a;
+	return haha + b;
+}
+
+int main() {
+	return f(0, 0);
+}

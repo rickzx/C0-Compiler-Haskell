@@ -1,0 +1,21 @@
+//test error
+
+//function is not its return type
+typedef int yay;
+
+yay wedidit(int m, int n){
+    int res = 21356;
+    while(m > n){
+        res -= n;
+        m -= 5;
+    }
+    if(res > 12379){
+        return true;
+    }
+    return false;
+}
+
+int main(){
+    yay hooray = wedidit(5, 123);
+    return hooray;
+}

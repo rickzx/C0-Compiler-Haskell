@@ -1,20 +1,65 @@
 module Compile.Frontend.Elaborate where
 
 import Compile.Types
+import qualified Data.Map as Map
+import qualified Data.Maybe as Maybe
+
+--map each function to (Arg type, return type).
+type Fnmap = Map.Map Ident Type
 
 --generate our intermediate ast structure
-eGen :: AST -> EAST
-eGen (Block stmts) = eBlock stmts
+--(EAST, declared function map, defined function map)
+eGen :: AST -> (EAST, Fnmap, Fnmap)
+eGen (Program l) = let
+    (_, funcdecl, funcdef, tpemap) = findFunc (l, Map.empty, Map.empty, Map.empty)
+    in
+    (eGdeclist l tpemap,  funcdecl, funcdef)
 
-eBlock :: [Stmt] -> EAST
-eBlock [] = ENop
-eBlock [x] = eStmt x
+findFunc :: ([Gdecl], Fnmap, Fnmap, Fnmap) -> ([Gdecl], Fnmap, Fnmap, Fnmap)
+findFunc ([], dec, def, tmap) = ([], dec, def, tmap)
+findFunc (x:xs, dec, def, tmap) = case x of 
+    Fdecl rtp nme param -> let types = extractParam param tmap in
+            findFunc(xs, Map.insert nme (ARROW types (findtp tmap rtp)) dec, def, tmap)
+    Fdefn rtp nme param blk -> let types = extractParam param tmap in
+            findFunc(xs, Map.insert nme (ARROW types (findtp tmap rtp)) dec, Map.insert nme (ARROW types (findtp tmap rtp)) def, tmap)
+    Typedef rtp nme -> findFunc(xs, dec, def, Map.insert nme rtp tmap)
+
+--different case of decl, its function decl, we extract the
+--types of parameters to make Fdecl to generate the function type
+--else, if its typedef we just map the new type to its new name
+--else, we use decl, and does the assign op to assign decl to the block
+--TODO: change this to throw error instead of NONE
+findtp :: Fnmap -> Type -> Type
+findtp tmap (DEF str) = Maybe.fromMaybe NONE (Map.lookup str tmap)
+findtp tmap tp = tp
+
+--extract the parameter of the function
+extractParam :: [(Type, Ident)] -> Fnmap -> [(Ident, Type)]
+extractParam [] tmap = [("", VOID)]
+extractParam l tmap = foldr f [] l
+    where 
+        f :: (Type, Ident) -> [(Ident, Type)] -> [(Ident, Type)]
+        f (ty, name) curr = (name, findtp tmap ty): curr
+
+eGdeclist :: [Gdecl] -> Fnmap -> EAST
+eGdeclist [] _ = ENop --end of the file
+eGdeclist (x:xs) tmap =
+    case x of
+        Fdecl rtp nme param -> EDef nme (ARROW (extractParam param tmap) (findtp tmap rtp)) (eGdeclist xs tmap)
+        Fdefn rtp nme param blk ->
+            EDef nme (ARROW (extractParam param tmap) (findtp tmap rtp)) (ESeq (eBlock blk tmap) (eGdeclist xs tmap))
+        Typedef rtp nme -> eGdeclist xs tmap --we handled typedef in findFunc already
+
+
+eBlock :: [Stmt] -> Fnmap -> EAST
+eBlock [] _ = ENop
+eBlock [x] tmap = eStmt x tmap
 --give declare precedence
-eBlock (x:l) = case x of
+eBlock (x:l) tmap = case x of
     Simp (Decl d) -> case d of
-        JustDecl var tp -> EDecl var tp (eBlock l)
-        DeclAsgn var tp expr -> EDecl var tp (ESeq (EAssign var (pExp expr)) (eBlock l))
-    _ -> ESeq (eStmt x) (eBlock l)
+        JustDecl var tp -> EDecl var (findtp tmap tp) (eBlock l tmap)
+        DeclAsgn var tp expr -> EDecl var (findtp tmap tp) (ESeq (EAssign var (pExp expr)) (eBlock l tmap))
+    _ -> ESeq (eStmt x tmap) (eBlock l tmap)
 
 pExp :: Exp -> EExp
 pExp (Int a) = EInt a
@@ -24,26 +69,29 @@ pExp (Ident x) = EIdent x
 pExp (Binop b expr1 expr2) = EBinop b (pExp expr1) (pExp expr2)
 pExp (Ternop expr1 expr2 expr3) = ETernop (pExp expr1) (pExp expr2) (pExp expr3)
 pExp (Unop u expr1) = EUnop u (pExp expr1)
+pExp (Function id exprlist) = EFunc id (fmap pExp exprlist)
 
-eStmt :: Stmt -> EAST
-eStmt x = case x of
-    Simp s -> eSimp s
-    Stmts b -> eBlock b
+eStmt :: Stmt -> Fnmap -> EAST
+eStmt x tmap = case x of
+    Simp s -> eSimp s tmap
+    Stmts b -> eBlock b tmap
     ControlStmt c -> case c of
-        Condition b t el -> EIf (pExp b) (eStmt t) (eElse el)
+        Condition b t el -> EIf (pExp b) (eStmt t tmap) (eElse el tmap)
         --declaration still need to be prioritized
         For _initr _condi (Opt (Decl _)) _bodyi -> error "Declaration not meaningful as step of for-loop"
         For initr condi stepi bodyi -> case initr of
-            Opt (Decl (JustDecl var tp)) -> EDecl var tp (EWhile (pExp condi) (ESeq (eStmt bodyi) (eSimpopt stepi)))
-            Opt (Decl (DeclAsgn var tp expr)) -> EDecl var tp (ESeq (EAssign var (pExp expr))
-                (EWhile (pExp condi) (ESeq (eStmt bodyi) (eSimpopt stepi))))
-            _ -> ESeq (eSimpopt initr) (EWhile (pExp condi) (ESeq (eStmt bodyi)
-                (eSimpopt stepi)))
-        While condi bodyi -> EWhile (pExp condi) (eStmt bodyi)
-        Retn ret -> ERet $ Just (pExp ret)
+            Opt (Decl (JustDecl var tp)) -> EDecl var (findtp tmap tp) (EWhile (pExp condi) (ESeq (eStmt bodyi tmap) (eSimpopt stepi tmap)))
+            Opt (Decl (DeclAsgn var tp expr)) -> EDecl var (findtp tmap tp) (ESeq (EAssign var (pExp expr))
+                (EWhile (pExp condi) (ESeq (eStmt bodyi tmap) (eSimpopt stepi tmap))))
+            _ -> ESeq (eSimpopt initr tmap) (EWhile (pExp condi) (ESeq (eStmt bodyi tmap)
+                (eSimpopt stepi tmap)))
+        While condi bodyi -> EWhile (pExp condi) (eStmt bodyi tmap)
+        Assert condi -> EAssert (pExp condi)
+        Retn ret -> ERet (Maybe.Just (pExp ret))
+        Void -> ERet Maybe.Nothing
 
-eSimp :: Simp -> EAST
-eSimp simp = case simp of
+eSimp :: Simp -> Fnmap -> EAST
+eSimp simp tmap = case simp of
     Asgn i asop expr -> let
         expression = case asop of
             Equal -> pExp expr
@@ -52,41 +100,58 @@ eSimp simp = case simp of
     AsgnP i pos -> if pos == Incr then EAssign i (pExp (Binop Add (Ident i) (Int 1)))
         else EAssign i (pExp (Binop Sub(Ident i) (Int 1)))
     Decl d -> case d of
-        JustDecl var tp -> EDecl var tp ENop
-        DeclAsgn var tp expr -> EDecl var tp (EAssign var (pExp expr))
+        JustDecl var tp -> EDecl var (findtp tmap tp) ENop
+        DeclAsgn var tp expr -> EDecl var (findtp tmap tp) (EAssign var (pExp expr))
     Exp expr -> ELeaf (pExp expr)
 
-eSimpopt :: Simpopt -> EAST
-eSimpopt sopt = case sopt of
+eSimpopt :: Simpopt -> Fnmap -> EAST
+eSimpopt sopt tmap = case sopt of
     SimpNop -> ENop
-    Opt s -> eSimp s
+    Opt s -> eSimp s tmap
 
-eElse :: Elseopt -> EAST
-eElse eopt = case eopt of
+eElse :: Elseopt -> Fnmap -> EAST
+eElse eopt tmap = case eopt of
     ElseNop -> ENop
-    Else stmt -> eStmt stmt
+    Else stmt -> eStmt stmt tmap
 
---example from hw 1 with while loop and for loop
+--compute the factorial of a number example.
 exAST :: AST
 exAST =
-  Block
-    [ Simp (Decl $ DeclAsgn ("x") INTEGER (Int 7))
-    , ControlStmt
-        (While
-           (Binop Neq (Ident "x") (Int 5))
-           (Stmts
-              [ Simp (Decl $ DeclAsgn ("z") INTEGER (Binop Mul (Ident "x") (Ident "x")))
-              , Simp (Asgn ("y") (AsnOp Add) (Ident "z"))
-              , Simp (AsgnP ("x") (Decr))
-              ]))
-    , ControlStmt
-        (For
-           { initial = Opt (Decl $ DeclAsgn "w" INTEGER (Int 1))
-           , cond = Binop Neq (Ident "w") (Int 5)
-           , step = Opt $ AsgnP ("w") (Incr)
-           , body = Simp (AsgnP ("y") (Incr))
-           })
-    , ControlStmt (Retn (Ident "y"))
+  Program
+    [ 
+        Typedef INTEGER "hh",
+        Fdecl VOID "o98k" [(INTEGER, "n"), (DEF "hh", "j")],
+        Fdefn (DEF "hh") "fact_spec" [(INTEGER, "n")] [
+            ControlStmt (Condition (Binop Eql (Ident "n") (Int 0)) (ControlStmt $ Retn (Int 1))
+                (Else $ ControlStmt $ Retn (Binop Mul (Ident "n") (Function "fast_spec" [(Binop Sub (Ident "n") (Int 1))] ))))
+        ],
+        Fdefn (DEF "hh") "factorial" [(INTEGER, "n")] [
+            Simp $ Decl $ DeclAsgn "total" (DEF "hh") (Int 1),
+            Simp $ Decl $ DeclAsgn "count" INTEGER (Int 0),
+            ControlStmt $ While (Binop Lt (Ident "count" )(Ident "n")) (Stmts
+            [
+                Simp (AsgnP "count" Incr),
+                Simp (Asgn "total" (AsnOp Mul) (Ident "count"))
+            ]),
+            ControlStmt $ Retn (Ident "total")
+        ],
+        Fdefn INTEGER "main" [] [
+            ControlStmt $ For (Opt $ Decl (DeclAsgn "i" (DEF "hh") (Int 0))) (Binop Lt (Ident "i") (Int 10)) (Opt (AsgnP "i" Incr))
+            (Stmts [
+                Simp $ Exp $ Function "factorial" [Ident "i"]
+            ]),
+            ControlStmt $ Retn (Int 0)
+        ]
     ]
 testEAST :: IO ()
-testEAST = print $ eGen exAST
+testEAST = 
+    let
+        (east, declmap, defmap) = eGen exAST
+    in
+        do{
+            print east;
+            print "____________________________________";
+            print declmap;
+            print "____________________________________";
+            print defmap;
+        }

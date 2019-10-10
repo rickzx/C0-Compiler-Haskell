@@ -16,12 +16,14 @@ import Compile.Types.AST
   '{'     {TokLBrace}
   '}'     {TokRBrace}
   ';'     {TokSemi}
+  ','     {TokComma}
   dec     {TokDec $$}
   hex     {TokHex $$}
   ident   {TokIdent $$}
   tokmain    {TokMain}
   ret     {TokReturn}
   int     {TokInt}
+  void    {TokVoid}
   '-'     {TokMinus}
   '+'     {TokPlus}
   '*'     {TokTimes}
@@ -30,6 +32,8 @@ import Compile.Types.AST
   asgnop  {TokAsgnop $$}
   kill    {TokReserved}
 
+  typedef {TokTypeDef}
+  assert  {TokAssert}
   while   {TokWhile}
   '^'     {TokXor}
   '!'     {TokUnop LNot}
@@ -73,12 +77,31 @@ import Compile.Types.AST
 %right NEG '~' '!' '++' '--'
 %%
 
-Program : tokmain Block {Block $2}
+Program : {- Empty -} {[]}
+      | Gdecl Program {$1 : $2}
+
+Gdecl : Fdecl {Fdecl $1}
+      | Fdefn {Fdefn $1}
+      | Typedef {Typedef $1}
+
+Fdecl : Type ident Paramlist {$1 $2 $3}
+Fdefn : Type ident Paramlist Block {$1 $2 $3 $4}
+Param : Type ident {($1,$2)}
+
+ParamlistFollow : {- Empty -} {[]}
+      | ',' Param ParamlistFollow {$2 : $3}
+
+Paramlist : '(' ')' {[]}
+      | '(' Param ParamlistFollow ')' {$2 : $3}
+
+Typedef : typedef Type ident ';' {$2 $3}
 
 Block : '{' Stmts '}' {$2}
 
 Type  : int {INTEGER}
       | bool {BOOLEAN}
+      | ident {DEF ident}
+      | void {VOID}
 
 Decl  : Type ident asgnop Exp {checkDeclAsgn $2 $3 $1 $4}
       | Type ident {JustDecl $2 $1}
@@ -106,6 +129,7 @@ Control : if '(' Exp ')' Stmt Elseopt {Condition $3 $5 $6}
       | while '(' Exp ')' Stmt {While $3 $5}
       | for '(' Simpopt ';' Exp ';' Simpopt ')' Stmt {For $3 $5 $7 $9}
       | ret Exp ';' {Retn $2}
+      | ret ';' {Void}
 
 Exp : '(' Exp ')' {$2}
     | Exp '?' Exp ':' Exp {Ternop $1 $3 $5}
@@ -114,6 +138,13 @@ Exp : '(' Exp ')' {$2}
     | Intconst {$1}
     | ident {Ident $1}
     | Operation {$1}
+    | ident Arglist {Function $1 $2}
+
+ArglistFollow : {- Empty -} {[]}
+    | ',' Exp ArglistFollow {$2 : $3}
+
+Arglist : '(' ')' {[]}
+    |'(' Exp ArglistFollow ')' {$2 : $3}
 
 Operation : Exp '-' Exp {Binop Sub $1 $3}
           | Exp '+' Exp {Binop Add $1 $3}

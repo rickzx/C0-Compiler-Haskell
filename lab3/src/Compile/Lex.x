@@ -16,13 +16,13 @@ tokens :-
 
   continue {\_ -> TokReserved}
   struct {\_ -> TokReserved}
-  typedef {\_ -> TokReserved}
+  typedef {\_ -> TokTypeDef}
   break {\_ -> TokReserved}
-  assert {\_ -> TokReserved}
+  assert {\_ -> TokAssert}
   NULL {\_ -> TokReserved}
   alloc {\_ -> TokReserved}
   alloc_array {\_ -> TokReserved}
-  void {\_ -> TokReserved}
+  void {\_ -> TokVoid}
   char {\_ -> TokReserved}
   string {\_ -> TokReserved}
 
@@ -88,6 +88,7 @@ tokens :-
   [\{] {\_ -> TokLBrace}
   [\}] {\_ -> TokRBrace}
   [\;] {\_ -> TokSemi}
+  [\,] {\_ -> TokComma}
 
   -- comments
   \/\/.*\n ;
@@ -139,6 +140,10 @@ data Token =
   TokIncr |
   TokDecr |
   TokXor |
+  TokComma |
+  TokTypeDef |
+  TokAssert |
+  TokVoid |
   TokReserved
   deriving (Eq,Show)
 
