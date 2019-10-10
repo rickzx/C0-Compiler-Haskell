@@ -44,7 +44,7 @@ compile job = do
   res <- runExceptT $ do
     let 
       ast = parseTokens $ lexProgram s
-      east = eGen ast
+      (east, _, _) = eGen ast
     liftEIO $ checkEAST east
     let
         optEast = optEAST east
