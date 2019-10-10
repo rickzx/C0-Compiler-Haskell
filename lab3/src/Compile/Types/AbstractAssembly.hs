@@ -76,10 +76,10 @@ instance Show ALoc where
   show (ATemp n) = "%t" ++ show n
 
 instance Show ACtrl where
-  show (ALab s) = ".L" ++ s ++ ":"
-  show (AJump s) = "\tGoto L" ++ s
-  show (ACJump x l1 l2) = "\tIf " ++ show x ++ " goto L" ++ l1 ++ " else goto L" ++ l2
-  show (ACJump' op a b l1 l2) = "\tIf " ++ show a ++ " " ++ show op ++ " " ++ show b ++ " goto L" ++ l1 ++ " else goto L" ++ l2
+  show (ALab s) = "." ++ s ++ ":"
+  show (AJump s) = "\tGoto ." ++ s
+  show (ACJump x l1 l2) = "\tIf " ++ show x ++ " goto ." ++ l1 ++ " else goto ." ++ l2
+  show (ACJump' op a b l1 l2) = "\tIf " ++ show a ++ " " ++ show op ++ " " ++ show b ++ " goto ." ++ l1 ++ " else goto ." ++ l2
 
 -- A hack to work with an AAsm tool
 testPrintAAsm :: [AAsm] -> String -> String

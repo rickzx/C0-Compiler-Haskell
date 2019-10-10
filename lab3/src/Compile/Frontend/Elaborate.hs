@@ -40,7 +40,7 @@ eStmt x = case x of
             _ -> ESeq (eSimpopt initr) (EWhile (pExp condi) (ESeq (eStmt bodyi)
                 (eSimpopt stepi)))
         While condi bodyi -> EWhile (pExp condi) (eStmt bodyi)
-        Retn ret -> ERet (pExp ret)
+        Retn ret -> ERet $ Just (pExp ret)
 
 eSimp :: Simp -> EAST
 eSimp simp = case simp of

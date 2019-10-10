@@ -41,6 +41,7 @@ instance Show EAST where
     show (EDecl ident stype e1) = show "EDecl" ++ "(" ++ ident ++ "  ,  " ++ show stype ++ " , " ++ show e1 ++ ")"
     show (ELeaf e) = show e
     show (EAssert e) = "EAssert" ++ "(" ++ show e ++ ")"
+    show (EDef f args e) = show "EDef(" ++ show f ++ ", " ++ show args ++ ", " ++ show e ++ ")"
 
 instance Show EExp where
     show (EInt a) = show a
@@ -51,7 +52,7 @@ instance Show EExp where
     show (ETernop expr1 expr2 expr3) = show expr1 ++ " ? " ++ show expr2 ++ " : " ++ show expr3
     show (EUnop u expr1) = show u ++ show expr1
     show (EFunc iden exprlist) = 
-        iden ++ "(" ++ (foldr redu_fn "" exprlist) ++ ")"
+        iden ++ "(" ++ foldr redu_fn "" exprlist ++ ")"
         where 
             redu_fn :: EExp -> String -> String
             redu_fn e stri = show e ++ "," ++ stri

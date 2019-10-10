@@ -16,6 +16,8 @@ data Alloc =
     -- ^ Value greater than any id in the map.
         , uniqueLabelCounter :: Int
     -- ^ Next label to generate.
+        , genFunctions :: Map.Map Ident ([AAsm], Int)
+        , currentFunction :: String
         }
 
 -- Using the state monad with Alloc as the state allows us to implicitly
@@ -26,27 +28,30 @@ type AllocM = State.State Alloc
 getNewUniqueID :: AllocM Int
 getNewUniqueID = do
     currentCount <- State.gets uniqueIDCounter
-    State.modify' $ \(Alloc vs counter lab) -> Alloc vs (counter + 1) lab
+    State.modify' $ \(Alloc vs counter lab genf cf) -> Alloc vs (counter + 1) lab genf cf
     return currentCount
 
-getNewUniqueLabel :: AllocM Int
+getNewUniqueLabel :: AllocM String
 getNewUniqueLabel = do
     currentCount <- State.gets uniqueLabelCounter
-    State.modify' $ \(Alloc vs counter lab) -> Alloc vs counter (lab + 1)
-    return currentCount
+    State.modify' $ \(Alloc vs counter lab genf cf) -> Alloc vs counter (lab + 1) genf cf
+    let lab = "L" ++ show currentCount
+    return lab
 
-aasmGen :: EAST -> ([AAsm], Int)
+aasmGen :: EAST -> Map.Map Ident ([AAsm], Int)
 aasmGen east = State.evalState assemM initialState
   where
     initialState =
         Alloc {variables = Map.empty, 
                 uniqueIDCounter = 0, 
-                uniqueLabelCounter = 0}
-    assemM :: AllocM ([AAsm], Int)
+                uniqueLabelCounter = 0,
+                genFunctions = Map.empty,
+                currentFunction = ""}
+    assemM :: AllocM (Map.Map Ident ([AAsm], Int))
     assemM = do
-        eastAssm <- genEast east
-        localVar <- getNewUniqueID
-        return (eastAssm, localVar)
+        _genAAsm <- genEast east
+        Alloc _ _ _ genf _ <- State.get
+        return genf
 
 -- Get the decls from a sequence of stmts.
 getDecls :: EAST -> [Ident]
@@ -66,23 +71,23 @@ genEast (EAssign x expr) = do
     let tmpNum = ATemp $ allocMap Map.! x
     genExp expr tmpNum
 genEast (EDef fn t e) = do
-    gen <- genEast e
-    Alloc _v uid ulab <- State.get
-    let args = map fst t
+    let args = map fst (tail t)
         decls = args ++ getDecls e
-        v' = Map.fromList $ zip decls [uid ..]
-        uid' = uid + length decls
-    State.put $ Alloc v' uid' ulab
+        v' = Map.fromList $ zip decls [0 ..]
+    State.modify' $ \(Alloc _vs _counter lab genf _cf) -> Alloc v' 0 lab genf fn
     let (inReg, inStk) = splitAt 6 (map (\a -> ATemp $ v' Map.! a) args)
         movArg = map (\(i, tmp) -> AAsm [tmp] ANop [ALoc $ argRegs !! i]) $ zip [0..] inReg
-    return $ [AFun fn inStk] ++ movArg ++ gen
+    gen <- genEast e
+    let funGen = [AFun fn inStk] ++ movArg ++ gen
+    State.modify' $ \(Alloc vs counter lab genf cf) -> Alloc vs counter lab (Map.insert fn (funGen, counter) genf) cf
+    return funGen
 genEast (EAssert expr) = do
     let trans = EIf expr ENop (ELeaf $ EFunc "_c0_abort" [])
     genEast trans
 genEast (EIf expr e1 e2) = do
-    l1 <- fmap show getNewUniqueLabel
-    l2 <- fmap show getNewUniqueLabel
-    l3 <- fmap show getNewUniqueLabel
+    l1 <- getNewUniqueLabel
+    l2 <- getNewUniqueLabel
+    l3 <- getNewUniqueLabel
     cmp <- genCmp expr l1 l2
     gen1 <- genEast e1
     gen2 <- genEast e2
@@ -91,18 +96,19 @@ genEast (EIf expr e1 e2) = do
         [AControl $ ALab l1] ++
         gen1 ++ [AControl $ AJump l3, AControl $ ALab l2] ++ gen2 ++ [AControl $ AJump l3, AControl $ ALab l3]
 genEast (EWhile expr e) = do
-    l1 <- fmap show getNewUniqueLabel -- label before while guard
-    l2 <- fmap show getNewUniqueLabel -- label of the while block
-    l3 <- fmap show getNewUniqueLabel -- label after while block
+    l1 <- getNewUniqueLabel -- label before while guard
+    l2 <- getNewUniqueLabel -- label of the while block
+    l3 <- getNewUniqueLabel -- label after while block
     cmp <- genCmp expr l2 l3
     gen <- genEast e
     return $ [AControl $ ALab l1] ++ cmp ++ [AControl $ ALab l2] ++ gen ++ [AControl $ AJump l1, AControl $ ALab l3]
-genEast (ERet expr) = 
+genEast (ERet expr) = do
+    fname <- State.gets currentFunction
     case expr of
         Just e -> do 
                 gen <- genExp e (AReg 0)
-                return $ gen ++ [AControl $ AJump "RET"]
-        Nothing -> return [AControl $ AJump "RET"]
+                return $ gen ++ [AControl $ AJump $ fname ++ "_ret"]
+        Nothing -> return [AControl $ AJump $ fname ++ "_ret"]
 genEast ENop = return []
 genEast (EDecl _ _ e) = genEast e
 genEast (ELeaf e) = genSideEffect e
@@ -136,9 +142,9 @@ genExp expr@(EBinop binop exp1 exp2) dest
         let combine = [ARel [dest] (genRelOp binop) [ALoc $ ATemp n, ALoc $ ATemp n']]
         return $ codegen1 ++ codegen2 ++ combine
     | binop == LAnd || binop == LOr = do
-        l1 <- fmap show getNewUniqueLabel
-        l2 <- fmap show getNewUniqueLabel
-        l3 <- fmap show getNewUniqueLabel
+        l1 <- getNewUniqueLabel
+        l2 <- getNewUniqueLabel
+        l3 <- getNewUniqueLabel
         cmp <- genCmp expr l1 l2
         return $
             cmp ++
@@ -163,9 +169,9 @@ genExp expr@(EBinop binop exp1 exp2) dest
 genExp (EUnop unop expr) dest =
     case unop of
         LNot -> do
-            l1 <- fmap show getNewUniqueLabel
-            l2 <- fmap show getNewUniqueLabel
-            l3 <- fmap show getNewUniqueLabel
+            l1 <- getNewUniqueLabel
+            l2 <- getNewUniqueLabel
+            l3 <- getNewUniqueLabel
             cmp <- genCmp expr l1 l2
             return $
                 cmp ++
@@ -189,9 +195,9 @@ genExp (ETernop e1 e2 e3) dest =
         ET -> genExp e2 dest
         EF -> genExp e3 dest
         _ -> do
-            l1 <- fmap show getNewUniqueLabel
-            l2 <- fmap show getNewUniqueLabel
-            l3 <- fmap show getNewUniqueLabel
+            l1 <- getNewUniqueLabel
+            l2 <- getNewUniqueLabel
+            l3 <- getNewUniqueLabel
             cmp <- genCmp e1 l1 l2
             gen1 <- genExp e2 dest
             gen2 <- genExp e3 dest
@@ -199,6 +205,15 @@ genExp (ETernop e1 e2 e3) dest =
                 cmp ++
                 [AControl $ ALab l1] ++
                 gen1 ++ [AControl $ AJump l3, AControl $ ALab l2] ++ gen2 ++ [AControl $ AJump l3, AControl $ ALab l3]
+genExp (EFunc fn args) dest = do
+    let argLen = length args
+    ids <- replicateM argLen getNewUniqueID
+    let tmpVars = map ATemp ids
+    gens <- mapM (\(i, e) -> genExp e (tmpVars !! i)) $ zip [0..] args
+    let gen = join gens
+    let (inReg, inStk) = splitAt 6 tmpVars
+        movArg = map (\(i, tmp) -> AAsm [argRegs !! i] ANop [ALoc tmp]) $ zip [0..] inReg
+    return $ gen ++ movArg ++ [ACall fn inStk, AAsm [dest] ANop [ALoc $ AReg 0]]
     
 
 genCmp :: EExp -> ALabel -> ALabel -> AllocM [AAsm]
@@ -211,12 +226,12 @@ genCmp (EBinop op e1 e2) l l'
         gen2 <- genExp e2 (ATemp n')
         return $ gen1 ++ gen2 ++ [AControl $ ACJump' (genRelOp op) (ALoc $ ATemp n) (ALoc $ ATemp n') l l']
     | op == LAnd = do
-        l2 <- fmap show getNewUniqueLabel
+        l2 <- getNewUniqueLabel
         gen1 <- genCmp e1 l2 l'
         gen2 <- genCmp e2 l l'
         return $ gen1 ++ [AControl $ ALab l2] ++ gen2
     | op == LOr = do
-        l2 <- fmap show getNewUniqueLabel
+        l2 <- getNewUniqueLabel
         gen1 <- genCmp e1 l l2
         gen2 <- genCmp e2 l l'
         return $ gen1 ++ [AControl $ ALab l2] ++ gen2
@@ -251,21 +266,37 @@ genRelOp Ge = AGe
 genRelOp o = error $ "Operator is not a RelOp: " ++ show o
 
 argRegs :: [ALoc]
-argRegs = [AReg 1, AReg 2, AReg 3, AReg 4, AReg 5, AReg 6]
+argRegs = [AReg 3, AReg 4, AReg 1, AReg 2, AReg 5, AReg 6]
 
 testGenEast :: IO ()
 testGenEast = do
     let east =
-            EDecl
-                "x"
-                INTEGER
-                (EDecl
-                     "y"
-                     INTEGER
-                     (ESeq
-                          (EIf (EInt 1) (EAssign "x" (EInt 1)) (EAssign "x" (EInt 2)))
-                          (ERet $ Just (EBinop Add (EIdent "x") (EIdent "y")))))
-        (aasms, _) = aasmGen east
-    putStr $ show $ getDecls east
+            ESeq (
+            EDecl "f" (ARROW [INTEGER] INTEGER) (
+                EDef "f" [("f", INTEGER), ("x", INTEGER)] (
+                    ERet (Just $ EInt 1)
+                )
+            ))
+            (EDecl "g" (ARROW [INTEGER] INTEGER) (
+                EDef "g" [("g", INTEGER), ("x", INTEGER)] (
+                    ERet (Just $ EFunc "f" [EIdent "x"])
+                )
+            ))
+        funs = aasmGen east
+    putStr $ show funs
+    
+testGenRecursion :: IO()
+testGenRecursion = do
+    let east =
+            EDecl "fact" (ARROW [INTEGER] INTEGER) (
+                EDef "fact" [("fact", INTEGER), ("x", INTEGER)] (
+                    EIf (EBinop Eql (EIdent "x") (EInt 0)) (
+                        ERet (Just $ EInt 1)
+                    ) (
+                        ERet $ Just $ EBinop Mul (EFunc "fact" [EBinop Sub (EIdent "x") (EInt 1)]) (EIdent "x")
+                    )
+                )
+            )
+        funs = aasmGen east
     putStr "\n"
-    putStr $ show aasms
+    putStr $ show funs
