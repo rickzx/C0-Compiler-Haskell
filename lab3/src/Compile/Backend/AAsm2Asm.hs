@@ -28,10 +28,7 @@ toAsm :: AAsm -> Coloring -> [Inst]
 toAsm (AAsm [assign] ANop [arg]) coloring =
     let assign' = mapToReg assign coloring
         [arg'] = getRegAlloc [arg] coloring False
-     in case arg' of
-            Mem {} -> [Movl arg' (Reg R11D), Movl (Reg R11D) assign']
-            Mem' {} -> [Movl arg' (Reg R11D), Movl (Reg R11D) assign']
-            _ -> [Movl arg' assign']
+     in genMovl arg' assign'
 toAsm (AAsm [assign] AAdd [src1, src2]) coloring =
     let assign' = mapToReg assign coloring
         [src1', src2'] = getRegAlloc [src1, src2] coloring False
@@ -172,33 +169,27 @@ toAsm (AAsm [assign] AXor [src1, src2]) coloring =
 toAsm (AAsm [assign] ASal [src1, src2]) coloring =
     let assign' = mapToReg assign coloring
         [src1', src2'] = getRegAlloc [src1, src2] coloring False
-     in case (assign', src1') of
-            (Mem {}, Mem {}) ->
-                [Movl src2' (Reg ECX), Movl src1' (Reg R11D), Movl (Reg R11D) assign', Sall (Reg CL) assign']
-            (Mem' {}, Mem {}) ->
-                [Movl src2' (Reg ECX), Movl src1' (Reg R11D), Movl (Reg R11D) assign', Sall (Reg CL) assign']
-            (Mem {}, Mem' {}) ->
-                [Movl src2' (Reg ECX), Movl src1' (Reg R11D), Movl (Reg R11D) assign', Sall (Reg CL) assign']
-            (Mem' {}, Mem' {}) ->
-                [Movl src2' (Reg ECX), Movl src1' (Reg R11D), Movl (Reg R11D) assign', Sall (Reg CL) assign']
-            (_, Reg ECX) ->
-                [Movl (Reg ECX) (Reg R11D), Movl src2' (Reg ECX), Movl (Reg R11D) assign', Sall (Reg CL) assign']
-            _ -> [Movl src2' (Reg ECX), Movl src1' assign', Sall (Reg CL) assign']
+     in if isMem assign' && isMem src1'
+            then [Movl src2' (Reg ECX), Movl src1' (Reg R11D), Movl (Reg R11D) assign', Sall (Reg CL) assign']
+            else if src1' == Reg ECX
+                     then [ Movl (Reg ECX) (Reg R11D)
+                          , Movl src2' (Reg ECX)
+                          , Movl (Reg R11D) assign'
+                          , Sall (Reg CL) assign'
+                          ]
+                     else [Movl src2' (Reg ECX), Movl src1' assign', Sall (Reg CL) assign']
 toAsm (AAsm [assign] ASar [src1, src2]) coloring =
     let assign' = mapToReg assign coloring
         [src1', src2'] = getRegAlloc [src1, src2] coloring False
-     in case (assign', src1') of
-            (Mem {}, Mem {}) ->
-                [Movl src2' (Reg ECX), Movl src1' (Reg R11D), Movl (Reg R11D) assign', Sarl (Reg CL) assign']
-            (Mem' {}, Mem {}) ->
-                [Movl src2' (Reg ECX), Movl src1' (Reg R11D), Movl (Reg R11D) assign', Sarl (Reg CL) assign']
-            (Mem {}, Mem' {}) ->
-                [Movl src2' (Reg ECX), Movl src1' (Reg R11D), Movl (Reg R11D) assign', Sarl (Reg CL) assign']
-            (Mem' {}, Mem' {}) ->
-                [Movl src2' (Reg ECX), Movl src1' (Reg R11D), Movl (Reg R11D) assign', Sarl (Reg CL) assign']
-            (_, Reg ECX) ->
-                [Movl (Reg ECX) (Reg R11D), Movl src2' (Reg ECX), Movl (Reg R11D) assign', Sarl (Reg CL) assign']
-            _ -> [Movl src2' (Reg ECX), Movl src1' assign', Sarl (Reg CL) assign']
+     in if isMem assign' && isMem src1'
+            then [Movl src2' (Reg ECX), Movl src1' (Reg R11D), Movl (Reg R11D) assign', Sarl (Reg CL) assign']
+            else if src1' == Reg ECX
+                     then [ Movl (Reg ECX) (Reg R11D)
+                          , Movl src2' (Reg ECX)
+                          , Movl (Reg R11D) assign'
+                          , Sarl (Reg CL) assign'
+                          ]
+                     else [Movl src2' (Reg ECX), Movl src1' assign', Sarl (Reg CL) assign']
 toAsm (AControl (ALab l)) _ = [Label l]
 toAsm (AControl (AJump l)) _ = [Jmp l]
 toAsm (AControl (ACJump v l l')) coloring =
@@ -231,12 +222,9 @@ toAsm (ARel [assign] AEq [src1, src2]) coloring =
             , Movzbl (Reg R11B) (Reg R11D)
             , Movl (Reg R11D) assign'
             ]
-     in case (assign', src1') of
-            (Mem {}, _) -> asm
-            (Mem' {}, _) -> asm
-            (_, Mem {}) -> asm
-            (_, Mem' {}) -> asm
-            _ -> [Cmp src2' src1', Sete (Reg R11B), Movzbl (Reg R11B) assign']
+     in if isMem assign' && isMem src1'
+            then asm
+            else [Cmp src2' src1', Sete (Reg R11B), Movzbl (Reg R11B) assign']
 toAsm (ARel [assign] ANe [src1, src2]) coloring =
     let assign' = mapToReg assign coloring
         [src1', src2'] = getRegAlloc [src1, src2] coloring False
@@ -247,12 +235,9 @@ toAsm (ARel [assign] ANe [src1, src2]) coloring =
             , Movzbl (Reg R11B) (Reg R11D)
             , Movl (Reg R11D) assign'
             ]
-     in case (assign', src1') of
-            (Mem {}, _) -> asm
-            (Mem' {}, _) -> asm
-            (_, Mem {}) -> asm
-            (_, Mem' {}) -> asm
-            _ -> [Cmp src2' src1', Setne (Reg R11B), Movzbl (Reg R11B) assign']
+     in if isMem assign' && isMem src1'
+            then asm
+            else [Cmp src2' src1', Setne (Reg R11B), Movzbl (Reg R11B) assign']
 toAsm (ARel [assign] ALt [src1, src2]) coloring =
     let assign' = mapToReg assign coloring
         [src1', src2'] = getRegAlloc [src1, src2] coloring False
@@ -263,12 +248,9 @@ toAsm (ARel [assign] ALt [src1, src2]) coloring =
             , Movzbl (Reg R11B) (Reg R11D)
             , Movl (Reg R11D) assign'
             ]
-     in case (assign', src1') of
-            (Mem {}, _) -> asm
-            (Mem' {}, _) -> asm
-            (_, Mem {}) -> asm
-            (_, Mem' {}) -> asm
-            _ -> [Cmp src2' src1', Setl (Reg R11B), Movzbl (Reg R11B) assign']
+     in if isMem assign' && isMem src1'
+            then asm
+            else [Cmp src2' src1', Setl (Reg R11B), Movzbl (Reg R11B) assign']
 toAsm (ARel [assign] AGt [src1, src2]) coloring =
     let assign' = mapToReg assign coloring
         [src1', src2'] = getRegAlloc [src1, src2] coloring False
@@ -279,12 +261,9 @@ toAsm (ARel [assign] AGt [src1, src2]) coloring =
             , Movzbl (Reg R11B) (Reg R11D)
             , Movl (Reg R11D) assign'
             ]
-     in case (assign', src1') of
-            (Mem {}, _) -> asm
-            (Mem' {}, _) -> asm
-            (_, Mem {}) -> asm
-            (_, Mem' {}) -> asm
-            _ -> [Cmp src2' src1', Setg (Reg R11B), Movzbl (Reg R11B) assign']
+     in if isMem assign' && isMem src1'
+            then asm
+            else [Cmp src2' src1', Setg (Reg R11B), Movzbl (Reg R11B) assign']
 toAsm (ARel [assign] ALe [src1, src2]) coloring =
     let assign' = mapToReg assign coloring
         [src1', src2'] = getRegAlloc [src1, src2] coloring False
@@ -295,12 +274,9 @@ toAsm (ARel [assign] ALe [src1, src2]) coloring =
             , Movzbl (Reg R11B) (Reg R11D)
             , Movl (Reg R11D) assign'
             ]
-     in case (assign', src1') of
-            (Mem {}, _) -> asm
-            (Mem' {}, _) -> asm
-            (_, Mem {}) -> asm
-            (_, Mem' {}) -> asm
-            _ -> [Cmp src2' src1', Setle (Reg R11B), Movzbl (Reg R11B) assign']
+     in if isMem assign' && isMem src1'
+            then asm
+            else [Cmp src2' src1', Setle (Reg R11B), Movzbl (Reg R11B) assign']
 toAsm (ARel [assign] AGe [src1, src2]) coloring =
     let assign' = mapToReg assign coloring
         [src1', src2'] = getRegAlloc [src1, src2] coloring False
@@ -311,27 +287,46 @@ toAsm (ARel [assign] AGe [src1, src2]) coloring =
             , Movzbl (Reg R11B) (Reg R11D)
             , Movl (Reg R11D) assign'
             ]
-     in case (assign', src1') of
-            (Mem {}, _) -> asm
-            (Mem' {}, _) -> asm
-            (_, Mem {}) -> asm
-            (_, Mem' {}) -> asm
-            _ -> [Cmp src2' src1', Setge (Reg R11B), Movzbl (Reg R11B) assign']
-toAsm (ACall fun stks) coloring = 
-    let
-        stks' = getRegAlloc' stks coloring False
+     in if isMem assign' && isMem src1'
+            then asm
+            else [Cmp src2' src1', Setge (Reg R11B), Movzbl (Reg R11B) assign']
+toAsm (ACall fun stks) coloring =
+    let stks' = getRegAlloc' stks coloring False
         pushStks = map Pushq stks'
-        popStks = map Popq (reverse stks')
-    in
-        pushStks ++ [Xorl (Reg EAX) (Reg EAX), Call fun] ++ popStks
+        popStks =
+            if Reg EAX `elem` stks'
+                then [Movl (Reg EAX) (Reg R11D)] ++ map Popq (reverse stks') ++ [Movl (Reg R11D) (Reg EAX)]
+                else map Popq (reverse stks')
+     in if length stks' `mod` 2 == 0
+            then pushStks ++ [Xorl (Reg EAX) (Reg EAX), Call fun] ++ popStks
+            else pushStks ++
+                 [Subq (Imm 8) (Reg RSP), Xorl (Reg EAX) (Reg EAX), Call fun, Addq (Imm 8) (Reg RSP)] ++ popStks
 toAsm (AFun _fn stks) coloring =
-    let
-        stks' = getRegAlloc' stks coloring False
-        movStks' = concatMap (\(i, s) -> case s of
-            Mem {} -> [Movl (Mem' (i * 8) RSP) (Reg R11D), Movl (Reg R11D) s]
-            Mem' {} -> [Movl (Mem' (i * 8) RSP) (Reg R11D), Movl (Reg R11D) s]
-            _ -> [Movl (Mem' (i * 8) RSP) s]) $ zip [1..] stks'
-        
-    in
-        movStks'
+    let stks' = getRegAlloc' stks coloring False
+     in concatMap (\(i, s) -> genMovl (Mem' (i * 8) RBP) s) $ zip [2 ..] stks'
 toAsm _ _ = error "ill-formed abstract assembly"
+
+genMovl :: Operand -> Operand -> [Inst]
+genMovl src dest =
+    case (src, dest) of
+        (Mem {}, Mem {}) -> [Movl src (Reg R11D), Movl (Reg R11D) dest]
+        (Mem' {}, Mem {}) -> [Movl src (Reg R11D), Movl (Reg R11D) dest]
+        (Mem {}, Mem' {}) -> [Movl src (Reg R11D), Movl (Reg R11D) dest]
+        (Mem' {}, Mem' {}) -> [Movl src (Reg R11D), Movl (Reg R11D) dest]
+        _ -> [Movl src dest]
+
+genMovq :: Operand -> Operand -> [Inst]
+genMovq src dest =
+    case (src, dest) of
+        (Mem {}, Mem {}) -> [Movq src (Reg R11), Movq (Reg R11) dest]
+        (Mem' {}, Mem {}) -> [Movq src (Reg R11), Movq (Reg R11) dest]
+        (Mem {}, Mem' {}) -> [Movq src (Reg R11), Movq (Reg R11) dest]
+        (Mem' {}, Mem' {}) -> [Movq src (Reg R11), Movq (Reg R11) dest]
+        _ -> [Movq src dest]
+
+isMem :: Operand -> Bool
+isMem oper =
+    case oper of
+        Mem {} -> True
+        Mem' {} -> True
+        _ -> False

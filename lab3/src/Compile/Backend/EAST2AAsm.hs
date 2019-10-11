@@ -42,11 +42,13 @@ aasmGen :: EAST -> [(Ident, ([AAsm], Int))]
 aasmGen east = State.evalState assemM initialState
   where
     initialState =
-        Alloc {variables = Map.empty, 
-                uniqueIDCounter = 0, 
-                uniqueLabelCounter = 0,
-                genFunctions = [],
-                currentFunction = ""}
+        Alloc
+            { variables = Map.empty
+            , uniqueIDCounter = 0
+            , uniqueLabelCounter = 0
+            , genFunctions = []
+            , currentFunction = ""
+            }
     assemM :: AllocM [(Ident, ([AAsm], Int))]
     assemM = do
         _genAAsm <- genEast east
@@ -77,7 +79,7 @@ genEast (EDef fn t e) = do
         v' = Map.fromList $ zip decls [0 ..]
     State.modify' $ \(Alloc _vs _counter lab genf _cf) -> Alloc v' 0 lab genf fn
     let (inReg, inStk) = splitAt 6 (map (\a -> ATemp $ v' Map.! a) args)
-        movArg = map (\(i, tmp) -> AAsm [tmp] ANop [ALoc $ argRegs !! i]) $ zip [0..] inReg
+        movArg = map (\(i, tmp) -> AAsm [tmp] ANop [ALoc $ argRegs !! i]) $ zip [0 ..] inReg
     gen <- genEast e
     let funGen = [AFun fn inStk] ++ movArg ++ gen
     State.modify' $ \(Alloc vs counter lab genf cf) -> Alloc vs counter lab ((fn, (funGen, counter)) : genf) cf
@@ -106,9 +108,9 @@ genEast (EWhile expr e) = do
 genEast (ERet expr) = do
     fname <- State.gets currentFunction
     case expr of
-        Just e -> do 
-                gen <- genExp e (AReg 0)
-                return $ gen ++ [AControl $ AJump $ fname ++ "_ret"]
+        Just e -> do
+            gen <- genExp e (AReg 0)
+            return $ gen ++ [AControl $ AJump $ fname ++ "_ret"]
         Nothing -> return [AControl $ AJump $ fname ++ "_ret"]
 genEast ENop = return []
 genEast (EDecl _ _ e) = genEast e
@@ -119,10 +121,10 @@ genSideEffect (EFunc fn args) = do
     let argLen = length args
     ids <- replicateM argLen getNewUniqueID
     let tmpVars = map ATemp ids
-    gens <- mapM (\(i, e) -> genExp e (tmpVars !! i)) $ zip [0..] args
+    gens <- mapM (\(i, e) -> genExp e (tmpVars !! i)) $ zip [0 ..] args
     let gen = join gens
     let (inReg, inStk) = splitAt 6 tmpVars
-        movArg = map (\(i, tmp) -> AAsm [argRegs !! i] ANop [ALoc tmp]) $ zip [0..] inReg
+        movArg = map (\(i, tmp) -> AAsm [argRegs !! i] ANop [ALoc tmp]) $ zip [0 ..] inReg
     return $ gen ++ movArg ++ [ACall fn inStk]
 genSideEffect _ = error "Expression has no side effect."
 
@@ -210,12 +212,11 @@ genExp (EFunc fn args) dest = do
     let argLen = length args
     ids <- replicateM argLen getNewUniqueID
     let tmpVars = map ATemp ids
-    gens <- mapM (\(i, e) -> genExp e (tmpVars !! i)) $ zip [0..] args
+    gens <- mapM (\(i, e) -> genExp e (tmpVars !! i)) $ zip [0 ..] args
     let gen = join gens
     let (inReg, inStk) = splitAt 6 tmpVars
-        movArg = map (\(i, tmp) -> AAsm [argRegs !! i] ANop [ALoc tmp]) $ zip [0..] inReg
+        movArg = map (\(i, tmp) -> AAsm [argRegs !! i] ANop [ALoc tmp]) $ zip [0 ..] inReg
     return $ gen ++ movArg ++ [ACall fn inStk, AAsm [dest] ANop [ALoc $ AReg 0]]
-    
 
 genCmp :: EExp -> ALabel -> ALabel -> AllocM [AAsm]
 -- genCmp e _ _ | trace ("genCmp " ++ show e ++ "\n") False = undefined
@@ -272,32 +273,30 @@ argRegs = [AReg 3, AReg 4, AReg 1, AReg 2, AReg 5, AReg 6]
 testGenEast :: IO ()
 testGenEast = do
     let east =
-            ESeq (
-            EDecl "f" (ARROW [("x", INTEGER)] INTEGER) (
-                EDef "f" (ARROW [("x", INTEGER)] INTEGER) (
-                    ERet (Just $ EInt 1)
-                )
-            ))
-            (EDecl "g" (ARROW [("x", INTEGER)] INTEGER) (
-                EDef "g" (ARROW [("x", INTEGER)] INTEGER) (
-                    ERet (Just $ EFunc "f" [EIdent "x"])
-                )
-            ))
+            ESeq
+                (EDecl
+                     "f"
+                     (ARROW [("x", INTEGER)] INTEGER)
+                     (EDef "f" (ARROW [("x", INTEGER)] INTEGER) (ERet (Just $ EInt 1))))
+                (EDecl
+                     "g"
+                     (ARROW [("x", INTEGER)] INTEGER)
+                     (EDef "g" (ARROW [("x", INTEGER)] INTEGER) (ERet (Just $ EFunc "f" [EIdent "x"]))))
         funs = aasmGen east
     putStr $ show funs
-    
-testGenRecursion :: IO()
+
+testGenRecursion :: IO ()
 testGenRecursion = do
     let east =
-            EDecl "fact" (ARROW [("x", INTEGER)] INTEGER) (
-                EDef "fact" (ARROW [("x", INTEGER)] INTEGER) (
-                    EIf (EBinop Eql (EIdent "x") (EInt 0)) (
-                        ERet (Just $ EInt 1)
-                    ) (
-                        ERet $ Just $ EBinop Mul (EFunc "fact" [EBinop Sub (EIdent "x") (EInt 1)]) (EIdent "x")
-                    )
-                )
-            )
+            EDecl
+                "fact"
+                (ARROW [("x", INTEGER)] INTEGER)
+                (EDef
+                     "fact"
+                     (ARROW [("x", INTEGER)] INTEGER)
+                     (EIf (EBinop Eql (EIdent "x") (EInt 0))
+                          (ERet (Just $ EInt 1))
+                          (ERet $ Just $ EBinop Mul (EFunc "fact" [EBinop Sub (EIdent "x") (EInt 1)]) (EIdent "x"))))
         funs = aasmGen east
     putStr $ show east
     putStr "\n"

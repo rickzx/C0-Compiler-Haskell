@@ -20,7 +20,6 @@ import Compile.Types.AST
   dec     {TokDec $$}
   hex     {TokHex $$}
   ident   {TokIdent $$}
-  tokmain    {TokMain}
   ret     {TokReturn}
   int     {TokInt}
   void    {TokVoid}

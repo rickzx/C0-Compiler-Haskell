@@ -45,9 +45,11 @@ eGdeclist :: [Gdecl] -> Fnmap -> EAST
 eGdeclist [] _ = ENop --end of the file
 eGdeclist (x:xs) tmap =
     case x of
-        Fdecl rtp nme param -> EDef nme (ARROW (extractParam param tmap) (findtp tmap rtp)) (eGdeclist xs tmap)
-        Fdefn rtp nme param blk ->
-            EDef nme (ARROW (extractParam param tmap) (findtp tmap rtp)) (ESeq (eBlock blk tmap) (eGdeclist xs tmap))
+        Fdecl rtp nme param -> EDecl nme (ARROW (extractParam param tmap) (findtp tmap rtp)) (eGdeclist xs tmap)
+        Fdefn rtp nme param blk -> let
+            typ =  ARROW (extractParam param tmap) (findtp tmap rtp) 
+            in 
+            EDecl nme typ (ESeq (EDef nme typ (eBlock blk tmap)) (eGdeclist xs tmap))
         Typedef rtp nme -> eGdeclist xs tmap --we handled typedef in findFunc already
 
 

@@ -45,13 +45,13 @@ compile job = do
     let 
       ast = parseTokens $ lexProgram s
       (east, _, _) = eGen ast
-    liftEIO $ checkEAST east
+--    liftEIO $ checkEAST east
     let
-        optEast = optEAST east
+--        optEast = optEAST east
     case jobOutFormat job of
       TC -> liftEIO (Right ()) -- By now, we should have thrown any typechecking errors
-      Asm -> writeIOString (jobOut job) $ addHeader (asmGen optEast)
-      Abs -> writeString (jobOut job) $ testPrintAAsm (fst $ codeGen optEast) (jobOut job)
+      Asm -> writeIOString (jobOut job) $ addHeader (asmGen east)
+      Abs -> writeString (jobOut job) $ testPrintAAsm (codeGen east) (jobOut job)
   case res of
     Left msg -> error msg
     Right () -> return ()

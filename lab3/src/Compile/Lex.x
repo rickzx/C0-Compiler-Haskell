@@ -76,7 +76,6 @@ tokens :-
   0 {\_ -> TokDec 0}
   $decstart $decdigit* {\s -> TokDec (read s)}
   0 [xX] $hexdigit+ {\s -> TokHex (read s)}
-  int $white+ main $white* [\(]$white*[\)] {\_ -> TokMain}
 
   return {\_ -> TokReturn}
   int {\_ -> TokInt}
@@ -106,7 +105,6 @@ data Token =
   TokDec Integer |
   TokHex Integer |
   TokIdent String |
-  TokMain |
   TokReturn |
   TokInt |
   TokMinus |
