@@ -18,7 +18,7 @@ data Type =
   | VOID
   | NONE --for debug
   | DEF Ident
-  | ARROW [Type] Type deriving Eq
+  | ARROW [(Ident, Type)] Type deriving Eq
 
 data AST = Program [Gdecl] deriving Eq
 
@@ -106,6 +106,7 @@ instance Show Type where
   show INTEGER = "int"
   show BOOLEAN = "bool"
   show VOID = "void"
+  show (ARROW args res) = show args ++ " -> " ++ show res
   show NONE = "error"
   show (DEF a) = "def" ++ a
 

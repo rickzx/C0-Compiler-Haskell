@@ -2,6 +2,7 @@ module Compile.Frontend.CheckEAST where
 
 import Control.Monad.State
 import Control.Monad.Trans.Except
+import Data.Maybe
 
 import qualified Data.Map as Map
 import qualified Data.Set as Set
@@ -77,12 +78,17 @@ checkInit (EWhile e et) = do
     _ <- checkInit et
     put s0
     return False
-checkInit (ERet e) = do
-    t <- checkUse e
-    assertMsg "Variable used before initialization" t
-    (declared, _) <- get
-    put (declared, declared)
-    return True
+checkInit (ERet e) = case e of
+    Just expr -> do
+        t <- checkUse expr
+        assertMsg "Variable used before initialization" t
+        (declared, _) <- get
+        put (declared, declared)
+        return True
+    Nothing -> do
+        (declared, _) <- get
+        put (declared, declared)
+        return True
 checkInit ENop = return False
 checkInit (EDecl x _t et) = do
     (declared, defined) <- get
@@ -119,11 +125,13 @@ synthValid ctx east =
             case te of
                 Just BOOLEAN -> synthValid ctx et
                 _ -> throwE "Tycon mismatch"
-        ERet e -> do
-            te <- synthType ctx e
-            case te of
-                Just INTEGER -> return ()
-                _ -> throwE "Tycon mismatch"
+        ERet e -> case e of
+            Just expr -> do
+                te <- synthType ctx expr
+                case te of
+                    Just INTEGER -> return ()
+                    _ -> throwE "Tycon mismatch"
+            Nothing -> return ()
         ENop -> return ()
         EDecl x typ et -> do
             assertMsg "Variable already defined" (not $ Map.member x ctx)
@@ -207,21 +215,21 @@ synthType ctx expr =
                     _ <- throwE "Tycon mismatch"
                     return Nothing
 
-testCheckEAST :: IO ()
-testCheckEAST = do
-    let east =
-            EDecl
-                "x"
-                INTEGER
-                (EDecl
-                     "y"
-                     INTEGER
-                     (ESeq
-                          (EAssign "y" (EInt 2))
-                          (ESeq
-                               (EIf (EBinop Lt (EIdent "y") (EInt 1)) (EAssign "x" (EInt 1)) (EAssign "x" (EInt 2)))
-                               (ERet (EBinop Add (EIdent "x") (EIdent "y"))))))
-    res <- runExceptT $ liftEIO $ checkEAST east
-    case res of
-        Left s -> putStrLn s
-        Right _ -> putStrLn "Type-check suceeded"
+--testCheckEAST :: IO ()
+--testCheckEAST = do
+--    let east =
+--            EDecl
+--                "x"
+--                INTEGER
+--                (EDecl
+--                     "y"
+--                     INTEGER
+--                     (ESeq
+--                          (EAssign "y" (EInt 2))
+--                          (ESeq
+--                               (EIf (EBinop Lt (EIdent "y") (EInt 1)) (EAssign "x" (EInt 1)) (EAssign "x" (EInt 2)))
+--                               (ERet (EBinop Add (EIdent "x") (EIdent "y"))))))
+--    res <- runExceptT $ liftEIO $ checkEAST east
+--    case res of
+--        Left s -> putStrLn s
+--        Right _ -> putStrLn "Type-check suceeded"

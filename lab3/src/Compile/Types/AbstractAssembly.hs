@@ -23,6 +23,8 @@ data AAsm
       , aRelOp  :: ARelOp
       , aArgs   :: [AVal]
       }
+  | AFun ALabel [ALoc]      -- Here, [ALoc] only contains the arguments that should be placed on the stack, if any
+  | ACall ALabel [ALoc]     -- Here, [ALoc] only contains the arguments that should be placed on the stack, if any
   | ARet AVal
   | AControl ACtrl
   | AComment String
@@ -54,32 +56,33 @@ instance Show AAsm where
       ++ show src1 ++ " " ++ show relop ++ " " ++ show src2 ++ "\n"
   show (ARet _) = "\tret %eax\n"
   show (AControl ctrl) = show ctrl ++ "\n"
+  show (ACall f xs) = "\tCall " ++ f ++ " with parameters on stack: " ++ show xs ++ "\n"
+  show (AFun f xs) = f ++ " with parameters on stack: " ++ show xs ++ ":\n"
   show _ = "ill-formed\n"
 
 instance Show AVal where
   show (ALoc loc) = show loc
-  show (AImm n) = "$" ++ (show n)
+  show (AImm n) = "$" ++ show n
 
 instance Show ALoc where
   show (AReg 0) = "%eax"
   show (AReg 1) = "%edx"
   show (AReg 2) = "%ecx"
+  show (AReg 3) = "%edi"
+  show (AReg 4) = "%esi"
+  show (AReg 5) = "%r8d"
+  show (AReg 6) = "%r9d"
   show (AReg _) = "%ill-formed"
-  show (ATemp n) = "%t" ++ (show n)
+  show (ATemp n) = "%t" ++ show n
 
 instance Show ACtrl where
-  show (ALab s) = ".L" ++ s ++ ":"
-  show (AJump s) = "\tGoto L" ++ s
-  show (ACJump x l1 l2) = "\tIf " ++ show x ++ " goto L" ++ l1 ++ " else goto L" ++ l2
-  show (ACJump' op a b l1 l2) = "\tIf " ++ show a ++ " " ++ show op ++ " " ++ show b ++ " goto L" ++ l1 ++ " else goto L" ++ l2
+  show (ALab s) = "." ++ s ++ ":"
+  show (AJump s) = "\tGoto ." ++ s
+  show (ACJump x l1 l2) = "\tIf " ++ show x ++ " goto ." ++ l1 ++ " else goto ." ++ l2
+  show (ACJump' op a b l1 l2) = "\tIf " ++ show a ++ " " ++ show op ++ " " ++ show b ++ " goto ." ++ l1 ++ " else goto ." ++ l2
 
 -- A hack to work with an AAsm tool
 testPrintAAsm :: [AAsm] -> String -> String
-testPrintAAsm prog filename =
-  let
-    header = "\t.file\t\"" ++ filename ++ "\"\n"
-    footer = "\t.ident\t\"15-411 L1 Haskell Starter Code\"\n"
-  in
-  header ++ concatMap (\line -> show line) prog ++ footer
+testPrintAAsm prog filename = "\t.file\t\"" ++ filename ++ "\"\n" ++ concatMap show prog
 
 

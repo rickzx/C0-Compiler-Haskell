@@ -10,14 +10,14 @@ import qualified Data.Maybe as Maybe
 --EX: add : int * int -> int.
 data EAST 
     = ESeq EAST EAST
-    | EAssign Ident EAST -- single variable assign
-    | EDef Ident [(Type, Ident)] Type EAST -- Arg type list -> return type
+    | EAssign Ident EExp -- single variable assign
+    | EDef Ident Type EAST -- Arg type list -> return type
     | EIf EExp EAST EAST
     | EWhile EExp EAST
     | EAssert EExp
     | ERet (Maybe.Maybe EExp) -- must be function return type
     | ENop
-    | EDecl Ident Type EAST --for variable decl
+    | EDecl Ident Type EAST --last item of type is the return type, if only 1 item, its variable decl
     | ELeaf EExp
 
 data EExp
@@ -40,7 +40,7 @@ instance Show EAST where
     show ENop = show "NOP"
     show (EDecl ident stype e1) = show "EDecl" ++ "(" ++ ident ++ "  ,  " ++ show stype ++ " , " ++ show e1 ++ ")"
     show (ELeaf e) = show e
-    show (EDef ident types rtype east) = show "EDef" ++ "(" ++ ident ++ "  ,  " ++ show types ++ " -> " ++ show rtype ++ " , " ++ show east ++ ")"
+    show (EDef ident types east) = show "EDef" ++ "(" ++ ident ++ "  :  " ++ show types ++ " , " ++ show east ++ ")"
     show (EAssert e) = show "EAssert" ++ "(" ++ show e ++ ")"
 
 instance Show EExp where
@@ -52,7 +52,7 @@ instance Show EExp where
     show (ETernop expr1 expr2 expr3) = show expr1 ++ " ? " ++ show expr2 ++ " : " ++ show expr3
     show (EUnop u expr1) = show u ++ show expr1
     show (EFunc iden exprlist) = 
-        iden ++ "(" ++ (foldr redu_fn "" exprlist) ++ ")"
+        iden ++ "(" ++ foldr redu_fn "" exprlist ++ ")"
         where 
             redu_fn :: EExp -> String -> String
             redu_fn e stri = show e ++ "," ++ stri

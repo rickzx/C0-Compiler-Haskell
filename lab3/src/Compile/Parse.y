@@ -20,7 +20,6 @@ import Compile.Types.AST
   dec     {TokDec $$}
   hex     {TokHex $$}
   ident   {TokIdent $$}
-  tokmain    {TokMain}
   ret     {TokReturn}
   int     {TokInt}
   void    {TokVoid}
@@ -77,16 +76,24 @@ import Compile.Types.AST
 %right NEG '~' '!' '++' '--'
 %%
 
-Program : {- Empty -} {[]}
-      | Gdecl Program {$1 : $2}
+Program : Funs {Program $1}
 
-Gdecl : Fdecl {Fdecl $1}
-      | Fdefn {Fdefn $1}
-      | Typedef {Typedef $1}
+Funs : {- Empty -} {[]}
+      | Gdecl Funs {$1 : $2}
 
+<<<<<<< HEAD
 Fdecl : Type ident Paramlist {$1 $2 $3}
 Fdefn : Type ident Paramlist Block {$1 $2 $3 $4}
 Param : Type ident {($1, $2)}
+=======
+Gdecl : Fdecl {$1}
+      | Fdefn {$1}
+      | Typedef {$1}
+
+Fdecl : Type ident Paramlist {Fdecl $1 $2 $3}
+Fdefn : Type ident Paramlist Block {Fdefn $1 $2 $3 $4}
+Param : Type ident {($1,$2)}
+>>>>>>> 8d3756102ed45f4fef52c861e016356862fec827
 
 ParamlistFollow : {- Empty -} {[]}
       | ',' Param ParamlistFollow {$2 : $3}
@@ -94,13 +101,13 @@ ParamlistFollow : {- Empty -} {[]}
 Paramlist : '(' ')' {[]}
       | '(' Param ParamlistFollow ')' {$2 : $3}
 
-Typedef : typedef Type ident ';' {$2 $3}
+Typedef : typedef Type ident ';' {Typedef $2 $3}
 
 Block : '{' Stmts '}' {$2}
 
 Type  : int {INTEGER}
       | bool {BOOLEAN}
-      | ident {DEF ident}
+      | ident {DEF $1}
       | void {VOID}
 
 Decl  : Type ident asgnop Exp {checkDeclAsgn $2 $3 $1 $4}
@@ -183,7 +190,7 @@ checkSimpAsgn id op e =
 
 checkSimpAsgnP :: Exp -> Postop -> Simp
 checkSimpAsgnP id op =
-    case id of  
+    case id of
         Ident a -> AsgnP a op
         _ -> error "Invalid postop assignment to non variables"
 

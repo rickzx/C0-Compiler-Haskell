@@ -9,7 +9,7 @@ optEAST east = case east of
     EAssign x e -> EAssign x (constantFold e)
     EIf e et1 et2 -> EIf (constantFold e) (optEAST et1) (optEAST et2)
     EWhile e et -> EWhile (constantFold e) (optEAST et)
-    ERet e -> ERet (constantFold e)
+    ERet e -> ERet (fmap constantFold e)
     ENop -> east
     EDecl x t et -> EDecl x t (optEAST et)
     ELeaf e -> ELeaf (constantFold e)

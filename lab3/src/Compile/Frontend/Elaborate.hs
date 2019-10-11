@@ -4,10 +4,8 @@ import Compile.Types
 import qualified Data.Map as Map
 import qualified Data.Maybe as Maybe
 
-type Typemap = Map.Map Ident Type
-
 --map each function to (Arg type, return type).
-type Fnmap = Map.Map Ident ([(Type, Ident)], Type)
+type Fnmap = Map.Map Ident Type
 
 --generate our intermediate ast structure
 --(EAST, declared function map, defined function map)
@@ -17,13 +15,13 @@ eGen (Program l) = let
     in
     (eGdeclist l tpemap,  funcdecl, funcdef)
 
-findFunc :: ([Gdecl], Fnmap, Fnmap, Typemap) -> ([Gdecl], Fnmap, Fnmap, Typemap)
+findFunc :: ([Gdecl], Fnmap, Fnmap, Fnmap) -> ([Gdecl], Fnmap, Fnmap, Fnmap)
 findFunc ([], dec, def, tmap) = ([], dec, def, tmap)
-findFunc (x:xs, dec, def, tmap) = case x of
+findFunc (x:xs, dec, def, tmap) = case x of 
     Fdecl rtp nme param -> let types = extractParam param tmap in
-            findFunc(xs, Map.insert nme (types, findtp tmap rtp) dec, def, tmap)
+            findFunc(xs, Map.insert nme (ARROW types (findtp tmap rtp)) dec, def, tmap)
     Fdefn rtp nme param blk -> let types = extractParam param tmap in
-            findFunc(xs, Map.insert nme (types, findtp tmap rtp) dec, Map.insert nme (types, findtp tmap rtp) def, tmap)
+            findFunc(xs, Map.insert nme (ARROW types (findtp tmap rtp)) dec, Map.insert nme (ARROW types (findtp tmap rtp)) def, tmap)
     Typedef rtp nme -> findFunc(xs, dec, def, Map.insert nme rtp tmap)
 
 --different case of decl, its function decl, we extract the
@@ -31,35 +29,38 @@ findFunc (x:xs, dec, def, tmap) = case x of
 --else, if its typedef we just map the new type to its new name
 --else, we use decl, and does the assign op to assign decl to the block
 --TODO: change this to throw error instead of NONE
-findtp :: Typemap -> Type -> Type
+findtp :: Fnmap -> Type -> Type
 findtp tmap (DEF str) = Maybe.fromMaybe NONE (Map.lookup str tmap)
 findtp tmap tp = tp
 
 --extract the parameter of the function
-extractParam :: [(Type, Ident)] -> Typemap -> [(Type, Ident)]
-extractParam [] tmap = [(VOID, "")]
+extractParam :: [(Type, Ident)] -> Fnmap -> [(Ident, Type)]
+extractParam [] tmap = [("", VOID)]
 extractParam l tmap = foldr f [] l
     where 
-        f :: (Type, Ident) -> [(Type, Ident)] -> [(Type, Ident)]
-        f (ty, name) curr = (findtp tmap ty, name): curr
+        f :: (Type, Ident) -> [(Ident, Type)] -> [(Ident, Type)]
+        f (ty, name) curr = (name, findtp tmap ty): curr
 
-eGdeclist :: [Gdecl] -> Typemap -> EAST
+eGdeclist :: [Gdecl] -> Fnmap -> EAST
 eGdeclist [] _ = ENop --end of the file
-eGdeclist (x:xs) tmap = case x of
-    Fdecl rtp nme param -> EDef nme (extractParam param tmap) (findtp tmap rtp) (eGdeclist xs tmap)
-    Fdefn rtp nme param blk -> EDef nme (extractParam param tmap) (findtp tmap rtp)
-        (ESeq (EAssign nme (eBlock blk tmap)) (eGdeclist xs tmap))
-    Typedef rtp nme -> eGdeclist xs tmap --we handled typedef in findFunc already
+eGdeclist (x:xs) tmap =
+    case x of
+        Fdecl rtp nme param -> EDecl nme (ARROW (extractParam param tmap) (findtp tmap rtp)) (eGdeclist xs tmap)
+        Fdefn rtp nme param blk -> let
+            typ =  ARROW (extractParam param tmap) (findtp tmap rtp) 
+            in 
+            EDecl nme typ (ESeq (EDef nme typ (eBlock blk tmap)) (eGdeclist xs tmap))
+        Typedef rtp nme -> eGdeclist xs tmap --we handled typedef in findFunc already
 
 
-eBlock :: [Stmt] -> Typemap -> EAST
+eBlock :: [Stmt] -> Fnmap -> EAST
 eBlock [] _ = ENop
 eBlock [x] tmap = eStmt x tmap
 --give declare precedence
 eBlock (x:l) tmap = case x of
     Simp (Decl d) -> case d of
         JustDecl var tp -> EDecl var (findtp tmap tp) (eBlock l tmap)
-        DeclAsgn var tp expr -> EDecl var (findtp tmap tp) (ESeq (EAssign var (ELeaf $ pExp expr)) (eBlock l tmap))
+        DeclAsgn var tp expr -> EDecl var (findtp tmap tp) (ESeq (EAssign var (pExp expr)) (eBlock l tmap))
     _ -> ESeq (eStmt x tmap) (eBlock l tmap)
 
 pExp :: Exp -> EExp
@@ -72,7 +73,7 @@ pExp (Ternop expr1 expr2 expr3) = ETernop (pExp expr1) (pExp expr2) (pExp expr3)
 pExp (Unop u expr1) = EUnop u (pExp expr1)
 pExp (Function id exprlist) = EFunc id (fmap pExp exprlist)
 
-eStmt :: Stmt -> Typemap -> EAST
+eStmt :: Stmt -> Fnmap -> EAST
 eStmt x tmap = case x of
     Simp s -> eSimp s tmap
     Stmts b -> eBlock b tmap
@@ -82,7 +83,7 @@ eStmt x tmap = case x of
         For _initr _condi (Opt (Decl _)) _bodyi -> error "Declaration not meaningful as step of for-loop"
         For initr condi stepi bodyi -> case initr of
             Opt (Decl (JustDecl var tp)) -> EDecl var (findtp tmap tp) (EWhile (pExp condi) (ESeq (eStmt bodyi tmap) (eSimpopt stepi tmap)))
-            Opt (Decl (DeclAsgn var tp expr)) -> EDecl var (findtp tmap tp) (ESeq (EAssign var (ELeaf $ pExp expr))
+            Opt (Decl (DeclAsgn var tp expr)) -> EDecl var (findtp tmap tp) (ESeq (EAssign var (pExp expr))
                 (EWhile (pExp condi) (ESeq (eStmt bodyi tmap) (eSimpopt stepi tmap))))
             _ -> ESeq (eSimpopt initr tmap) (EWhile (pExp condi) (ESeq (eStmt bodyi tmap)
                 (eSimpopt stepi tmap)))
@@ -91,26 +92,26 @@ eStmt x tmap = case x of
         Retn ret -> ERet (Maybe.Just (pExp ret))
         Void -> ERet Maybe.Nothing
 
-eSimp :: Simp -> Typemap -> EAST
+eSimp :: Simp -> Fnmap -> EAST
 eSimp simp tmap = case simp of
     Asgn i asop expr -> let
         expression = case asop of
             Equal -> pExp expr
             AsnOp b -> pExp (Binop b (Ident i) expr)
-        in EAssign i (ELeaf expression)
-    AsgnP i pos -> if pos == Incr then EAssign i (ELeaf $ pExp (Binop Add (Ident i) (Int 1)))
-        else EAssign i (ELeaf $ pExp (Binop Sub(Ident i) (Int 1)))
+        in EAssign i expression
+    AsgnP i pos -> if pos == Incr then EAssign i (pExp (Binop Add (Ident i) (Int 1)))
+        else EAssign i (pExp (Binop Sub(Ident i) (Int 1)))
     Decl d -> case d of
         JustDecl var tp -> EDecl var (findtp tmap tp) ENop
-        DeclAsgn var tp expr -> EDecl var (findtp tmap tp) (EAssign var (ELeaf $ pExp expr))
+        DeclAsgn var tp expr -> EDecl var (findtp tmap tp) (EAssign var (pExp expr))
     Exp expr -> ELeaf (pExp expr)
 
-eSimpopt :: Simpopt -> Typemap -> EAST
+eSimpopt :: Simpopt -> Fnmap -> EAST
 eSimpopt sopt tmap = case sopt of
     SimpNop -> ENop
     Opt s -> eSimp s tmap
 
-eElse :: Elseopt -> Typemap -> EAST
+eElse :: Elseopt -> Fnmap -> EAST
 eElse eopt tmap = case eopt of
     ElseNop -> ENop
     Else stmt -> eStmt stmt tmap
