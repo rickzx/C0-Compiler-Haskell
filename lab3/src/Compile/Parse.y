@@ -86,7 +86,7 @@ Gdecl : Fdecl {Fdecl $1}
 
 Fdecl : Type ident Paramlist {$1 $2 $3}
 Fdefn : Type ident Paramlist Block {$1 $2 $3 $4}
-Param : Type ident {（$1，$2）}
+Param : Type ident {($1, $2)}
 
 ParamlistFollow : {- Empty -} {[]}
       | ',' Param ParamlistFollow {$2 : $3}

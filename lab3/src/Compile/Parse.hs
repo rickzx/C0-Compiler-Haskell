@@ -1455,7 +1455,7 @@ happyReduce_8 = happySpecReduce_2  8 happyReduction_8
 happyReduction_8 (HappyTerminal (TokIdent happy_var_2))
 	(HappyAbsSyn13  happy_var_1)
 	 =  HappyAbsSyn8
-		 (happy_var_1 happy_var_2
+		 ((happy_var_1, happy_var_2)
 	)
 happyReduction_8 _ _  = notHappyAtAll 
 
@@ -1524,7 +1524,7 @@ happyReduction_16 _
 happyReduce_17 = happySpecReduce_1  13 happyReduction_17
 happyReduction_17 _
 	 =  HappyAbsSyn13
-		 (Ident ident
+		 (DEF ident
 	)
 
 happyReduce_18 = happySpecReduce_1  13 happyReduction_18
@@ -1767,9 +1767,9 @@ happyReduction_46 _  = notHappyAtAll
 
 happyReduce_47 = happySpecReduce_2  21 happyReduction_47
 happyReduction_47 (HappyAbsSyn23  happy_var_2)
-	_
+	(HappyTerminal (TokIdent happy_var_1))
 	 =  HappyAbsSyn21
-		 (Function happy_var_2
+		 (Function happy_var_1 happy_var_2
 	)
 happyReduction_47 _ _  = notHappyAtAll 
 
