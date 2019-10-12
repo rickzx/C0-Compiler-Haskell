@@ -81,11 +81,6 @@ Program : Funs {Program $1}
 Funs : {- Empty -} {[]}
       | Gdecl Funs {$1 : $2}
 
-<<<<<<< HEAD
-Fdecl : Type ident Paramlist {$1 $2 $3}
-Fdefn : Type ident Paramlist Block {$1 $2 $3 $4}
-Param : Type ident {($1, $2)}
-=======
 Gdecl : Fdecl {$1}
       | Fdefn {$1}
       | Typedef {$1}
@@ -93,7 +88,6 @@ Gdecl : Fdecl {$1}
 Fdecl : Type ident Paramlist {Fdecl $1 $2 $3}
 Fdefn : Type ident Paramlist Block {Fdefn $1 $2 $3 $4}
 Param : Type ident {($1,$2)}
->>>>>>> 8d3756102ed45f4fef52c861e016356862fec827
 
 ParamlistFollow : {- Empty -} {[]}
       | ',' Param ParamlistFollow {$2 : $3}

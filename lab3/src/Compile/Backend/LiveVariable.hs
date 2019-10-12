@@ -33,7 +33,6 @@ getLoc (x:rest) =
 reverseAAsm :: [(Int, AAsm)] -> [(Int, AAsm)] -> [(Int, AAsm)]
 reverseAAsm = foldl (flip (:))
 
---compute live list for a straight line of code
 addLineNum :: [AAsm] -> [(Int, AAsm)]
 addLineNum = zip [0 ..]
 
@@ -70,6 +69,11 @@ computePredicate ((idx, x):xs) mapping pr =
              in computePredicate xs mapping linemap
         ARel assign _ args ->
             let linemap = Map.insert idx (Set.fromList assign, [idx + 1], getLoc args) pr
+             in computePredicate xs mapping linemap
+        AFun l extraargs -> computePredicate xs mapping (Map.insert idx (Set.empty, [idx + 1], Set.empty) pr)
+        ACall l extraargs ->
+            --need to include rax
+            let linemap = Map.insert idx (Set.empty, [idx + 1], Set.fromList (AReg 0: extraargs)) pr
              in computePredicate xs mapping linemap
         AControl c ->
             case c of
@@ -269,7 +273,8 @@ buildInterfere ((idx, x):xs) live pr g =
                  in buildInterfere xs live pr newg
             _ -> buildInterfere xs live pr g
 
-computerInterfere :: [AAsm] -> Graph
+--(function name, (AASM generated, # of var)
+computerInterfere :: [AAsm]-> Graph
 computerInterfere aasm =
     let processed = reverseAAsm [] (addLineNum aasm)
         labels = findlabels processed Map.empty
@@ -284,51 +289,58 @@ computerInterfere aasm =
         -- (trace $ "Predicate: " ++ show pred ++ "\n\n" ++ "Ancestors :" ++ show ancestors ++ "\n\n" ++ "Liveness: " ++ show liveness ++ "\n")
         buildInterfere processed liveness predec Map.empty
 
---example from Written 1
-exAASM :: [AAsm]
-exAASM =
-    [ AAsm {aAssign = [ATemp 0], aOp = ANop, aArgs = [AImm (-9)]}
-    , AAsm {aAssign = [ATemp 1], aOp = ANop, aArgs = [AImm 1]}
-    , AAsm {aAssign = [ATemp 2], aOp = ANop, aArgs = [AImm 2]}
-    , AAsm {aAssign = [ATemp 3], aOp = ANop, aArgs = [AImm 3]}
-    , AAsm {aAssign = [ATemp 4], aOp = AMul, aArgs = [ALoc (ATemp 2), ALoc (ATemp 3)]}
-    , AAsm {aAssign = [ATemp 5], aOp = AAdd, aArgs = [ALoc (ATemp 1), ALoc (ATemp 4)]}
-    , AAsm {aAssign = [ATemp 6], aOp = AAdd, aArgs = [ALoc (ATemp 0), ALoc (ATemp 5)]}
-    , AAsm {aAssign = [ATemp 7], aOp = ANop, aArgs = [AImm 2]}
-    --T11 should interfere with everything Immediately after this line even if its not used
-    , AAsm {aAssign = [ATemp 11], aOp = ANop, aArgs = [AImm 5]}
-    , AAsm {aAssign = [ATemp 8], aOp = AAdd, aArgs = [ALoc (ATemp 6), ALoc (ATemp 7)]}
-    , AAsm {aAssign = [ATemp 9], aOp = ANop, aArgs = [AImm 4]}
-    , AAsm {aAssign = [ATemp 10], aOp = ADiv, aArgs = [ALoc (ATemp 8), ALoc (ATemp 9)]}
-    , AAsm {aAssign = [AReg 0], aOp = AAdd, aArgs = [ALoc (ATemp 6), ALoc (ATemp 10)]}
-    , ARet (ALoc (AReg 0))
+exAASM :: [(Ident, ([AAsm], Int))]
+exAASM = 
+    [
+        ("f", ([
+            AFun "f" [],
+            AAsm [ATemp 0] ANop [ALoc $ AReg 3],
+            AAsm [ATemp 1] ANop [ALoc $ AReg 4],
+            AAsm [AReg 0] ANop [AImm 1],
+            ARet (ALoc $ AReg 0)
+        ], 0)),
+        ("g", ([
+            AFun "g" [],
+            AAsm [ATemp 0] ANop [ALoc $ AReg 3],
+            AAsm [ATemp 0] ANop [ALoc $ ATemp 0],
+            AAsm [ATemp 0] ANop [ALoc $ AReg 3],
+            ACall "f" [],
+            AAsm [AReg 0] ANop [ALoc $ AReg 0],
+            ARet (ALoc $ AReg 0)
+        ], 1)),
+        ("h", ([
+            AFun "h" [ATemp 15, ATemp 16]
+            , AAsm [ATemp 0] ANop [AImm 0]
+            , AAsm [ATemp 1] ANop [AImm 2]
+            , AAsm [ATemp 2] ANop [AImm 3]
+            , AControl (ALab "L0")
+            , AControl (ACJump' ANe (ALoc $ ATemp 0) (AImm 0) "L1" "L2")
+            , ACall "f" [ATemp 0]
+            , AControl (ALab "L1")
+            , AControl (ACJump' ALe (ALoc $ ATemp 1) (ALoc $ ATemp 0) "L3" "L4")
+            , AControl (ALab "L3")
+            , AAsm [ATemp 5] AAdd [ALoc (ATemp 0), AImm 2]
+            , AAsm [ATemp 4] AAdd [ALoc (ATemp 1), AImm 2]
+            , AControl (AJump "L0")
+            , AControl (ALab "L4")
+            , AAsm [ATemp 6] AAdd [ALoc (ATemp 0), AImm 1]
+            , AAsm [ATemp 3] AAdd [ALoc (ATemp 2), AImm 1]
+            , AControl (AJump "L0")
+            , AControl (ALab "L2")
+            , AAsm [ATemp 7] AAdd [ALoc (ATemp 2), ALoc (ATemp 1)]
+            , ACall "g" [ATemp 2, ATemp 1]
+            , ARet (ALoc (AReg 0))
+            ], 2))
     ]
+testL :: [(Ident, ([AAsm], Int))] -> [Graph]
+testL [] = []
+testL ((name, (eaasm, numvar)):xs) = 
+    (computerInterfere eaasm) : (testL xs)
 
-loopAASM :: [AAsm]
-loopAASM =
-    [ AAsm [ATemp 0] ANop [AImm 0]
-    , AAsm [ATemp 1] ANop [AImm 2]
-    , AAsm [ATemp 2] ANop [AImm 3]
-    , AControl (ALab "L0")
-    , AControl (ACJump' ANe (ALoc $ ATemp 0) (AImm 0) "L1" "L2")
-    , AControl (ALab "L1")
-    , AControl (ACJump' ALe (ALoc $ ATemp 1) (ALoc $ ATemp 0) "L3" "L4")
-    , AControl (ALab "L3")
-    , AAsm [ATemp 5] AAdd [ALoc (ATemp 0), AImm 2]
-    , AAsm [ATemp 4] AAdd [ALoc (ATemp 1), AImm 2]
-    , AControl (AJump "L0")
-    , AControl (ALab "L4")
-    , AAsm [ATemp 6] AAdd [ALoc (ATemp 0), AImm 1]
-    , AAsm [ATemp 3] AAdd [ALoc (ATemp 2), AImm 1]
-    , AControl (AJump "L0")
-    , AControl (ALab "L2")
-    , AAsm [AReg 0] AAdd [ALoc (ATemp 2), ALoc (ATemp 1)]
-    , ARet (ALoc (AReg 0))
-    ]
+testEx :: IO()
+testEx = print $ testL exAASM
 
-whileAASM :: [AAsm]
-whileAASM = [AAsm [ATemp 0] ANop [AImm 1], AAsm [AReg 0] ANop [AImm 1], ARet (ALoc (AReg 0))]
-
+{-
 testLive :: IO ()
 testLive =
     let processed = reverseAAsm [] (addLineNum whileAASM)
@@ -364,3 +376,4 @@ testInterfereNew =
            print predec
            print "______________________________"
            print (buildInterfere processed liveness predec Map.empty)
+-}
