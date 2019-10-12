@@ -73,7 +73,7 @@ computePredicate ((idx, x):xs) mapping pr =
         AFun l extraargs -> computePredicate xs mapping (Map.insert idx (Set.empty, [idx + 1], Set.empty) pr)
         ACall l extraargs ->
             --need to include rax
-            let linemap = Map.insert idx (Set.empty, [idx + 1], Set.fromList (AReg 0: extraargs)) pr
+            let linemap = Map.insert idx (Set.empty, [idx + 1], Set.fromList (AReg 0 : extraargs)) pr
              in computePredicate xs mapping linemap
         AControl c ->
             case c of
@@ -332,13 +332,30 @@ exAASM =
             , ARet (ALoc (AReg 0))
             ], 2))
     ]
+
+shortAAsm :: [(Ident, ([AAsm], Int))]
+shortAAsm = 
+    [
+        ("g", ([
+            AFun "g" [],
+            AAsm [ATemp 0] ANop [ALoc $ AReg 3],
+            AAsm [ATemp 0] ANop [ALoc $ ATemp 0],
+            AAsm [AReg 3] ANop [ALoc $ ATemp 0],
+            ACall "f" [],
+            AAsm [ATemp 2] ANop [ALoc $ AReg 0],
+            AAsm [ATemp 1] AAdd [ALoc $ ATemp 0, AImm 1],
+            AAsm [AReg 0] AAdd [ALoc $ ATemp 2, ALoc $ ATemp 1],
+            ARet (ALoc $ AReg 0)
+        ], 1))
+    ]
+
 testL :: [(Ident, ([AAsm], Int))] -> [Graph]
 testL [] = []
 testL ((name, (eaasm, numvar)):xs) = 
     (computerInterfere eaasm) : (testL xs)
 
 testEx :: IO()
-testEx = print $ testL exAASM
+testEx = print $ testL shortAAsm
 
 {-
 testLive :: IO ()
