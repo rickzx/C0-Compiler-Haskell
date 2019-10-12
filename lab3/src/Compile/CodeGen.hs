@@ -36,7 +36,7 @@ generateFunc (fn, aasms, localVar) =
         (coloring, stackVar, calleeSaved) = if localVar > 200 then allStackColor localVar else
             let
               graph = computerInterfere aasms
-    
+              
               -- (trace $ "Interference graph: " ++ show graph ++ "\n\n")
               precolor = Map.fromList [(AReg 0, 0), (AReg 1, 3), (AReg 2, 4),
                                         (AReg 3, 1), (AReg 4, 2), (AReg 5, 5), (AReg 6, 6)]
