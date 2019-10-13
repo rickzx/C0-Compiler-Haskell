@@ -35,7 +35,7 @@ eGenHeader (Program l) =
 eGen :: AST -> Header -> EAST
 eGen (Program l) header =
     let initialState = GlobState {funDeclared = Map.singleton "main" (ARROW [] INTEGER), funDefined = Map.empty, typeDefined = Map.empty}
-        allDef = Set.insert "main" $ findDefFunc l
+        allDef = findDefFunc l
         elaborate = elabGdecls l header allDef
         e = evalState (runExceptT elaborate) initialState
      in case e of
