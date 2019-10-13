@@ -39,6 +39,7 @@ mungeArgs :: String -> String
 mungeArgs s
   | "-e" `isPrefixOf` s = "--emit=" ++ drop 2 s
   | "-O" `isPrefixOf` s = "--opt=" ++ drop 2 s
+  | "-l" `isPrefixOf` s = "--link=" ++ drop 2 s
   | otherwise = s
 
 argTable :: [OptDescr (Job -> Job)]
@@ -53,6 +54,11 @@ argTable =
       ["emit"]
       (ReqArg setOF "EMIT")
       "Produce a particular type of output (documented in c0c-spec.txt)"
+  , Option 
+      []
+      ["link"]
+      (ReqArg injectHeader "LINK")
+      "Link the c0 file with an h0 header"
   , Option [] ["opt"] (ReqArg setOpti "OPT") "Optimization level"
   ]
 
@@ -67,6 +73,9 @@ optiTable = [("0", 0), ("1", 1), ("2", 2)]
 
 setOF :: String -> Job -> Job
 setOF outFormat j = j {jobOutFormat = fromJust $ lookup outFormat typeTable}
+
+injectHeader :: String -> Job -> Job
+injectHeader header j = j {jobHeader = header}
 
 setOpti :: String -> Job -> Job
 setOpti optimizationLevel j =

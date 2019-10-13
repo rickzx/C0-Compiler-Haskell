@@ -12,6 +12,7 @@ data EAST
     = ESeq EAST EAST
     | EAssign Ident EExp -- single variable assign
     | EDef Ident Type EAST -- Arg type list -> return type
+    | ETDef Type Ident
     | EIf EExp EAST EAST
     | EWhile EExp EAST
     | EAssert EExp
@@ -42,6 +43,7 @@ instance Show EAST where
     show (ELeaf e) = show e
     show (EDef ident types east) = show "EDef" ++ "(" ++ ident ++ "  :  " ++ show types ++ " , " ++ show east ++ ")"
     show (EAssert e) = show "EAssert" ++ "(" ++ show e ++ ")"
+    show (ETDef t x) = show "ETDef" ++ "(" ++ show t ++ ", " ++ show x ++ ")"
 
 instance Show EExp where
     show (EInt a) = show a

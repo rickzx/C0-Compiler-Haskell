@@ -11,21 +11,23 @@ module Compile.Types.Job where
 data Job = Job
   { jobOut          :: FilePath
   , jobSource       :: FilePath
+  , jobHeader       :: FilePath
   , jobOptimization :: Integer
   , jobOutUnsafe    :: Bool
   , jobOutFormat    :: OF
-  }
+  } deriving Show
 
 data OF
   = TC
   | Abs
   | Asm
-  deriving Eq
+  deriving (Eq, Show)
 
 defaultJob :: Job
 defaultJob = Job
   { jobOut          = ""
   , jobSource       = ""
+  , jobHeader       = "../runtime/15411-l3.h0"
   , jobOptimization = 0
   , jobOutUnsafe    = False
   , jobOutFormat    = Abs

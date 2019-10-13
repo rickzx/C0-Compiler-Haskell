@@ -65,7 +65,7 @@ getDecls _ = []
 
 genEast :: EAST -> AllocM [AAsm]
 genEast (ESeq e1 e2) = do
-    gen1 <- genEast e1
+    gen1 <- genEast e1 
     gen2 <- genEast e2
     return $ gen1 ++ gen2
 genEast (EAssign x expr) = do
@@ -114,6 +114,7 @@ genEast (ERet expr) = do
         Nothing -> return [AControl $ AJump $ fname ++ "_ret"]
 genEast ENop = return []
 genEast (EDecl _ _ e) = genEast e
+genEast (ETDef _ _) = return []
 genEast (ELeaf e) = genSideEffect e
 
 genSideEffect :: EExp -> AllocM [AAsm]
@@ -126,7 +127,9 @@ genSideEffect (EFunc fn args) = do
     let (inReg, inStk) = splitAt 6 tmpVars
         movArg = map (\(i, tmp) -> AAsm [argRegs !! i] ANop [ALoc tmp]) $ zip [0 ..] inReg
     return $ gen ++ movArg ++ [ACall fn inStk]
-genSideEffect _ = error "Expression has no side effect."
+genSideEffect expr = do
+    n <- getNewUniqueID
+    genExp expr (ATemp n)
 
 genExp :: EExp -> ALoc -> AllocM [AAsm]
 -- genExp e _ | trace ("genExp " ++ show e ++ "\n") False = undefined

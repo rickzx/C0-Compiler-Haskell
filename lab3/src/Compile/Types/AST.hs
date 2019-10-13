@@ -108,7 +108,7 @@ instance Show Type where
   show VOID = "void"
   show (ARROW args res) = show args ++ " -> " ++ show res
   show NONE = "error"
-  show (DEF a) = "def" ++ a
+  show (DEF a) = "def " ++ a
 
 instance Show Exp where
   show (Int x) = show x

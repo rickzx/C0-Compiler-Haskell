@@ -20,13 +20,12 @@ assertMsg _ True = return ()
 assertMsg s False = throwE s
 
 checkEAST :: EAST -> Either String ()
--- (trace $ "EAST: " ++ show east ++ "\n") 
+-- (trace $ "EAST: " ++ show east ++ "\n")
 checkEAST east = evalState (runExceptT typeCheck) initialState
   where
     initialState = (Set.empty, Set.empty)
     typeCheck = do
-        hasReturn <- checkInit east
-        assertMsg "Main does not return" hasReturn
+        checkInit east
         synthValid Map.empty east
 
 checkUse :: EExp -> ExceptT String (State TypeCheckState) Bool
@@ -97,6 +96,18 @@ checkInit (EDecl x _t et) = do
     (_, defined') <- get
     put (declared, Set.delete x defined')
     return t
+checkInit (EDef fn (ARROW args ret) et) = do
+    (declared, defined) <- get
+    let ndecl = foldr (\x s -> Set.insert (fst x) s) declared args
+        ndef = foldr (\x s -> Set.insert (fst x) s) defined args
+    put (ndecl, ndef)
+    t <- checkInit et
+    case ret of
+        VOID -> return True
+        _ -> do
+            assertMsg ("Function " ++ fn ++ "does not have return") t
+            put (declared, defined)
+            return t
 checkInit (ELeaf _e) = return False
 
 synthValid :: Context -> EAST -> ExceptT String (State TypeCheckState) ()
@@ -125,22 +136,31 @@ synthValid ctx east =
             case te of
                 Just BOOLEAN -> synthValid ctx et
                 _ -> throwE "Tycon mismatch"
-        ERet e -> case e of
-            Just expr -> do
-                te <- synthType ctx expr
-                case te of
-                    Just INTEGER -> return ()
-                    _ -> throwE "Tycon mismatch"
-            Nothing -> return ()
+        ERet e ->
+            case e of
+                Just expr -> do
+                    te <- synthType ctx expr
+                    case te of
+                        Just INTEGER -> return ()
+                        _ -> throwE "Tycon mismatch"
+                Nothing -> return ()
         ENop -> return ()
-        EDecl x typ et -> do
-            assertMsg "Variable already defined" (not $ Map.member x ctx)
-            synthValid (Map.insert x typ ctx) et
+        EDecl fn typ@(ARROW _args _ret) et -> synthValid (Map.insert fn typ ctx) et
+        EDecl x typ et ->
+            case typ of
+                VOID -> throwE "Variable cannot be declared as void"
+                _ -> do
+                    assertMsg "Variable already defined" (not $ Map.member x ctx)
+                    synthValid (Map.insert x typ ctx) et
         ELeaf e -> do
             _ <- synthType ctx e
             return ()
+        EAssert e -> do
+            te <- synthType ctx e
+            case te of
+                Just BOOLEAN -> return ()
+                _ -> throwE "Tycon mismatch"
 
---typeCheck :: EAST -> Either String ()
 synthType :: Context -> EExp -> ExceptT String (State TypeCheckState) (Maybe Type)
 synthType ctx expr =
     case expr of
@@ -214,6 +234,22 @@ synthType ctx expr =
                 _ -> do
                     _ <- throwE "Tycon mismatch"
                     return Nothing
+        EFunc fn args -> do
+            let fnTyp = fromMaybe (error $ "Undefined function " ++ fn) (Map.lookup fn ctx)
+            argTyp <- mapM (synthType ctx) args
+            let retTyp = checkArgTyp argTyp fnTyp
+            return $ Just retTyp
+            
+checkArgTyp :: [Maybe Type] -> Type -> Type
+checkArgTyp argTyp (ARROW args ret)
+    | length argTyp /= length args = error "Function type mismatch"
+    | all (\(x, y) ->
+               case x of
+                   Nothing -> error "Tycon mismatch"
+                   Just typ -> typ == snd y) $
+          zip argTyp args = ret
+    | otherwise = error "Function type mismatch"
+checkArgTyp _ _ = error "Invalid type"
 
 --testCheckEAST :: IO ()
 --testCheckEAST = do
