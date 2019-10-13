@@ -13,6 +13,8 @@ import Data.Maybe
 import Data.List
 import System.FilePath
 
+import Debug.Trace
+
 data JobParseError
   = NoSources
   | TooManySources
@@ -39,7 +41,6 @@ mungeArgs :: String -> String
 mungeArgs s
   | "-e" `isPrefixOf` s = "--emit=" ++ drop 2 s
   | "-O" `isPrefixOf` s = "--opt=" ++ drop 2 s
-  | "-l" `isPrefixOf` s = "--link=" ++ drop 2 s
   | otherwise = s
 
 argTable :: [OptDescr (Job -> Job)]
@@ -55,7 +56,7 @@ argTable =
       (ReqArg setOF "EMIT")
       "Produce a particular type of output (documented in c0c-spec.txt)"
   , Option 
-      []
+      ['l']
       ["link"]
       (ReqArg injectHeader "LINK")
       "Link the c0 file with an h0 header"

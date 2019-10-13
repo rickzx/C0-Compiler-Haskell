@@ -291,14 +291,14 @@ toAsm (ARel [assign] AGe [src1, src2]) coloring _ =
      in if isMem assign' && isMem src1'
             then asm
             else [Cmp src2' src1', Setge (Reg R11B), Movzbl (Reg R11B) assign']
-toAsm (ACall fun stks) coloring header =
+toAsm (ACall fun stks _) coloring header =
     let stks' = getRegAlloc' stks coloring False
         pushStks = map Pushq stks'
         popStks =
             if Reg EAX `elem` stks'
                 then [Movl (Reg EAX) (Reg R11D)] ++ map Popq (reverse stks') ++ [Movl (Reg R11D) (Reg EAX)]
                 else map Popq (reverse stks')
-        fn = if Map.member fun (fnDecl header)
+        fn = if Map.member fun (fnDecl header) || fun == "abort"
                 then fun
                 else "_c0_" ++ fun
      in if length stks' `mod` 2 == 0

@@ -78,7 +78,7 @@ genEast (EDef fn t e) = do
         args = map fst ts
         decls = args ++ getDecls e
         v' = Map.fromList $ zip decls [0 ..]
-    State.modify' $ \(Alloc _vs _counter lab genf _cf) -> Alloc v' 0 lab genf fn
+    State.modify' $ \(Alloc _vs _counter lab genf _cf) -> Alloc v' (length decls) lab genf fn
     let (inReg, inStk) = splitAt 6 (map (\a -> ATemp $ v' Map.! a) args)
         movArg = map (\(i, tmp) -> AAsm [tmp] ANop [ALoc $ argRegs !! i]) $ zip [0 ..] inReg
     gen <- genEast e
@@ -86,7 +86,7 @@ genEast (EDef fn t e) = do
     State.modify' $ \(Alloc vs counter lab genf cf) -> Alloc vs counter lab ((fn, (funGen, counter)) : genf) cf
     return funGen
 genEast (EAssert expr) = do
-    let trans = EIf expr ENop (ELeaf $ EFunc "_c0_abort" [])
+    let trans = EIf expr ENop (ELeaf $ EFunc "abort" [])
     genEast trans
 genEast (EIf expr e1 e2) = do
     l1 <- getNewUniqueLabel
@@ -127,7 +127,7 @@ genSideEffect (EFunc fn args) = do
     let gen = join gens
     let (inReg, inStk) = splitAt 6 tmpVars
         movArg = map (\(i, tmp) -> AAsm [argRegs !! i] ANop [ALoc tmp]) $ zip [0 ..] inReg
-    return $ gen ++ movArg ++ [ACall fn inStk]
+    return $ gen ++ movArg ++ [ACall fn inStk (length inReg)]
 genSideEffect expr = do
     n <- getNewUniqueID
     genExp expr (ATemp n)
@@ -220,7 +220,7 @@ genExp (EFunc fn args) dest = do
     let gen = join gens
     let (inReg, inStk) = splitAt 6 tmpVars
         movArg = map (\(i, tmp) -> AAsm [argRegs !! i] ANop [ALoc tmp]) $ zip [0 ..] inReg
-    return $ gen ++ movArg ++ [ACall fn inStk, AAsm [dest] ANop [ALoc $ AReg 0]]
+    return $ gen ++ movArg ++ [ACall fn inStk (length inReg), AAsm [dest] ANop [ALoc $ AReg 0]]
 
 genCmp :: EExp -> ALabel -> ALabel -> AllocM [AAsm]
 -- genCmp e _ _ | trace ("genCmp " ++ show e ++ "\n") False = undefined

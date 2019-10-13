@@ -80,6 +80,5 @@ Executable c0c
     , Compile.Types.Ops
     , Compile.Types.EAST
     , Compile.Types.Header
-    , Compile.Types.Globals
     , LiftIOE
     , Util

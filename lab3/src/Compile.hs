@@ -38,7 +38,7 @@ writeIOString :: FilePath -> IO String -> ExceptT String IO ()
 writeIOString file s = liftIOE $ s >>= writeFile file
 
 compile :: Job -> IO ()
-compile j | (trace $ show j) False = undefined
+--compile j | (trace $ show j) False = undefined
 compile job = do
   headerHandle <- openFile (jobHeader job) ReadMode
   hSetEncoding headerHandle utf8
@@ -51,7 +51,7 @@ compile job = do
     let 
       ast = parseTokens $ lexProgram s
       east = eGen ast header
-    liftEIO $ checkEAST east
+    liftEIO $ checkEAST east header
     case jobOutFormat job of
       TC -> liftEIO (Right ()) -- By now, we should have thrown any typechecking errors
       Asm -> writeString (jobOut job) $ asmGen east header

@@ -131,6 +131,7 @@ Control : if '(' Exp ')' Stmt Elseopt {Condition $3 $5 $6}
       | for '(' Simpopt ';' Exp ';' Simpopt ')' Stmt {For $3 $5 $7 $9}
       | ret Exp ';' {Retn $2}
       | ret ';' {Void}
+      | assert '(' Exp ')' ';' {Assert $3}
 
 Exp : '(' Exp ')' {$2}
     | Exp '?' Exp ':' Exp {Ternop $1 $3 $5}

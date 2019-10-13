@@ -1,3 +1,6 @@
+{- Defines the type of the header file
+-}
+
 module Compile.Types.Header where
 
 import Compile.Types.AST

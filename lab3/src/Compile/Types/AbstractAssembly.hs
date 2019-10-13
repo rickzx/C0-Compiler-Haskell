@@ -24,7 +24,7 @@ data AAsm
       , aArgs   :: [AVal]
       }
   | AFun ALabel [ALoc]      -- Here, [ALoc] only contains the arguments that should be placed on the stack, if any
-  | ACall ALabel [ALoc]     -- Here, [ALoc] only contains the arguments that should be placed on the stack, if any
+  | ACall ALabel [ALoc] Int     -- Here, [ALoc] only contains the arguments that should be placed on the stack, if any
   | ARet AVal
   | AControl ACtrl
   | AComment String
@@ -57,7 +57,7 @@ instance Show AAsm where
       ++ show src1 ++ " " ++ show relop ++ " " ++ show src2 ++ "\n"
   show (ARet _) = "\tret %eax\n"
   show (AControl ctrl) = show ctrl ++ "\n"
-  show (ACall f xs) = "\tCall " ++ f ++ " with parameters on stack: " ++ show xs ++ "\n"
+  show (ACall f xs argNum) = "\tCall " ++ f ++ " with parameters on stack: " ++ show xs ++ ", use " ++ show argNum ++ " registers:\n"
   show (AFun f xs) = f ++ " with parameters on stack: " ++ show xs ++ ":\n"
   show _ = "ill-formed\n"
 
@@ -73,6 +73,8 @@ instance Show ALoc where
   show (AReg 4) = "%esi"
   show (AReg 5) = "%r8d"
   show (AReg 6) = "%r9d"
+  show (AReg 7) = "%r10d"
+  show (AReg 8) = "%r11d"
   show (AReg _) = "%ill-formed"
   show (ATemp n) = "%t" ++ show n
 

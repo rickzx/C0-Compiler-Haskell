@@ -45,6 +45,7 @@ data Inst
     | Jg String
     | Jge String
     | Movzbl Operand Operand
+    | Global String
     | Ret deriving (Eq, Ord)
 
 data Operand
@@ -211,8 +212,9 @@ instance Show Inst where
     show (Jg label) = "\tjg ." ++ label
     show (Jge label) = "\tjge ." ++ label
     show (Movzbl x1 x2) = "\tmovzbl " ++ show x1 ++ ", " ++ show x2 
-    show (Call f) = "\tcall" ++ f
+    show (Call f) = "\tcall " ++ f
     show (Fun f) = f ++ ":"
+    show (Global f) = "\t.globl " ++ f
 
 
 toReg64 :: Register -> Register
