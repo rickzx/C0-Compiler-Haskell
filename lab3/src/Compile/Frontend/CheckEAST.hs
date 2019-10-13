@@ -26,7 +26,7 @@ checkEAST east header = evalState (runExceptT typeCheck) initialState
     initialState = (Set.empty, Set.empty)
     typeCheck = do
         checkInit east
-        synthValid (Map.empty, fnDecl header) east
+        synthValid (Map.empty, Map.insert "main" (ARROW [] INTEGER) (fnDecl header)) east
 
 checkUse :: EExp -> ExceptT String (State TypeCheckState) Bool
 checkUse (EInt _) = return True
@@ -46,6 +46,8 @@ checkUse (ETernop e1 e2 e3) = do
     return $ t1 && t2 && t3
 checkUse (EUnop _ e) = checkUse e
 checkUse (EFunc fn args) = do
+    (_, defined) <- get
+    assertMsg ("Variable shadows the function declaration " ++ fn) (not (Set.member fn defined))
     checkAll <- mapM checkUse args
     return $ and checkAll
 
@@ -144,17 +146,16 @@ synthValid (ctx, fctx) east =
                 Just BOOLEAN -> synthValid (ctx, fctx) et
                 _ -> throwE "Tycon mismatch"
         ERet e ->
-            case e of
-                Just expr -> do
-                    te <- synthType (ctx, fctx) expr
-                    let ret = fromMaybe (error "Cannot find return type") (Map.lookup "return type" ctx)
-                    case te of
-                        Just typ ->
-                            if typ == ret
-                                then return ()
-                                else throwE "Function return does not match with declared type"
-                        Nothing -> throwE "Tycon mismatch"
-                Nothing -> return ()
+            let ret = fromMaybe (error "Cannot find return type") (Map.lookup "return type" ctx)
+            in
+                case e of
+                    Just expr -> do
+                        te <- synthType (ctx, fctx) expr
+                        case te of
+                            Just typ ->
+                                assertMsg "Function return does not match with declared type" (typ == ret)
+                            Nothing -> throwE "Tycon mismatch"
+                    Nothing -> assertMsg "Function return does not match with declared type" (ret == VOID)
         ENop -> return ()
         EDecl fn typ@(ARROW _args _ret) et -> synthValid (ctx, Map.insert fn typ fctx) et
         EDecl x typ et ->
@@ -249,13 +250,11 @@ synthType (ctx, fctx) expr =
                 _ -> do
                     _ <- throwE "Tycon mismatch"
                     return Nothing
-        EFunc fn args ->
-            if Map.member fn ctx then 
-                error $ "Variable shadows the function declaration " ++ fn else do
-                let fnTyp = fromMaybe (error $ "Undefined function " ++ fn) (Map.lookup fn fctx)
-                argTyp <- mapM (synthType (ctx, fctx)) args
-                let retTyp = checkArgTyp argTyp fnTyp
-                return $ Just retTyp
+        EFunc fn args -> do
+            let fnTyp = fromMaybe (error $ "Undefined function " ++ fn) (Map.lookup fn fctx)
+            argTyp <- mapM (synthType (ctx, fctx)) args
+            let retTyp = checkArgTyp argTyp fnTyp
+            return $ Just retTyp
             
 checkArgTyp :: [Maybe Type] -> Type -> Type
 checkArgTyp argTyp (ARROW args ret)

@@ -35,7 +35,7 @@ eGenHeader (Program l) =
 eGen :: AST -> Header -> EAST
 eGen (Program l) header =
     let initialState = GlobState {funDeclared = Map.singleton "main" (ARROW [] INTEGER), funDefined = Map.empty, typeDefined = Map.empty}
-        allDef = findDefFunc l
+        allDef = Set.insert "main" $ findDefFunc l
         elaborate = elabGdecls l header allDef
         e = evalState (runExceptT elaborate) initialState
      in case e of
@@ -107,7 +107,7 @@ elabGdecls (x:xs) header allDef =
                 case Map.lookup nme declared of
                     Just typ1 -> do
                         assertMsg
-                            ("Type of function " ++ nme ++ "does not match with previous declaration")
+                            ("Type of function " ++ nme ++ " does not match with previous declaration")
                             (arrowEq (typ, typ1))
                         elab' <- elabGdecls xs header allDef
                         return $ EDecl nme typ elab'
@@ -115,7 +115,7 @@ elabGdecls (x:xs) header allDef =
                         case Map.lookup nme (fnDecl header) of
                             Just typ1 -> do
                                 assertMsg
-                                    ("Type of function " ++ nme ++ "does not match with previous declaration in header")
+                                    ("Type of function " ++ nme ++ " does not match with previous declaration in header")
                                     (arrowEq (typ, typ1))
                                 elab' <- elabGdecls xs header allDef
                                 return $ EDecl nme typ elab'
@@ -124,18 +124,20 @@ elabGdecls (x:xs) header allDef =
                                 elab' <- elabGdecls xs header allDef
                                 return $ EDecl nme typ elab'
         Fdefn rtp nme param blk -> do
+            declared <- gets funDeclared
             defined <- gets funDefined
             typDefed <- gets typeDefined
             if Map.member nme typDefed || Map.member nme (typDef header) then throwE $ "Function uses a typedef name " ++ nme else 
                 if nme == "main" && (findType rtp (typDefed, typDef header) /= INTEGER || length param > 0) then throwE "Bad declaration for main" else do 
                     let typ = ARROW (extractParam param (typDefed, typDef header)) (findType rtp (typDefed, typDef header))
+                    _ <- elabGdecls [Fdecl rtp nme param] header allDef
                     case Map.lookup nme defined of
                         Just _ -> throwE $ "Function defined more than once: " ++ nme
                         Nothing ->
                             case Map.lookup nme (fnDecl header) of
                                 Just _ -> throwE $ "External functions must not be defined " ++ nme
                                 Nothing -> do
-                                    modify' $ \(GlobState fdec fdef tdef) -> GlobState fdec (Map.insert nme typ fdef) tdef
+                                    modify' $ \(GlobState fdec fdef tdef) -> GlobState (Map.insert nme typ fdec) (Map.insert nme typ fdef) tdef
                                     gState <- get
                                     let blk' = eBlock blk (gState, header) allDef
                                     elab' <- elabGdecls xs header allDef

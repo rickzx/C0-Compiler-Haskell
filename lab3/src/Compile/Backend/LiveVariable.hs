@@ -293,6 +293,31 @@ buildInterfere ((idx, x):xs) live pr g =
                                         liveVars
                              in newg
                  in buildInterfere xs live pr res
+            AFun _ extraArgs ->
+                let extraInterfere =
+                        [ (extraArgs !! i, extraArgs !! j)
+                        | i <- [0 .. (length extraArgs - 1)]
+                        , j <- [(i + 1) .. (length extraArgs - 1)]
+                        ]
+                    res = foldl f_fn g extraArgs
+                      where
+                        f_fn :: Graph -> ALoc -> Graph
+                        f_fn gra a =
+                            let ginit =
+                                    case Map.lookup a gra of
+                                        Just _ -> gra
+                                        Nothing -> Map.insert a Set.empty gra
+                                newg =
+                                    foldl
+                                        (\g' v ->
+                                             if a /= v
+                                                 then addEdge (v, a) (addEdge (a, v) g')
+                                                 else g')
+                                        ginit
+                                        liveVars
+                             in newg
+                    res' = foldr addEdge res extraInterfere
+                 in buildInterfere xs live pr res'
             _ -> buildInterfere xs live pr g
 
 --(function name, (AASM generated, # of var)
