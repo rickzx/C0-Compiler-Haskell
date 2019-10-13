@@ -13,6 +13,8 @@ optEAST east = case east of
     ENop -> east
     EDecl x t et -> EDecl x t (optEAST et)
     ELeaf e -> ELeaf (constantFold e)
+    EAssert e -> EAssert (constantFold e)
+    EDef id tp et -> EDef id tp (optEAST et)
 
 constantFold :: EExp -> EExp
 constantFold (EBinop Add e1 e2) = let

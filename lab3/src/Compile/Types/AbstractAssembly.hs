@@ -37,6 +37,7 @@ data ALoc
   = AReg Int
   | ATemp Int deriving (Eq, Ord)
 
+--add assert?
 data ACtrl
   = ALab ALabel
   | AJump ALabel

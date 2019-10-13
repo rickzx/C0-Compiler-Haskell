@@ -38,6 +38,7 @@ getNewUniqueLabel = do
     let lab = "L" ++ show currentCount
     return lab
 
+--for each term, (function name, AASM generated, # of var)
 aasmGen :: EAST -> [(Ident, ([AAsm], Int))]
 aasmGen east = State.evalState assemM initialState
   where
