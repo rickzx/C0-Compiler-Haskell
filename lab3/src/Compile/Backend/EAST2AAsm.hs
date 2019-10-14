@@ -159,13 +159,19 @@ genExp expr@(EBinop binop exp1 exp2) dest
             [AControl $ ALab l2, AAsm [dest] ANop [AImm $ fromIntegral (0 :: Int32)], AControl $ AJump l3] ++
             [AControl $ ALab l3]
     | binop == Sal || binop == Sar = do
+        n <- getNewUniqueID
+        gen1 <- genExp exp1 (ATemp n)
+        n' <- getNewUniqueID
+        gen2 <- genExp exp2 (ATemp n')
         let checker = EBinop LAnd (EBinop Le (EInt 0) exp2) (EBinop Lt exp2 (EInt 32))
-            newOp =
-                case binop of
-                    Sal -> Sal'
-                    Sar -> Sar'
-                    _ -> error "Can't happen"
-        genExp (ETernop checker (EBinop newOp exp1 exp2) (EBinop Div (EInt 1) (EInt 0))) dest
+            combine = [AAsm [dest] (genBinOp binop) [ALoc $ ATemp n, ALoc $ ATemp n']]
+        l1 <- getNewUniqueLabel
+        l2 <- getNewUniqueLabel
+        l3 <- getNewUniqueLabel
+        cmp <- genCmp checker l1 l2
+        genl2 <- genExp (EBinop Div (EInt 1) (EInt 0)) dest
+        return $ gen1 ++ gen2 ++ cmp ++ [AControl $ ALab l1] ++ combine ++ [AControl $ AJump l3, AControl $ ALab l2]
+                ++ genl2 ++ [AControl $ AJump l3, AControl $ ALab l3]
     | otherwise = do
         n <- getNewUniqueID
         codegen1 <- genExp exp1 (ATemp n)
@@ -258,8 +264,8 @@ genBinOp Mod = AMod
 genBinOp BAnd = ABAnd
 genBinOp BOr = ABOr
 genBinOp Xor = AXor
-genBinOp Sal' = ASal
-genBinOp Sar' = ASar
+genBinOp Sal = ASal
+genBinOp Sar = ASar
 genBinOp o = error $ "Operator not found: " ++ show o
 
 genRelOp :: Binop -> ARelOp
