@@ -303,8 +303,8 @@ toAsm (ACall fun stks _) coloring header =
                 else "_c0_" ++ fun
      in if length stks' `mod` 2 == 0
             then pushStks ++ [Xorl (Reg EAX) (Reg EAX), Call fn] ++ popStks
-            else pushStks ++
-                 [Subq (Imm 8) (Reg RSP), Xorl (Reg EAX) (Reg EAX), Call fn, Addq (Imm 8) (Reg RSP)] ++ popStks
+            else [Subq (Imm 8) (Reg RSP)] ++ pushStks ++
+                 [Xorl (Reg EAX) (Reg EAX), Call fn] ++ popStks ++ [Addq (Imm 8) (Reg RSP)]
 toAsm (AFun _fn stks) coloring _ =
     let stks' = getRegAlloc' stks coloring False
      in concatMap (\(i, s) -> genMovl (Mem' (i * 8) RBP) s) $ zip [2 ..] stks'
