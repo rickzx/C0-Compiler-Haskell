@@ -6,6 +6,41 @@ In L3, we modified our L2 compiler so that it will handle codes involving functi
 
 **C0 Code** ---Lexer/Parser---> **AST** ---Elaboration---> **EAST** ---TypeChecking & Optimization--> **EAST** ---Translation---> **Abstract Assembly** ---Live Analysis & Register Allocation---> **Assembly** ---CodeGen---> **x86-64**
 
+## Overall Code Structure
+
+```
+.
+├── Args.hs     Parse arguments (Add in -l option for l3)
+├── Compile
+│   ├── Backend
+│   │   ├── AAsm2Asm.hs     Convert abstract assembly to x86-64 assembly
+│   │   ├── EAST2AAsm.hs    Convert elaborated AST to abstract assembly
+│   │   ├── LiveVariable.hs     Conduct live analysis
+│   │   └── RegisterAlloc.hs    Register allocation
+│   ├── CodeGen.hs      Entry point for abstract assembly/x86-64 code generation
+│   ├── Frontend
+│   │   ├── CheckEAST.hs        Type-checker
+│   │   ├── EASTOptimize.hs     Optimizations on elaborated AST
+│   │   └── Elaborate.hs        Elaboration
+│   ├── Lex.hs
+│   ├── Lex.x       Lexer
+│   ├── Parse.hs
+│   ├── Parse.y     Parser
+│   ├── Types
+│   │   ├── AST.hs
+│   │   ├── AbstractAssembly.hs
+│   │   ├── Assembly.hs
+│   │   ├── EAST.hs         Elaborated AST Type
+│   │   ├── Header.hs       Type for the header file
+│   │   ├── Job.hs
+│   │   └── Ops.hs
+│   └── Types.hs
+├── Compile.hs      Compile code with various options
+├── LiftIOE.hs
+├── Util.hs
+└── c0c.hs      Entry point of the compiler
+```
+
 ## Lexing and Parsing
 
 For Lexing, we added the tokens used in our new language that represents typdefs and assert. We also added the void type for for functions returning void.
@@ -52,7 +87,7 @@ Where for EFunc, we have it followed by the function name and the variables for 
 
 When performing elaboration, we first elaborated on the AST generated on the headerfiles, putting all the function definitions and typedefs in Maps in a state monad. Then, we performed a similar elaboration for the main file. During our elaboration, we changed the types from typedefs accordingly, so that each type we get from a typedef are all converted to the primitive types it is corresponding to from the typedef map in each state. 
 
-With the Maps generated in the mutable state for both header and mainfile,we are also able to conduct part of typechecking in elaboration, such as multiple declarations of the same function needs have the same type. We will discuss more
+With the Maps generated in the mutable state for both header and main file, we are also able to conduct part of typechecking in elaboration, such as multiple declarations of the same function needs have the same type. We will discuss more
 of typechecking in the section below.
 
 ## Typechecking
@@ -65,6 +100,16 @@ Typechecking consists of three parts:
 
 **Checking Variable Initialization**: Check that along all control flow paths, any variable is defined before use. This is done by maintaing a set of declared variables and a set of defined variables of a scope.  If violations are found, the compiler will raise `Variable used before initialization`.
 
+**Function Call Checking**: Check that the arguments of function calls match with the type of function declaration, and that the return type is correct.
+
+**Shadowing**: If a string is first used as a function name, then declared as a variable name. We need to make sure that the variable shadows the function declaration. For example:
+```
+int f() {
+    int f = 5;
+    return f;
+}
+```
+is valid, and should return 5.
 ## Constant Folding Optimizations
 After Typechecking, we went through another iteration of our EAST to simplify statements that only contains constants. Specifically, when a binop expression having only constants, we simplify the binop expression by evaluating it directly. Also, when generating abstract assemblies, instead of assigning temps to all constants in each operation, we use AImm instead to reduce the number for temps for our file.
 
@@ -109,7 +154,7 @@ When calculating interference, for functions, we perform the similar operations 
 
 ### Define Assembly
 
-For L2 compiler, we add in `Jmp, Je, Label, Cmp ...` to handle control flow. We also add in some new x86 instructions for boolean and int types.
+For L3 compiler, we add in `Fun` and `Call` to handle function procedures.
 
 ```
 data  Inst
@@ -135,6 +180,8 @@ data  Inst
 | Cmp Operand Operand
 | Jmp String
 | Je String
+| Call String
+| Fun String
 ...
 
 data  Operand
@@ -170,3 +217,28 @@ To make the generated x86 assembly more compact, the compiler will
 
 - Remove trivial instructions, e.g. `Movq %RAX %RAX`
 - Remove unreachable code blocks
+
+For the functions defined in header, we call the function with its name in the declaration. For the functions defined in the main file, we call the function with an additional prefix "_c0\_".
+
+### Calling Convention
+
+#### Stack Diagram
+
+```
+arg8
+__________
+arg7
+__________
+return address
+__________
+%RBP        <--- %RBP
+__________
+Saved Callee 1
+__________
+Saved Callee 2      Function Frame
+__________
+
+Local Vars
+
+__________  <--- %RSP
+```
