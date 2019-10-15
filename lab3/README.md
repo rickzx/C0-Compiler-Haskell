@@ -1,4 +1,4 @@
-# Design Decisions for L2
+# Design Decisions for L3
 
 In L3, we modified our L2 compiler so that it will handle codes involving function calls, codes with typedefs, as well as typecheck codes that include a header file to our new language as specified in the steps below.
 
@@ -103,7 +103,8 @@ For liveness, when a function is called, we made every argument register(rdi, rs
 
 We add the actual register and additional temps used as argument parameters into the used set. We consider the function call separately, thus the successor is the line followed by the function call.
 
-When calculating interference, for functions, we perform the similar operations as L2 for all elements in defset, however, we do need to make sure that in a function definition and function call(the first line of the function), all the additional variables in the stack are defined in this line (and interfere with each other) <--True?-->
+When calculating interference, for functions, we perform the similar operations as L2 for all elements in defset, however, we do need to make sure that in a function definition and function call(the first line of the function), all the additional variables in the stack are defined in this line and interfere with the line succeeding the function.
+
 ## Abstract Assembly -> Assembly
 
 ### Define Assembly
