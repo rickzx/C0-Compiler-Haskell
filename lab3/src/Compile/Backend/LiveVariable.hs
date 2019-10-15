@@ -294,11 +294,7 @@ buildInterfere ((idx, x):xs) live pr g =
                              in newg
                  in buildInterfere xs live pr res
             AFun _ extraArgs ->
-                let extraInterfere =
-                        [ (extraArgs !! i, extraArgs !! j)
-                        | i <- [0 .. (length extraArgs - 1)]
-                        , j <- [(i + 1) .. (length extraArgs - 1)]
-                        ]
+                let 
                     res = foldl f_fn g extraArgs
                       where
                         f_fn :: Graph -> ALoc -> Graph
@@ -316,8 +312,7 @@ buildInterfere ((idx, x):xs) live pr g =
                                         ginit
                                         liveVars
                              in newg
-                    res' = foldr addEdge res extraInterfere
-                 in buildInterfere xs live pr res'
+                 in buildInterfere xs live pr res
             _ -> buildInterfere xs live pr g
 
 --(function name, (AASM generated, # of var)
