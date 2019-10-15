@@ -58,10 +58,21 @@ color graph seo preColor = (coloring, maximum [maxColor - length regOrder + 3, 0
 allStackColor :: Int -> (Coloring, Int, [Register])
 allStackColor localVar = 
     let
+        precolor =
+             Map.fromList
+             [ (AReg 0, 0)
+             , (AReg 1, 3)
+             , (AReg 2, 4)
+             , (AReg 3, 1)
+             , (AReg 4, 2)
+             , (AReg 5, 5)
+             , (AReg 6, 6)
+             , (AReg 7, 7)
+             ]
         vars = map ATemp [0..localVar]
         l = zip vars [0..]
     in
-        (Map.union (Map.fromList [(AReg 0, 0), (AReg 1, 3)]) (Map.fromList $ map (\(loc, i) -> (loc, i + length regOrder)) l), localVar + 3, [])
+        (Map.union precolor (Map.fromList $ map (\(loc, i) -> (loc, i + length regOrder)) l), localVar + 3, [])
 
 regOrder :: [Register]
 regOrder =

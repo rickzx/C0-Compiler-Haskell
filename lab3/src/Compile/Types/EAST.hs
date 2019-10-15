@@ -10,9 +10,8 @@ import qualified Data.Maybe as Maybe
 --EX: add : int * int -> int.
 data EAST 
     = ESeq EAST EAST
-    | EAssign Ident EExp -- single variable assign
+    | EAssign Ident EExp Bool -- single variable assign -- last parameter bool indicates if the assignment is in a declaration
     | EDef Ident Type EAST -- Arg type list -> return type
-    | ETDef Type Ident
     | EIf EExp EAST EAST
     | EWhile EExp EAST
     | EAssert EExp
@@ -33,17 +32,16 @@ data EExp
     deriving Eq
 
 instance Show EAST where
-    show (ESeq e1 e2) = show "ESeq" ++ "(" ++ show e1 ++ " , "  ++ show e2 ++ ")"
-    show (EAssign ident leaf) = show "EAssign" ++ "(" ++ ident ++ " , " ++ show leaf ++ ")"
-    show (EIf leaf e1 e2) = show "Eif" ++ "(" ++ show leaf ++ " , " ++ show e1 ++ " , " ++ show e2 ++ ")"
-    show (EWhile leaf e1) = show "EWhile" ++ "(" ++ show leaf ++ " , " ++ show e1 ++ ")"
-    show (ERet leaf) = show "ERet" ++ "(" ++ show leaf ++ ")"
-    show ENop = show "NOP"
-    show (EDecl ident stype e1) = show "EDecl" ++ "(" ++ ident ++ "  ,  " ++ show stype ++ " , " ++ show e1 ++ ")"
-    show (ELeaf e) = show e
-    show (EDef ident types east) = show "EDef" ++ "(" ++ ident ++ "  :  " ++ show types ++ " , " ++ show east ++ ")"
-    show (EAssert e) = show "EAssert" ++ "(" ++ show e ++ ")"
-    show (ETDef t x) = show "ETDef" ++ "(" ++ show t ++ ", " ++ show x ++ ")"
+    show (ESeq e1 e2) = "ESeq" ++ "(" ++ show e1 ++ " , "  ++ show e2 ++ ")"
+    show (EAssign ident leaf _b) = "EAssign" ++ "(" ++ ident ++ " , " ++ show leaf ++ ")"
+    show (EIf leaf e1 e2) = "Eif" ++ "(" ++ show leaf ++ " , " ++ show e1 ++ " , " ++ show e2 ++ ")"
+    show (EWhile leaf e1) = "EWhile" ++ "(" ++ show leaf ++ " , " ++ show e1 ++ ")"
+    show (ERet leaf) = "ERet" ++ "(" ++ show leaf ++ ")"
+    show ENop = "NOP"
+    show (EDecl ident stype e1) = "EDecl" ++ "(" ++ ident ++ "  ,  " ++ show stype ++ " , " ++ show e1 ++ ")"
+    show (ELeaf e) = "ELeaf" ++ "(" ++ show e ++ ")"
+    show (EDef ident types east) = "EDef" ++ "(" ++ ident ++ "  :  " ++ show types ++ " , " ++ show east ++ ")"
+    show (EAssert e) = "EAssert" ++ "(" ++ show e ++ ")"
 
 instance Show EExp where
     show (EInt a) = show a

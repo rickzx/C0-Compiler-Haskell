@@ -50,12 +50,13 @@ compile job = do
   res <- runExceptT $ do
     let 
       ast = parseTokens $ lexProgram s
-      east = eGen ast header
+      (east, newHeader) = eGen ast header
     liftEIO $ checkEAST east header
+    let optEast = optEAST east
     case jobOutFormat job of
       TC -> liftEIO (Right ()) -- By now, we should have thrown any typechecking errors
-      Asm -> writeString (jobOut job) $ asmGen east header
-      Abs -> writeString (jobOut job) $ testPrintAAsm (codeGen east) (jobOut job)
+      Asm -> writeString (jobOut job) $ asmGen optEast newHeader
+      Abs -> writeString (jobOut job) $ testPrintAAsm (codeGen optEast) (jobOut job)
   case res of
     Left msg -> error msg
     Right () -> return ()

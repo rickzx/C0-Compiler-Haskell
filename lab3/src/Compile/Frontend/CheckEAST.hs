@@ -46,8 +46,8 @@ checkUse (ETernop e1 e2 e3) = do
     return $ t1 && t2 && t3
 checkUse (EUnop _ e) = checkUse e
 checkUse (EFunc fn args) = do
-    (_, defined) <- get
-    assertMsg ("Variable shadows the function declaration " ++ fn) (not (Set.member fn defined))
+    (declared, _) <- get
+    assertMsg ("Variable shadows the function declaration " ++ fn) (not (Set.member fn declared))
     checkAll <- mapM checkUse args
     return $ and checkAll
 
@@ -58,16 +58,24 @@ checkInit (ESeq et1 et2) = do
     t1 <- checkInit et1
     t2 <- checkInit et2
     return $ t1 || t2
-checkInit (EAssign x e) = do
+checkInit (EAssign x e True) = do
+    (declared, defined) <- get
+    let newdecl = Set.delete x declared
+    put (newdecl, defined)
+    t <- checkUse e
+    assertMsg ("Variable used before initialization" ++ show e) t
+    put (declared, Set.insert x defined)
+    return False
+checkInit (EAssign x e False) = do
     (declared, defined) <- get
     t <- checkUse e
-    assertMsg "Variable used before initialization" t
+    assertMsg ("Variable used before initialization" ++ show e) t
     put (declared, Set.insert x defined)
     return False
 checkInit (EIf e et1 et2) = do
     (declared, defined) <- get
     t <- checkUse e
-    assertMsg "Variable used before initialization" t
+    assertMsg ("Variable used before initialization" ++ show e) t
     t1 <- checkInit et1
     (_, defined1) <- get
     put (declared, defined)
@@ -78,14 +86,14 @@ checkInit (EIf e et1 et2) = do
 checkInit (EWhile e et) = do
     s0 <- get
     t <- checkUse e
-    assertMsg "Variable used before initialization" t
+    assertMsg ("Variable used before initialization" ++ show e) t
     _ <- checkInit et
     put s0
     return False
 checkInit (ERet e) = case e of
     Just expr -> do
         t <- checkUse expr
-        assertMsg "Variable used before initialization" t
+        assertMsg ("Variable used before initialization" ++ show e) t
         (declared, _) <- get
         put (declared, declared)
         return True
@@ -94,6 +102,7 @@ checkInit (ERet e) = case e of
         put (declared, declared)
         return True
 checkInit ENop = return False
+checkInit (EDecl _x (ARROW _ _) et) = checkInit et
 checkInit (EDecl x _t et) = do
     (declared, defined) <- get
     put (Set.insert x declared, defined)
@@ -102,30 +111,32 @@ checkInit (EDecl x _t et) = do
     put (declared, Set.delete x defined')
     return t
 checkInit (EDef fn (ARROW args ret) et) = do
-    (declared, defined) <- get
-    let ndecl = foldr (\x s -> Set.insert (fst x) s) declared args
-        ndef = foldr (\x s -> Set.insert (fst x) s) defined args
+    let ndecl = foldr (\x s -> Set.insert (fst x) s) Set.empty args
+        ndef = foldr (\x s -> Set.insert (fst x) s) Set.empty args
     put (ndecl, ndef)
     t <- checkInit et
     case ret of
         VOID -> return True
         _ -> do
             assertMsg ("Function " ++ fn ++ "does not have return") t
-            put (declared, defined)
             return t
 checkInit (EAssert e) = do
     t <- checkUse e
-    assertMsg "Variable used before initialization" t
+    assertMsg ("Variable used before initialization" ++ show e) t
     return False
-checkInit (ELeaf _e) = return False
+checkInit (ELeaf e) = do
+    t <- checkUse e
+    assertMsg ("Variable used before initialization" ++ show e) t
+    return False
 
 synthValid :: (Context, Context) -> EAST -> ExceptT String (State TypeCheckState) ()
+--synthValid _ e | (trace $ show e) False = undefined
 synthValid (ctx, fctx) east =
     case east of
         ESeq et1 et2 -> do
             synthValid (ctx, fctx)  et1
             synthValid (ctx, fctx) et2
-        EAssign x e ->
+        EAssign x e _b ->
             case Map.lookup x ctx of
                 Just t -> do
                     te <- synthType (ctx, fctx) e
@@ -152,6 +163,7 @@ synthValid (ctx, fctx) east =
                     Just expr -> do
                         te <- synthType (ctx, fctx) expr
                         case te of
+                            Just VOID -> throwE $ "Returning void must invoke return, not " ++ show e
                             Just typ ->
                                 assertMsg "Function return does not match with declared type" (typ == ret)
                             Nothing -> throwE "Tycon mismatch"
@@ -173,11 +185,14 @@ synthValid (ctx, fctx) east =
                 Just BOOLEAN -> return ()
                 _ -> throwE "Tycon mismatch"
         EDef _fn (ARROW args ret) et ->
-            let nctx = foldr (\(x, typ) m -> Map.insert x typ m) Map.empty args
+            let nctx = foldr (\(x, typ) m -> case typ of
+                    VOID -> error "Function parameter cannot be VOID"
+                    _ -> Map.insert x typ m) Map.empty args
              in synthValid (Map.insert "return type" ret nctx, fctx) et
             
              
 synthType :: (Context, Context) -> EExp -> ExceptT String (State TypeCheckState) (Maybe Type)
+--synthType _ e | (trace $ "synthType " ++ show e) False = undefined
 synthType (ctx, fctx) expr =
     case expr of
         ET -> return $ Just BOOLEAN
@@ -194,6 +209,8 @@ synthType (ctx, fctx) expr =
                 t1 <- synthType (ctx, fctx) e1
                 t2 <- synthType (ctx, fctx) e2
                 case (t1, t2) of
+                    (Just VOID, _) -> throwE "Tycon mismatch"
+                    (_, Just VOID) -> throwE "Tycon mismatch"
                     (Just INTEGER, Just INTEGER) -> return $ Just BOOLEAN
                     _ -> do
                         _ <- throwE "Tycon mismatch"
@@ -201,15 +218,21 @@ synthType (ctx, fctx) expr =
             | op == Eql || op == Neq -> do
                 t1 <- synthType (ctx, fctx) e1
                 t2 <- synthType (ctx, fctx) e2
-                if t1 == t2
-                    then return $ Just BOOLEAN
-                    else do
-                        _ <- throwE "Tycon mismatch"
-                        return Nothing
+                case (t1, t2) of
+                    (Just VOID, _) -> throwE "Tycon mismatch"
+                    (_, Just VOID) -> throwE "Tycon mismatch"
+                    _ ->
+                        if t1 == t2
+                            then return $ Just BOOLEAN
+                            else do
+                                _ <- throwE "Tycon mismatch"
+                                return Nothing
             | op == LAnd || op == LOr -> do
                 t1 <- synthType (ctx, fctx) e1
                 t2 <- synthType (ctx, fctx) e2
                 case (t1, t2) of
+                    (Just VOID, _) -> throwE "Tycon mismatch"
+                    (_, Just VOID) -> throwE "Tycon mismatch"
                     (Just BOOLEAN, Just BOOLEAN) -> return $ Just BOOLEAN
                     _ -> do
                         _ <- throwE "Tycon mismatch"
@@ -218,6 +241,8 @@ synthType (ctx, fctx) expr =
                 t1 <- synthType (ctx, fctx) e1
                 t2 <- synthType (ctx, fctx) e2
                 case (t1, t2) of
+                    (Just VOID, _) -> throwE "Tycon mismatch"
+                    (_, Just VOID) -> throwE "Tycon mismatch"
                     (Just INTEGER, Just INTEGER) -> return $ Just INTEGER
                     _ -> do
                         _ <- throwE "Tycon mismatch"
@@ -225,6 +250,7 @@ synthType (ctx, fctx) expr =
         EUnop LNot e -> do
             t <- synthType (ctx, fctx) e
             case t of
+                Just VOID -> throwE "Tycon mismatch"
                 Just BOOLEAN -> return $ Just BOOLEAN
                 _ -> do
                     _ <- throwE "Tycon mismatch"
@@ -232,6 +258,7 @@ synthType (ctx, fctx) expr =
         EUnop _ e -> do
             t <- synthType (ctx, fctx) e
             case t of
+                Just VOID -> throwE "Tycon mismatch"
                 Just INTEGER -> return $ Just INTEGER
                 _ -> do
                     _ <- throwE "Tycon mismatch"
@@ -241,12 +268,12 @@ synthType (ctx, fctx) expr =
             t2 <- synthType (ctx, fctx) e2
             t3 <- synthType (ctx, fctx) e3
             case (t1, t2, t3) of
-                (Just BOOLEAN, Just t, Just t') ->
-                    if t == t'
-                        then return $ Just t
-                        else do
-                            _ <- throwE "Tycon mismatch"
-                            return Nothing
+                (Just BOOLEAN, Just t, Just t')
+                    | t == VOID || t' == VOID -> error "Conditional expression has large type"
+                    | t == t' -> return $ Just t
+                    | otherwise -> do
+                        _ <- throwE "Tycon mismatch"
+                        return Nothing
                 _ -> do
                     _ <- throwE "Tycon mismatch"
                     return Nothing
@@ -254,15 +281,17 @@ synthType (ctx, fctx) expr =
             let fnTyp = fromMaybe (error $ "Undefined function " ++ fn) (Map.lookup fn fctx)
             argTyp <- mapM (synthType (ctx, fctx)) args
             let retTyp = checkArgTyp argTyp fnTyp
-            return $ Just retTyp
+            return $! Just $! retTyp
             
 checkArgTyp :: [Maybe Type] -> Type -> Type
+--checkArgTyp arg arr | (trace $ "CheckArgTyp " ++ show arg ++ show arr) False = undefined
 checkArgTyp argTyp (ARROW args ret)
     | length argTyp /= length args = error "Function type mismatch"
     | all (\(x, y) ->
                case x of
                    Nothing -> error "Tycon mismatch"
-                   Just typ -> typ == snd y) $
+                   Just VOID -> error "Argument type cannot be VOID"
+                   Just typ -> (typ == snd y) || error "Tycon mismatch") $
           zip argTyp args = ret
     | otherwise = error "Function type mismatch"
 checkArgTyp _ _ = error "Invalid type"

@@ -6,7 +6,7 @@ import Data.Bits
 optEAST :: EAST -> EAST
 optEAST east = case east of
     ESeq et1 et2 -> ESeq (optEAST et1) (optEAST et2)
-    EAssign x e -> EAssign x (constantFold e)
+    EAssign x e b -> EAssign x (constantFold e) b
     EIf e et1 et2 -> EIf (constantFold e) (optEAST et1) (optEAST et2)
     EWhile e et -> EWhile (constantFold e) (optEAST et)
     ERet e -> ERet (fmap constantFold e)

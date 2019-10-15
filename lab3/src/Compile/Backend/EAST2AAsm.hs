@@ -69,7 +69,7 @@ genEast (ESeq e1 e2) = do
     gen1 <- genEast e1 
     gen2 <- genEast e2
     return $ gen1 ++ gen2
-genEast (EAssign x expr) = do
+genEast (EAssign x expr _b) = do
     allocMap <- State.gets variables
     let tmpNum = ATemp $ allocMap Map.! x
     genExp expr tmpNum
@@ -88,6 +88,8 @@ genEast (EDef fn t e) = do
 genEast (EAssert expr) = do
     let trans = EIf expr ENop (ELeaf $ EFunc "abort" [])
     genEast trans
+genEast (EIf ET e1 _e2) = genEast e1
+genEast (EIf EF _e1 e2) = genEast e2
 genEast (EIf expr e1 e2) = do
     l1 <- getNewUniqueLabel
     l2 <- getNewUniqueLabel
@@ -115,7 +117,6 @@ genEast (ERet expr) = do
         Nothing -> return [AControl $ AJump $ fname ++ "_ret"]
 genEast ENop = return []
 genEast (EDecl _ _ e) = genEast e
-genEast (ETDef _ _) = return []
 genEast (ELeaf e) = genSideEffect e
 
 genSideEffect :: EExp -> AllocM [AAsm]
@@ -172,6 +173,25 @@ genExp expr@(EBinop binop exp1 exp2) dest
         genl2 <- genExp (EBinop Div (EInt 1) (EInt 0)) dest
         return $ gen1 ++ gen2 ++ cmp ++ [AControl $ ALab l1] ++ combine ++ [AControl $ AJump l3, AControl $ ALab l2]
                 ++ genl2 ++ [AControl $ AJump l3, AControl $ ALab l3]
+    | binop == Add || binop == Sub || binop == Mul =
+        case (exp1, exp2) of
+            (EInt x1, _) -> do
+                n <- getNewUniqueID
+                codegen <- genExp exp2 (ATemp n)
+                let combine = [AAsm [dest] (genBinOp binop) [AImm x1, ALoc $ ATemp n]]
+                return $ codegen ++ combine
+            (_, EInt x2) -> do
+                 n <- getNewUniqueID
+                 codegen <- genExp exp1 (ATemp n)
+                 let combine = [AAsm [dest] (genBinOp binop) [ALoc $ ATemp n, AImm x2]]
+                 return $ codegen ++ combine  
+            _ -> do
+                 n <- getNewUniqueID
+                 codegen1 <- genExp exp1 (ATemp n)
+                 n' <- getNewUniqueID
+                 codegen2 <- genExp exp2 (ATemp n')
+                 let combine = [AAsm [dest] (genBinOp binop) [ALoc $ ATemp n, ALoc $ ATemp n']]
+                 return $ codegen1 ++ codegen2 ++ combine       
     | otherwise = do
         n <- getNewUniqueID
         codegen1 <- genExp exp1 (ATemp n)

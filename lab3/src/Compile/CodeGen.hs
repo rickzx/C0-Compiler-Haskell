@@ -34,7 +34,7 @@ asmGen east header =
 generateFunc :: (String, [AAsm], Int) -> Header -> String
 generateFunc (fn, aasms, localVar) header =
     let (coloring, stackVar, calleeSaved) =
-            if localVar > 200
+            if localVar > 600
                 then allStackColor localVar
                 else let graph = computerInterfere aasms
               -- (trace $ "Interference graph: " ++ show graph ++ "\n\n")

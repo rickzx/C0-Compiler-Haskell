@@ -1,3 +1,5 @@
+{-# LANGUAGE BangPatterns, Strict #-}
+
 module Compile.Frontend.Elaborate where
 
 import Compile.Types
@@ -32,15 +34,16 @@ eGenHeader (Program l) =
             Left err -> error err
             Right header -> header
 
-eGen :: AST -> Header -> EAST
+eGen :: AST -> Header -> (EAST, Header)
 eGen (Program l) header =
     let initialState = GlobState {funDeclared = Map.singleton "main" (ARROW [] INTEGER), funDefined = Map.empty, typeDefined = Map.empty}
         allDef = findDefFunc l
-        elaborate = elabGdecls l header allDef
+        elaborate = if not (Set.member "main" allDef) then error "Cannot find main function" else elabGdecls l header allDef
         e = evalState (runExceptT elaborate) initialState
+        newHeader = if Set.member "abort" allDef then header {fnDecl = Map.insert "abort" (ARROW [] VOID) (fnDecl header)} else header
      in case e of
             Left err -> error err
-            Right east -> east
+            Right east -> (east, newHeader)
 
 assertMsg :: (Monad m) => String -> Bool -> ExceptT String m ()
 assertMsg _ True = return ()
@@ -67,32 +70,37 @@ elabHeader (x:xs) =
         Fdecl rtp nme param -> do
             declared <- gets funDeclared
             typDefed <- gets typeDefined
-            let typ = ARROW (extractParam' param typDefed) (findType' rtp typDefed)
-            case Map.lookup nme declared of
-                Just typ1 -> do
-                    assertMsg
-                        ("Type of function " ++ nme ++ "does not match with previous declaration")
-                        (arrowEq (typ, typ1))
-                    elabHeader xs
-                Nothing -> do
-                    modify' $ \(GlobState fdec fdef tdef) -> GlobState (Map.insert nme typ fdec) fdef tdef
-                    elabHeader xs
+            if Map.member nme typDefed then throwE $ "Function uses a typedef name " ++ nme else do
+                let !argtyp = extractParam' param typDefed
+                    typ = ARROW argtyp (findType' rtp typDefed)
+                case Map.lookup nme declared of
+                    Just typ1 -> do
+                        assertMsg
+                            ("Type of function " ++ nme ++ "does not match with previous declaration")
+                            (arrowEq (typ, typ1))
+                        elabHeader xs
+                    Nothing -> do
+                        modify' $ \(GlobState fdec fdef tdef) -> GlobState (Map.insert nme typ fdec) fdef tdef
+                        elabHeader xs
         Typedef typ nme -> do
-            typDefed <- gets typeDefined
-            case Map.lookup nme typDefed of
-                Just _ -> throwE $ "Type defined more than once: " ++ nme
-                Nothing ->
-                    case typ of
-                        DEF ident ->
-                            case Map.lookup ident typDefed of
-                                Just primTyp -> do
-                                    modify' $ \(GlobState fdec fdef tdef) ->
-                                        GlobState fdec fdef (Map.insert nme primTyp tdef)
-                                    elabHeader xs
-                                Nothing -> throwE $ "Undefined type: " ++ nme
-                        _ -> do
-                            modify' $ \(GlobState fdec fdef tdef) -> GlobState fdec fdef (Map.insert nme typ tdef)
-                            elabHeader xs
+            declared <- gets funDeclared
+            if typ == VOID then throwE "Cannot typdef VOID" else 
+                if Map.member nme declared then throwE $ "Typdef uses a function name " ++ nme else do
+                typDefed <- gets typeDefined
+                case Map.lookup nme typDefed of
+                    Just _ -> throwE $ "Type defined more than once: " ++ nme
+                    Nothing ->
+                        case typ of
+                            DEF ident ->
+                                case Map.lookup ident typDefed of
+                                    Just primTyp -> do
+                                        modify' $ \(GlobState fdec fdef tdef) ->
+                                            GlobState fdec fdef (Map.insert nme primTyp tdef)
+                                        elabHeader xs
+                                    Nothing -> throwE $ "Undefined type: " ++ nme
+                            _ -> do
+                                modify' $ \(GlobState fdec fdef tdef) -> GlobState fdec fdef (Map.insert nme typ tdef)
+                                elabHeader xs
         _ -> throwE "Header only supports function declaration and typedef!"
 
 elabGdecls :: [Gdecl] -> Header -> Set.Set Ident -> ExceptT String (State GlobState) EAST
@@ -103,7 +111,8 @@ elabGdecls (x:xs) header allDef =
             declared <- gets funDeclared
             typDefed <- gets typeDefined
             if Map.member nme typDefed || Map.member nme (typDef header) then throwE $ "Function uses a typedef name " ++ nme else do
-                let typ = ARROW (extractParam param (typDefed, typDef header)) (findType rtp (typDefed, typDef header))
+                let !argtyp = extractParam param (typDefed, typDef header)
+                    typ = ARROW argtyp (findType rtp (typDefed, typDef header))
                 case Map.lookup nme declared of
                     Just typ1 -> do
                         assertMsg
@@ -129,7 +138,8 @@ elabGdecls (x:xs) header allDef =
             typDefed <- gets typeDefined
             if Map.member nme typDefed || Map.member nme (typDef header) then throwE $ "Function uses a typedef name " ++ nme else 
                 if nme == "main" && (findType rtp (typDefed, typDef header) /= INTEGER || length param > 0) then throwE "Bad declaration for main" else do 
-                    let typ = ARROW (extractParam param (typDefed, typDef header)) (findType rtp (typDefed, typDef header))
+                    let !argtyp = extractParam param (typDefed, typDef header)
+                        typ = ARROW argtyp (findType rtp (typDefed, typDef header))
                     _ <- elabGdecls [Fdecl rtp nme param] header allDef
                     case Map.lookup nme defined of
                         Just _ -> throwE $ "Function defined more than once: " ++ nme
@@ -142,7 +152,8 @@ elabGdecls (x:xs) header allDef =
                                     let blk' = eBlock blk (gState, header) allDef
                                     elab' <- elabGdecls xs header allDef
                                     return $ EDecl nme typ (ESeq (EDef nme typ blk') elab')
-        Typedef typ nme -> do
+        Typedef typ nme ->
+            if typ == VOID then throwE "Cannot typdef VOID" else do
             typDefed <- gets typeDefined
             fnDeclared <- gets funDeclared
             if Map.member nme fnDeclared || Map.member nme (fnDecl header) then throwE $ "Typedef uses a function name " ++ nme else
@@ -159,7 +170,12 @@ elabGdecls (x:xs) header allDef =
                                                 modify' $ \(GlobState fdec fdef tdef) ->
                                                     GlobState fdec fdef (Map.insert nme primTyp tdef)
                                                 elabGdecls xs header allDef
-                                            Nothing -> throwE $ "Undefined type: " ++ nme
+                                            Nothing -> case Map.lookup ident (typDef header) of
+                                                Just primTyp -> do
+                                                    modify' $ \(GlobState fdec fdef tdef) ->
+                                                        GlobState fdec fdef (Map.insert nme primTyp tdef)
+                                                    elabGdecls xs header allDef
+                                                Nothing -> throwE $ "Undefined type: " ++ ident
                                     _ -> do
                                         modify' $ \(GlobState fdec fdef tdef) ->
                                             GlobState fdec fdef (Map.insert nme typ tdef)
@@ -173,12 +189,18 @@ findType' typ typGlob =
 
 extractParam' :: [(Type, Ident)] -> Map.Map Ident Type -> [(Ident, Type)]
 extractParam' [] typGlob = []
-extractParam' l typGlob = foldr f [] l
-  where
-    f :: (Type, Ident) -> [(Ident, Type)] -> [(Ident, Type)]
-    f (ty, arg) curr =
-        let primTyp = findType' ty typGlob
-         in (arg, primTyp) : curr
+extractParam' l typGlob = fst (foldr f ([], Set.empty) l)
+    where
+      f :: (Type, Ident) -> ([(Ident, Type)], Set.Set Ident) -> ([(Ident, Type)], Set.Set Ident)
+      f (ty, arg) (curr, setVars)
+          | Map.member arg typGlob = error "Function parameter uses a typedef name"
+          | Set.member arg setVars = error "Function parameter contains duplicated parameters"
+          | ty == VOID = error "Function parameter cannot be VOID"
+          | otherwise =
+              let primTyp = findType' ty typGlob
+               in if primTyp == VOID
+                      then error "Function parameter cannot be VOID"
+                      else ((arg, primTyp) : curr, Set.insert arg setVars)
 
 findType :: Type -> (Map.Map Ident Type, Map.Map Ident Type) -> Type
 findType typ (typGlob, typHeader) =
@@ -192,12 +214,18 @@ findType typ (typGlob, typHeader) =
 --extract the parameter of the function
 extractParam :: [(Type, Ident)] -> (Map.Map Ident Type, Map.Map Ident Type) -> [(Ident, Type)]
 extractParam [] (typGlob, typHeader) = []
-extractParam l (typGlob, typHeader) = foldr f [] l
+extractParam l (typGlob, typHeader) = fst (foldr f ([], Set.empty) l)
   where
-    f :: (Type, Ident) -> [(Ident, Type)] -> [(Ident, Type)]
-    f (ty, arg) curr =
-        let primTyp = findType ty (typGlob, typHeader)
-         in (arg, primTyp) : curr
+    f :: (Type, Ident) -> ([(Ident, Type)], Set.Set Ident) -> ([(Ident, Type)], Set.Set Ident)
+    f (ty, arg) (curr, setVars)
+        | Map.member arg typGlob || Map.member arg typHeader = error "Function parameter uses a typedef name"
+        | Set.member arg setVars = error "Function parameter contains duplicated parameters"
+        | ty == VOID = error "Function parameter cannot be VOID"
+        | otherwise =
+            let primTyp = findType ty (typGlob, typHeader)
+             in if primTyp == VOID
+                    then error "Function parameter cannot be VOID"
+                    else ((arg, primTyp) : curr, Set.insert arg setVars)
 
 eBlock :: [Stmt] -> (GlobState, Header) -> Set.Set Ident -> EAST
 eBlock [] context allDef = ENop
@@ -216,7 +244,7 @@ eBlock (x:l) context allDef =
                     if Map.member var (typeDefined $ fst context) || Map.member var (typDef $ snd context)
                         then error $ "Type name " ++ var ++ " used as variable name"
                         else let primTyp = findType tp (typeDefined $ fst context, typDef $ snd context)
-                              in EDecl var primTyp (ESeq (EAssign var (pExp expr context allDef)) (eBlock l context allDef))
+                              in EDecl var primTyp (ESeq (EAssign var (pExp expr context allDef) True) (eBlock l context allDef))
         _ -> ESeq (eStmt x context allDef) (eBlock l context allDef)
 
 pExp :: Exp -> (GlobState, Header) -> Set.Set Ident -> EExp
@@ -259,7 +287,7 @@ eStmt x context allDef =
                                     var
                                     primTyp
                                     (ESeq
-                                         (EAssign var (pExp expr context allDef))
+                                         (EAssign var (pExp expr context allDef) True)
                                          (EWhile
                                               (pExp condi context allDef)
                                               (ESeq (eStmt bodyi context allDef) (eSimpopt stepi context allDef))))
@@ -280,11 +308,11 @@ eSimp simp context allDef =
                     case asop of
                         Equal -> pExp expr context allDef
                         AsnOp b -> pExp (Binop b (Ident i) expr) context allDef
-             in EAssign i expression
+             in EAssign i expression False
         AsgnP i pos ->
             if pos == Incr
-                then EAssign i (pExp (Binop Add (Ident i) (Int 1)) context allDef)
-                else EAssign i (pExp (Binop Sub (Ident i) (Int 1)) context allDef)
+                then EAssign i (pExp (Binop Add (Ident i) (Int 1)) context allDef) False
+                else EAssign i (pExp (Binop Sub (Ident i) (Int 1)) context allDef) False
         Decl d ->
             case d of
                 JustDecl var tp ->
@@ -296,7 +324,7 @@ eSimp simp context allDef =
                     if Map.member var (typeDefined $ fst context) || Map.member var (typDef $ snd context)
                         then error $ "Type name " ++ var ++ " used as variable name"
                         else let primTyp = findType tp (typeDefined $ fst context, typDef $ snd context)
-                              in EDecl var primTyp (EAssign var (pExp expr context allDef))
+                              in EDecl var primTyp (EAssign var (pExp expr context allDef) True)
         Exp expr -> ELeaf (pExp expr context allDef)
 
 eSimpopt :: Simpopt -> (GlobState, Header) -> Set.Set Ident -> EAST
