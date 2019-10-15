@@ -1,4 +1,4 @@
-# Design Decisions for L2
+# Design Decisions for L3
 
 In L3, we modified our L2 compiler so that it will handle codes involving function calls, codes with typedefs, as well as typecheck codes that include a header file to our new language as specified in the steps below.
 
