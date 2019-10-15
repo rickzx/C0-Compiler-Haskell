@@ -66,7 +66,8 @@ elabHeader :: [Gdecl] -> ExceptT String (State GlobState) ()
 elabHeader [] = return ()
 elabHeader (x:xs) =
     case x of
-        Fdecl rtp nme param -> do
+        Fdecl rtp fnname param -> do
+            let nme = if fnname == "abort" then "a bort" else fnname
             declared <- gets funDeclared
             typDefed <- gets typeDefined
             if Map.member nme typDefed then throwE $ "Function uses a typedef name " ++ nme else do
