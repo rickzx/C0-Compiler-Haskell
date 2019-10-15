@@ -109,7 +109,8 @@ genEast (EWhile expr e) = do
     gen <- genEast e
     return $ [AControl $ ALab l1] ++ cmp ++ [AControl $ ALab l2] ++ gen ++ [AControl $ AJump l1, AControl $ ALab l3]
 genEast (ERet expr) = do
-    fname <- State.gets currentFunction
+    fn <- State.gets currentFunction
+    let fname = if fn == "a bort" then "_c0_abort_local411" else "_c0_" ++ fn
     case expr of
         Just e -> do
             gen <- genExp e (AReg 0)

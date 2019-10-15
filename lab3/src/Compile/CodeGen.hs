@@ -27,7 +27,7 @@ asmGen :: EAST -> Header -> String
 --asmGen t h | (trace $ show t ++ "\n\n" ++ show h) False = undefined
 asmGen east header =
     let eastGen = aasmGen east
-        globs = map (\(x, _) -> Global $ "_c0_" ++ x) eastGen
+        globs = map (\(x, _) -> if x == "a bort" then Global "_c0_abort_local411" else Global $ "_c0_" ++ x) eastGen
         globString = concatMap (\line -> show line ++ "\n") globs
      in globString ++ concatMap (\(fn, (aasms, lv)) -> generateFunc (fn, aasms, lv) header) eastGen
 
@@ -39,7 +39,7 @@ generateFunc (fn, aasms, localVar) header =
                 else let graph = computerInterfere aasms
               -- (trace $ "Interference graph: " ++ show graph ++ "\n\n")
                          precolor =
-                                 Map.fromList
+                             Map.fromList
                                  [ (AReg 0, 0)
                                  , (AReg 1, 3)
                                  , (AReg 2, 4)
@@ -63,10 +63,10 @@ generateFunc (fn, aasms, localVar) header =
                      else stackVar)
             | stackVar `mod` 2 == 0 = stackVar
             | otherwise = stackVar + 1
-        fname =
-            if Map.member fn (fnDecl header)
-                then fn
-                else "_c0_" ++ fn
+        fname
+            | Map.member fn (fnDecl header) = fn
+            | fn == "a bort" = "_c0_abort_local411"
+            | otherwise = "_c0_" ++ fn
         prolog =
             if stackVarAligned > 0
                 then [Fun fname, Pushq (Reg RBP), Movq (Reg RSP) (Reg RBP)] -- Save rbp of parent, update rbp using rsp
@@ -77,9 +77,9 @@ generateFunc (fn, aasms, localVar) header =
                 else [Fun fname, Pushq (Reg RBP), Movq (Reg RSP) (Reg RBP)] ++ map (Pushq . Reg . toReg64) calleeSaved
         epilog =
             if stackVarAligned > 0
-                then [Label $ fn ++ "_ret", Addq (Imm (stackVarAligned * 8)) (Reg RSP)] ++
+                then [Label $ fname ++ "_ret", Addq (Imm (stackVarAligned * 8)) (Reg RSP)] ++
                      map (Popq . Reg . toReg64) (reverse calleeSaved) ++ [Popq (Reg RBP), Ret]
-                else [Label $ fn ++ "_ret"] ++ map (Popq . Reg . toReg64) (reverse calleeSaved) ++ [Popq (Reg RBP), Ret]
+                else [Label $ fname ++ "_ret"] ++ map (Popq . Reg . toReg64) (reverse calleeSaved) ++ [Popq (Reg RBP), Ret]
         -- (trace $ show fn ++ "\n" ++ show coloring ++ "\n\n" ++ show aasms)
         insts = concatMap (\x -> List.filter nonTrivial (toAsm x coloring header)) aasms
         fun = prolog ++ insts ++ epilog

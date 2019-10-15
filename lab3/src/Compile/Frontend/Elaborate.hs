@@ -34,16 +34,15 @@ eGenHeader (Program l) =
             Left err -> error err
             Right header -> header
 
-eGen :: AST -> Header -> (EAST, Header)
+eGen :: AST -> Header -> EAST
 eGen (Program l) header =
     let initialState = GlobState {funDeclared = Map.singleton "main" (ARROW [] INTEGER), funDefined = Map.empty, typeDefined = Map.empty}
         allDef = findDefFunc l
         elaborate = if not (Set.member "main" allDef) then error "Cannot find main function" else elabGdecls l header allDef
         e = evalState (runExceptT elaborate) initialState
-        newHeader = if Set.member "abort" allDef then header {fnDecl = Map.insert "abort" (ARROW [] VOID) (fnDecl header)} else header
      in case e of
             Left err -> error err
-            Right east -> (east, newHeader)
+            Right east -> east
 
 assertMsg :: (Monad m) => String -> Bool -> ExceptT String m ()
 assertMsg _ True = return ()
@@ -107,7 +106,8 @@ elabGdecls :: [Gdecl] -> Header -> Set.Set Ident -> ExceptT String (State GlobSt
 elabGdecls [] header allDef = return ENop
 elabGdecls (x:xs) header allDef =
     case x of
-        Fdecl rtp nme param -> do
+        Fdecl rtp fnname param -> do
+            let nme = if fnname == "abort" then "a bort" else fnname
             declared <- gets funDeclared
             typDefed <- gets typeDefined
             if Map.member nme typDefed || Map.member nme (typDef header) then throwE $ "Function uses a typedef name " ++ nme else do
@@ -132,7 +132,8 @@ elabGdecls (x:xs) header allDef =
                                 modify' $ \(GlobState fdec fdef tdef) -> GlobState (Map.insert nme typ fdec) fdef tdef
                                 elab' <- elabGdecls xs header allDef
                                 return $ EDecl nme typ elab'
-        Fdefn rtp nme param blk -> do
+        Fdefn rtp fnname param blk -> do
+            let nme = if fnname == "abort" then "a bort" else fnname
             declared <- gets funDeclared
             defined <- gets funDefined
             typDefed <- gets typeDefined
@@ -255,10 +256,11 @@ pExp (Ident x) context allDef = EIdent x
 pExp (Binop b expr1 expr2) context allDef = EBinop b (pExp expr1 context allDef) (pExp expr2 context allDef)
 pExp (Ternop expr1 expr2 expr3) context allDef = ETernop (pExp expr1 context allDef) (pExp expr2 context allDef) (pExp expr3 context allDef)
 pExp (Unop u expr1) context allDef = EUnop u (pExp expr1 context allDef)
-pExp (Function fn exprlist) context allDef =
+pExp (Function fnname exprlist) context allDef =
     let declGlob = funDeclared $ fst context
         defGlob = funDefined $ fst context
         declHeader = fnDecl $ snd context
+        fn = if fnname == "abort" then "a bort" else fnname
      in if Map.member fn declHeader || Map.member fn defGlob || (Map.member fn declGlob && Set.member fn allDef)
             then EFunc fn (fmap (\x -> pExp x context allDef) exprlist)
             else error $ "Undefined function: " ++ fn
