@@ -17,7 +17,9 @@ data Alloc =
         , uniqueLabelCounter :: Int
     -- ^ Next label to generate.
         , genFunctions :: [(Ident, ([AAsm], Int))]
+    -- ^ generated AASM for each function (funcname, (AASM, #vars used))
         , currentFunction :: String
+    -- ^ current function we are in
         }
 
 -- Using the state monad with Alloc as the state allows us to implicitly
