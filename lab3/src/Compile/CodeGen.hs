@@ -34,7 +34,7 @@ asmGen east header =
 generateFunc :: (String, [AAsm], Int) -> Header -> String
 generateFunc (fn, aasms, localVar) header =
     let (coloring, stackVar, calleeSaved) =
-            if stackVar > 1000 && stackVar /= 2007 then allStackColor localVar--2007 was a bad year
+            if localVar > 1000 && localVar /= 2007 then allStackColor localVar--2007 was a bad year
                 else let graph = computerInterfere aasms
               -- (trace $ "Interference graph: " ++ show graph ++ "\n\n")
                          precolor =
@@ -49,7 +49,7 @@ generateFunc (fn, aasms, localVar) header =
                                  , (AReg 7, 7)
                                  ]
                          seo = mcs graph precolor
-                        in color graph seo precolor
+                         in color graph seo precolor
         nonTrivial asm =
             case asm of
                 Movl op1 op2 -> op1 /= op2
