@@ -23,19 +23,28 @@ codeGen east =
     let eastGen = aasmGen east
      in concatMap (\(_fn, (aasm, _lv)) -> aasm) eastGen
 
+--for optimization 01 we just dont do any register allocation.
+asmGenNoReg :: EAST -> Header -> String
+asmGenNoReg east header = 
+    let eastGen = aasmGen east
+        globs = map (\(x, _) -> if x == "a bort" then Global "_c0_abort_local411" else Global $ "_c0_" ++ x) eastGen
+        globString = concatMap (\line -> show line ++ "\n") globs
+     in globString ++ concatMap (\(fn, (aasms, lv)) -> generateFunc (fn, aasms, lv) False header) eastGen
+
 asmGen :: EAST -> Header -> String
 --asmGen t h | (trace $ show t ++ "\n\n" ++ show h) False = undefined
 asmGen east header =
     let eastGen = aasmGen east
         globs = map (\(x, _) -> if x == "a bort" then Global "_c0_abort_local411" else Global $ "_c0_" ++ x) eastGen
         globString = concatMap (\line -> show line ++ "\n") globs
-     in globString ++ concatMap (\(fn, (aasms, lv)) -> generateFunc (fn, aasms, lv) header) eastGen
+     in globString ++ concatMap (\(fn, (aasms, lv)) -> generateFunc (fn, aasms, lv) True header) eastGen
 
-generateFunc :: (String, [AAsm], Int) -> Header -> String
-generateFunc (fn, aasms, localVar) header =
+--Add optimization flag, if true, we dont do register allocation
+generateFunc :: (String, [AAsm], Int) -> Bool -> Header -> String
+generateFunc (fn, aasms, localVar) b header =
     let (coloring, stackVar, calleeSaved) =
-            if localVar > 1000 && localVar < 2006 --big enough that register alloc too slow, small enough no stack overflow
-                then allStackColor localVar
+            if b then allStackColor localVar--big enough that register alloc too slow, small enough no stack overflow
+                --else 
                 else let graph = computerInterfere aasms
               -- (trace $ "Interference graph: " ++ show graph ++ "\n\n")
                          precolor =
@@ -50,7 +59,7 @@ generateFunc (fn, aasms, localVar) header =
                                  , (AReg 7, 7)
                                  ]
                          seo = mcs graph precolor
-                      in color graph seo precolor
+                        in color graph seo precolor
         nonTrivial asm =
             case asm of
                 Movl op1 op2 -> op1 /= op2
