@@ -117,7 +117,7 @@ After Typechecking, we went through another iteration of our EAST to simplify st
 
 We follow the dynamic semantics in (http://www.cs.cmu.edu/afs/cs/academic/class/15411-f19/www/lec/09b-irtrees.pdf).
 
-We use the `State` monad to keep track of the fresh variables and labels.
+We use the `State` monad to keep track of the fresh variables, labels, and the current function we are generating's name.
 
 ```
 data Alloc =
@@ -128,18 +128,22 @@ data Alloc =
     -- ^ Value greater than any id in the map.
         , uniqueLabelCounter :: Int
     -- ^ Next label to generate.
+        , genFunctions :: [(Ident, ([AAsm], Int))]
+    -- ^ generated AASM for each function (funcname, (AASM, #vars used))
+        , currentFunction :: String
+    -- ^ current function we are in
         }
 ```
 
-We define several types of abstract assembly constructors to handle control flows:
+We define several types of abstract assembly constructors to handle Function Calls:
 
 ```
-data ACtrl
-  = ALab ALabel   -- Label
-  | AJump ALabel    -- Direct Jump
-  | ACJump AVal ALabel ALabel   -- Conditional Jump, if x then l1 else l2
-  | ACJump' ARelOp AVal AVal ALabel ALabel  -- Conditional Jump, if (x ? y) then l1 else l2
+  | AFun ALabel [ALoc]      -- Here, [ALoc] only contains the arguments that should be placed on the stack, if any
+  | ACall ALabel [ALoc] Int -- Here, [ALoc] only contains the arguments that should be placed on the stack, if any,
+                            -- The Int in the end represents the number of args the function call has.
 ```
+For functions with sideeffects, such as having arguments that is just not a constant or variable, we generate the 
+evaluations for such arguments first before the function call. We also concated _c0_ in front of any non external functions. For defined abort functions in the l3 file as a special case, we changed its name to _c0_abort411 since _c0_abort is a function in our run411.c library.
 
 ## Liveness and interference graph
 For liveness analysis, we considered each function definition and computed interference graph and assigned registers for them separately, since each function will have their own separate stack frame. 
