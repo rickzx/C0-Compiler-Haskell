@@ -143,7 +143,9 @@ We define several types of abstract assembly constructors to handle Function Cal
                             -- The Int in the end represents the number of args the function call has.
 ```
 For functions with sideeffects, such as having arguments that is just not a constant or variable, we generate the 
-evaluations for such arguments first before the function call. We also concated _c0_ in front of any non external functions. For defined abort functions in the l3 file as a special case, we changed its name to _c0_abort411 since _c0_abort is a function in our run411.c library.
+evaluations for such arguments first before the function call. We also concated _c0_ in front of any non external functions.
+
+For defined abort functions in the l3 file as a special case, we changed its name to _c0_abort411 since _c0_abort is a function in our run411.c library.
 
 ## Liveness and interference graph
 For liveness analysis, we considered each function definition and computed interference graph and assigned registers for them separately, since each function will have their own separate stack frame. 
