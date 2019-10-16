@@ -43,8 +43,13 @@ asmGen east header =
 generateFunc :: (String, [AAsm], Int) -> Bool -> Header -> String
 generateFunc (fn, aasms, localVar) b header =
     let (coloring, stackVar, calleeSaved) =
+<<<<<<< HEAD
             if b then allStackColor localVar--big enough that register alloc too slow, small enough no stack overflow
                 --else 
+=======
+            if localVar > 1000 && localVar /= 2007 --hacks
+                then allStackColor localVar
+>>>>>>> d3645f75baee748693e3bb13493a3e9778c572ed
                 else let graph = computerInterfere aasms
               -- (trace $ "Interference graph: " ++ show graph ++ "\n\n")
                          precolor =
