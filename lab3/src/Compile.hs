@@ -55,8 +55,7 @@ compile job = do
     let optEast = optEAST east
     case jobOutFormat job of
       TC -> liftEIO (Right ()) -- By now, we should have thrown any typechecking errors
-      Asm -> if jobOptimization job > 0 then writeString (jobOut job) $ asmGen optEast header 
-                else writeString (jobOut job) $ asmGenNoReg optEast header
+      Asm -> writeString (jobOut job) $ asmGen optEast header 
       Abs -> writeString (jobOut job) $ testPrintAAsm (codeGen optEast) (jobOut job)
   case res of
     Left msg -> error msg
