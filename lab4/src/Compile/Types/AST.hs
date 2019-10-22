@@ -18,51 +18,63 @@ data Type =
   | VOID
   | NONE --for debug
   | DEF Ident
+  | POINTER Type
+  | ARRAY Type
+  | STRUCT Ident
   | ARROW [(Ident, Type)] Type deriving Eq
 
-data AST = Program [Gdecl] deriving Eq
+data AST = Program [Gdecl] deriving (Eq, Show)
 
 data Gdecl =
     Fdecl {rtype :: Type, name :: Ident, parameters :: [(Type, Ident)]}
   | Fdefn {rtype :: Type, name :: Ident, parameters :: [(Type, Ident)], block :: [Stmt]}
+  | Sdecl {name :: Ident}
+  | Sdef {name :: Ident, parameters :: [(Type, Ident)]}
   | Typedef {rtype :: Type, name :: Ident}
-  deriving Eq
+  deriving (Eq, Show)
 
 data Stmt
   = Simp Simp
   | Stmts [Stmt]
   | ControlStmt Control
-  deriving Eq
+  deriving (Eq, Show)
 
 data Simpopt 
   = SimpNop
   | Opt Simp
-  deriving Eq
+  deriving (Eq, Show)
 
 data Elseopt
   = ElseNop
   | Else Stmt
-  deriving Eq
+  deriving (Eq, Show)
 
 data Decl
   = JustDecl { dVar :: Ident, dType :: Type}
   | DeclAsgn { dVar :: Ident, dType :: Type, dExp :: Exp}
-  deriving Eq
+  deriving (Eq, Show)
 
-data Simp = Asgn Ident Asnop Exp
-  | AsgnP Ident Postop
+data Simp = Asgn Exp Asnop Exp -- Exp = all possible lvals
+  | AsgnP Exp Postop -- Exp = all possible lvals
   | Decl Decl
-  | Exp Exp deriving Eq
+  | Exp Exp deriving (Eq, Show)
 
 data Exp
   = Int Int
   | T
   | F
+  | NULL
   | Ident Ident
+  | Alloc Type
+  | ArrayAlloc Type Exp -- type, length of array
+  | ArrayAccess Exp Exp -- first is the array, second is the idx
   | Binop Binop Exp Exp
   | Unop Unop Exp
   | Ternop Exp Exp Exp -- e1 ? e2 : e3
   | Function Ident [Exp]
+  | Field Exp Ident -- Exp repressents struct, Ident = field name
+  | Access Exp Ident -- Struct and name for ptr access
+  | Ptrderef Exp 
   deriving Eq
 
 data Control
@@ -72,7 +84,7 @@ data Control
   | Assert {cond :: Exp}
   | Void
   | Retn Exp
-  deriving Eq
+  deriving (Eq, Show)
 {-
 -- Note to the student: You will probably want to write a new pretty printer
 -- using the module Text.PrettyPrint.HughesPJ from the pretty package
@@ -125,3 +137,4 @@ instance Show Exp where
       where 
         redu_fn :: Exp -> String -> String
         redu_fn e stri = show e ++ "," ++ stri
+

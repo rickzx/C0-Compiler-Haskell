@@ -2,6 +2,10 @@
 module Compile.Lexer where
 
 import Compile.Types.Ops
+import Control.Monad.State
+import qualified Data.Set as Set
+import Data.Word
+
 }
 %wrapper "basic"
 
@@ -15,13 +19,13 @@ $identletter = [A-Za-z0-9_]
 tokens :-
 
   continue {\_ -> TokReserved}
-  struct {\_ -> TokReserved}
+  struct {\_ -> TokStruct}
   typedef {\_ -> TokTypeDef}
   break {\_ -> TokReserved}
   assert {\_ -> TokAssert}
   NULL {\_ -> TokReserved}
-  alloc {\_ -> TokReserved}
-  alloc_array {\_ -> TokReserved}
+  alloc {\_ -> TokAlloc}
+  alloc_array {\_ -> TokArrayAlloc}
   void {\_ -> TokVoid}
   char {\_ -> TokReserved}
   string {\_ -> TokReserved}
@@ -33,6 +37,7 @@ tokens :-
   true {\_ -> TokTrue}
   false {\_ -> TokFalse}
 
+  "->"  {\_ -> TokAccess}
   "-"   {\_ -> TokMinus}
   "+"   {\_ -> TokPlus}
   "*"   {\_ -> TokTimes}
@@ -71,7 +76,7 @@ tokens :-
   "<<="  {\_ -> TokAsgnop (AsnOp Sal)}
   ">>="  {\_ -> TokAsgnop (AsnOp Sar)}
 
-  
+
   $white+ ;
   0 {\_ -> TokDec 0}
   $decstart $decdigit* {\s -> TokDec (read s)}
@@ -82,12 +87,16 @@ tokens :-
   bool {\_ -> TokBool}
 
   $identstart $identletter* {\s -> TokIdent s}
+
+  [\[] {\_ -> TokLBracket}
+  [\]] {\_ -> TokRBracket}
   [\(] {\_ -> TokLParen}
   [\)] {\_ -> TokRParen}
   [\{] {\_ -> TokLBrace}
   [\}] {\_ -> TokRBrace}
   [\;] {\_ -> TokSemi}
   [\,] {\_ -> TokComma}
+  [\.] {\_ -> TokField}
 
   -- comments
   \/\/.*\n ;
@@ -142,8 +151,45 @@ data Token =
   TokTypeDef |
   TokAssert |
   TokVoid |
+  TokStruct |
+  TokAccess |
+  TokLBracket |
+  TokRBracket |
+  TokNULL |
+  TokAlloc |
+  TokEOF |
+  TokArrayAlloc |
+  TokField |
+  TokTypeDefIdent String |
   TokReserved
   deriving (Eq,Show)
+
+-- Our Parser monad
+type P a = State (AlexInput, Set.Set String) a
+
+evalP::P a -> (AlexInput, Set.Set String) -> a
+evalP = evalState
+
+-- Action to read a token
+readToken :: P Token
+readToken = do
+    (s@(_, _, str), typedefs) <- get
+    case alexScan s 0 of
+        AlexEOF -> return TokEOF
+        AlexError _ -> error "Lexical Error"
+        AlexSkip inp' _ -> do
+            put (inp', typedefs)
+            readToken
+        AlexToken inp' len act -> do
+            put (inp', typedefs)
+            let tk = act (take len str)
+            case tk of
+                TokIdent x -> if (Set.member x typedefs) then return (TokTypeDefIdent x) else return tk
+                _ -> return tk
+
+-- The lexer function to be passed to Happy
+lexer :: (Token -> P a)->P a
+lexer cont = readToken >>= cont
 
 removeComments :: String -> String
 removeComments s = removeCommentsHelp 0 s
@@ -176,7 +222,4 @@ removeLineComment [] = []
 removeLineComment (x:xs) =
   if (x == '\n')
   then (x:xs)
-  else removeLineComment xs
-
-lexProgram s = alexScanTokens $ removeComments s
-}
+  else removeLineComment xs}
