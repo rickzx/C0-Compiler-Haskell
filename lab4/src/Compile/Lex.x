@@ -15,13 +15,13 @@ $identletter = [A-Za-z0-9_]
 tokens :-
 
   continue {\_ -> TokReserved}
-  struct {\_ -> TokReserved}
+  struct {\_ -> TokStruct}
   typedef {\_ -> TokTypeDef}
   break {\_ -> TokReserved}
   assert {\_ -> TokAssert}
   NULL {\_ -> TokReserved}
-  alloc {\_ -> TokReserved}
-  alloc_array {\_ -> TokReserved}
+  alloc {\_ -> TokAlloc}
+  alloc_array {\_ -> TokArrayAlloc}
   void {\_ -> TokVoid}
   char {\_ -> TokReserved}
   string {\_ -> TokReserved}
@@ -33,6 +33,7 @@ tokens :-
   true {\_ -> TokTrue}
   false {\_ -> TokFalse}
 
+  "->"  {\_ -> TokAccess}
   "-"   {\_ -> TokMinus}
   "+"   {\_ -> TokPlus}
   "*"   {\_ -> TokTimes}
@@ -82,12 +83,16 @@ tokens :-
   bool {\_ -> TokBool}
 
   $identstart $identletter* {\s -> TokIdent s}
+
+  [\[] {\_ -> TokLBracket}
+  [\]] {\_ -> TokRBracket}
   [\(] {\_ -> TokLParen}
   [\)] {\_ -> TokRParen}
   [\{] {\_ -> TokLBrace}
   [\}] {\_ -> TokRBrace}
   [\;] {\_ -> TokSemi}
   [\,] {\_ -> TokComma}
+  [\.] {\_ -> TokField}
 
   -- comments
   \/\/.*\n ;
@@ -142,6 +147,16 @@ data Token =
   TokTypeDef |
   TokAssert |
   TokVoid |
+  TokStruct |
+  TokAccess |
+  TokLBracket |
+  TokRBracket |
+  TokNULL |
+  TokAlloc |
+  TokEOF |
+  TokArrayAlloc |
+  TokField |
+  TokTypeIdent String |
   TokReserved
   deriving (Eq,Show)
 

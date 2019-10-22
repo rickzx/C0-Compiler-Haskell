@@ -4,21 +4,29 @@ module Compile.Parser where
 import Compile.Lexer
 import Compile.Types.Ops
 import Compile.Types.AST
+import qualified Data.Set as Set
 }
 
 %name parseTokens
 %tokentype { Token }
 %error { parseError }
+%monad { Alex }
+%lexer { lexTokens } { TokEOF }
 
 %token
+  '.'     {TokField}
+  '->'    {TokAccess}
   '('     {TokLParen}
   ')'     {TokRParen}
+  '['     {TokLBracket}
+  ']'     {TokRBracket}
   '{'     {TokLBrace}
   '}'     {TokRBrace}
   ';'     {TokSemi}
   ','     {TokComma}
   dec     {TokDec $$}
   hex     {TokHex $$}
+  typeIdent {TokTypeIdent $$}
   ident   {TokIdent $$}
   ret     {TokReturn}
   int     {TokInt}
@@ -30,7 +38,11 @@ import Compile.Types.AST
   '%'     {TokMod}
   asgnop  {TokAsgnop $$}
   kill    {TokReserved}
+  NULL    {TokNULL}
+  alloc   {TokAlloc}
+  alloc_array {TokArrayAlloc}
 
+  struct  {TokStruct}
   typedef {TokTypeDef}
   assert  {TokAssert}
   while   {TokWhile}
@@ -73,7 +85,8 @@ import Compile.Types.AST
 %left '<<' '>>'
 %left '+' '-'
 %left '*' '/' '%'
-%right NEG '~' '!' '++' '--'
+%right NEG '~' '!' PTR '++' '--' 
+%nonassoc '[' ']' '.' '->'
 %%
 
 Program : Funs {Program $1}
@@ -83,6 +96,8 @@ Funs : {- Empty -} {[]}
 
 Gdecl : Fdecl {$1}
       | Fdefn {$1}
+      | Sdecl {$1}
+      | Sdef {$1}
       | Typedef {$1}
 
 Fdecl : Type ident Paramlist ';' {Fdecl $1 $2 $3}
@@ -95,14 +110,24 @@ ParamlistFollow : {- Empty -} {[]}
 Paramlist : '(' ')' {[]}
       | '(' Param ParamlistFollow ')' {$2 : $3}
 
-Typedef : typedef Type ident ';' {Typedef $2 $3}
+Sdecl : struct ident ';' {Sdecl $2}
+
+Sdef : struct ident '{' Fieldlist '}' ';' {Sdef $2 $4}
+Field : Type ident ';' {($1, $2)}
+Fieldlist : {- Empty -} {[]}
+      | Field Fieldlist {$1 : $2}
+
+Typedef : typedef Type ident ';' {% typeDefHandle $2 $3}
 
 Block : '{' Stmts '}' {$2}
 
 Type  : int {INTEGER}
       | bool {BOOLEAN}
-      | ident {DEF $1}
+      | typeIdent {DEF $1}
       | void {VOID}
+      | typeIdent '[' ']'{ARRAY $1}
+      | typeIdent '*'{POINTER $1}
+      | struct ident {STRUCT $2}
 
 Decl  : Type ident asgnop Exp {checkDeclAsgn $2 $3 $1 $4}
       | Type ident {JustDecl $2 $1}
@@ -137,10 +162,17 @@ Exp : '(' Exp ')' {$2}
     | Exp '?' Exp ':' Exp {Ternop $1 $3 $5}
     | true {T}
     | false {F}
+    | NULL {NULL}
     | Intconst {$1}
     | ident {Ident $1}
     | Operation {$1}
     | ident Arglist {Function $1 $2}
+    | alloc '(' Type ')' {Alloc $3}
+    | alloc_array '(' Type ',' Exp ')' {ArrayAlloc $3 $5}
+    | Exp '[' Exp ']' {ArrayAccess $1 $3}
+    | Exp '.' ident {Field $1 $3}
+    | Exp '->' ident {Access $1 $3}
+    | '*' Exp %prec PTR {Ptrderef $2}
 
 ArglistFollow : {- Empty -} {[]}
     | ',' Exp ArglistFollow {$2 : $3}
@@ -174,19 +206,43 @@ Intconst  : dec {checkDec $1}
           | hex {checkHex $1}
 
 {
-parseError :: [Token] -> a
-parseError t = error ("Parse Error " ++ (show t))
+lexTokens :: (Token -> Alex a) -> Alex a
+lexTokens cont = do
+      token <- alexMonadScan
+      case token of
+            TokIdent s -> let
+                        Alex Right(_, defset) = getDefinedSet
+                  in
+                        if(Set.member s defset) then cont (TokTypeIdent s)
+                        else cont (TokIdent s)
+            _ -> cont token
+
+parseError :: [Token] -> Alex a
+parseError t = alexError ("Parse Error " ++ (show t))
+
+typeDefHandle :: Type -> Ident -> Gdecl 
+typeDefHandle tp name = do
+      addDefinedState name 
+      return $ TypeDef tp name
 
 checkSimpAsgn :: Exp -> Asnop -> Exp -> Simp
 checkSimpAsgn id op e =
     case id of
-        Ident a -> Asgn a op e
+        Ident _ -> Asgn id op e
+        Ptrderef _ -> Asgn id op e
+        Access _ _ -> Asgn id op e
+        Field _ _ -> Asgn id op e
+        ArrayAccess _ _ -> Asgn id op e
         _ -> error "Invalid assignment to non variables"
 
 checkSimpAsgnP :: Exp -> Postop -> Simp
 checkSimpAsgnP id op =
     case id of
-        Ident a -> AsgnP a op
+        Ident _ -> AsgnP id op
+        Ptrderef _ -> AsgnP id op
+        Access _ _ -> AsgnP id op
+        Field _ _ -> AsgnP id op
+        ArrayAccess _ _ -> AsgnP id op
         _ -> error "Invalid postop assignment to non variables"
 
 checkDeclAsgn :: Ident -> Asnop -> Type -> Exp -> Decl
@@ -198,4 +254,5 @@ checkDeclAsgn v op tp e =
 checkDec n = if (n > 2^31) then error "Decimal too big" else Int (fromIntegral n)
 checkHex n = if (n >= 2^32) then error "Hex too big" else Int (fromIntegral n)
 
+parseInput input = runAlex input parseTokens
 }

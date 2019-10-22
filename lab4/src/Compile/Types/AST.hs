@@ -18,6 +18,9 @@ data Type =
   | VOID
   | NONE --for debug
   | DEF Ident
+  | POINTER Type
+  | ARRAY Type
+  | STRUCT Ident
   | ARROW [(Ident, Type)] Type deriving Eq
 
 data AST = Program [Gdecl] deriving Eq
@@ -25,6 +28,8 @@ data AST = Program [Gdecl] deriving Eq
 data Gdecl =
     Fdecl {rtype :: Type, name :: Ident, parameters :: [(Type, Ident)]}
   | Fdefn {rtype :: Type, name :: Ident, parameters :: [(Type, Ident)], block :: [Stmt]}
+  | Sdecl {name :: Ident}
+  | Sdef {name :: Ident, parameters :: [(Type, Ident)]}
   | Typedef {rtype :: Type, name :: Ident}
   deriving Eq
 
@@ -49,8 +54,8 @@ data Decl
   | DeclAsgn { dVar :: Ident, dType :: Type, dExp :: Exp}
   deriving Eq
 
-data Simp = Asgn Ident Asnop Exp
-  | AsgnP Ident Postop
+data Simp = Asgn Exp Asnop Exp -- Exp = all possible lvals
+  | AsgnP Exp Postop -- Exp = all possible lvals
   | Decl Decl
   | Exp Exp deriving Eq
 
@@ -58,11 +63,18 @@ data Exp
   = Int Int
   | T
   | F
+  | NULL
   | Ident Ident
+  | Alloc Type
+  | ArrayAlloc Type Int -- type, length of array
+  | ArrayAccess Exp Exp -- first is the array, second is the idx
   | Binop Binop Exp Exp
   | Unop Unop Exp
   | Ternop Exp Exp Exp -- e1 ? e2 : e3
   | Function Ident [Exp]
+  | Field Exp Ident -- Exp repressents struct, Ident = field name
+  | Access Exp Ident -- Struct and name for ptr access
+  | Ptrderef Exp 
   deriving Eq
 
 data Control
