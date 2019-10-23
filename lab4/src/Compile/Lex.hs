@@ -16774,9 +16774,6 @@ removeLineComment (x:xs) =
   if (x == '\n')
   then (x:xs)
   else removeLineComment xs
-
-lexProgram s = removeComments s
-
 alex_action_0 = \_ -> TokReserved
 alex_action_1 = \_ -> TokStruct
 alex_action_2 = \_ -> TokTypeDef
