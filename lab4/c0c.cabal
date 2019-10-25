@@ -62,23 +62,11 @@ Executable c0c
   other-modules:
       Args
     , Compile
-    , Compile.CodeGen
     , Compile.Lexer
     , Compile.Parser
     , Compile.Types
     , Compile.Types.AST
-    , Compile.Types.AbstractAssembly
-    , Compile.Frontend.CheckEAST
-    , Compile.Frontend.Elaborate
-    , Compile.Frontend.EASTOptimize
-    , Compile.Backend.RegisterAlloc
-    , Compile.Backend.AAsm2Asm
-    , Compile.Backend.LiveVariable
-    , Compile.Backend.EAST2AAsm
-    , Compile.Types.Assembly
     , Compile.Types.Job
     , Compile.Types.Ops
-    , Compile.Types.EAST
-    , Compile.Types.Header
     , LiftIOE
     , Util

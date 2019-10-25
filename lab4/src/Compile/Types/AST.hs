@@ -23,7 +23,7 @@ data Type =
   | STRUCT Ident
   | ARROW [(Ident, Type)] Type deriving Eq
 
-data AST = Program [Gdecl] deriving Eq
+data AST = Program [Gdecl] deriving (Eq, Show)
 
 data Gdecl =
     Fdecl {rtype :: Type, name :: Ident, parameters :: [(Type, Ident)]}
@@ -31,33 +31,33 @@ data Gdecl =
   | Sdecl {name :: Ident}
   | Sdef {name :: Ident, parameters :: [(Type, Ident)]}
   | Typedef {rtype :: Type, name :: Ident}
-  deriving Eq
+  deriving (Eq, Show)
 
 data Stmt
   = Simp Simp
   | Stmts [Stmt]
   | ControlStmt Control
-  deriving Eq
+  deriving (Eq, Show)
 
 data Simpopt 
   = SimpNop
   | Opt Simp
-  deriving Eq
+  deriving (Eq, Show)
 
 data Elseopt
   = ElseNop
   | Else Stmt
-  deriving Eq
+  deriving (Eq, Show)
 
 data Decl
   = JustDecl { dVar :: Ident, dType :: Type}
   | DeclAsgn { dVar :: Ident, dType :: Type, dExp :: Exp}
-  deriving Eq
+  deriving (Eq, Show)
 
 data Simp = Asgn Exp Asnop Exp -- Exp = all possible lvals
   | AsgnP Exp Postop -- Exp = all possible lvals
   | Decl Decl
-  | Exp Exp deriving Eq
+  | Exp Exp deriving (Eq, Show)
 
 data Exp
   = Int Int
@@ -66,7 +66,7 @@ data Exp
   | NULL
   | Ident Ident
   | Alloc Type
-  | ArrayAlloc Type Int -- type, length of array
+  | ArrayAlloc Type Exp -- type, length of array
   | ArrayAccess Exp Exp -- first is the array, second is the idx
   | Binop Binop Exp Exp
   | Unop Unop Exp
@@ -84,7 +84,7 @@ data Control
   | Assert {cond :: Exp}
   | Void
   | Retn Exp
-  deriving Eq
+  deriving (Eq, Show)
 {-
 -- Note to the student: You will probably want to write a new pretty printer
 -- using the module Text.PrettyPrint.HughesPJ from the pretty package
@@ -121,6 +121,8 @@ instance Show Type where
   show (ARROW args res) = show args ++ " -> " ++ show res
   show NONE = "error"
   show (DEF a) = "def " ++ a
+  show (ARRAY a) = show a ++ "[]"
+  show (POINTER a) = show a ++ "*"
 
 instance Show Exp where
   show (Int x) = show x
@@ -137,3 +139,5 @@ instance Show Exp where
       where 
         redu_fn :: Exp -> String -> String
         redu_fn e stri = show e ++ "," ++ stri
+  show (Ptrderef e) = "*("++ show e ++ ")"
+

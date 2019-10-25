@@ -21,13 +21,16 @@ import Control.Monad.Trans.Except
 import Compile.Types
 import Compile.Lexer
 import Compile.Parser
+{-
 import Compile.Frontend.Elaborate
 import Compile.Frontend.CheckEAST
 import Compile.CodeGen
+-}
 import Data.Maybe (fromMaybe)
 import System.Environment
-import Compile.Frontend.EASTOptimize
+--import Compile.Frontend.EASTOptimize
 import Debug.Trace
+import qualified Data.Set as Set
 
 import LiftIOE
 
@@ -40,26 +43,31 @@ writeIOString file s = liftIOE $ s >>= writeFile file
 compile :: Job -> IO ()
 --compile j | (trace $ show j) False = undefined
 compile job = do
-  headerHandle <- openFile (jobHeader job) ReadMode
-  hSetEncoding headerHandle utf8
-  h0 <- hGetContents headerHandle
-  let header = eGenHeader $ parseTokens $ lexProgram h0
-  inputHandle <- openFile (jobSource job) ReadMode
-  hSetEncoding inputHandle utf8
-  s <- hGetContents inputHandle
-  res <- runExceptT $ do
-    let 
-      ast = parseTokens $ lexProgram s
-      east = eGen ast header
-    liftEIO $ checkEAST east header
-    let optEast = optEAST east
-    case jobOutFormat job of
-      TC -> liftEIO (Right ()) -- By now, we should have thrown any typechecking errors
-      Asm -> writeString (jobOut job) $ asmGen optEast header 
-      Abs -> writeString (jobOut job) $ testPrintAAsm (codeGen optEast) (jobOut job)
-  case res of
-    Left msg -> error msg
-    Right () -> return ()
+    headerHandle <- openFile (jobHeader job) ReadMode
+    hSetEncoding headerHandle utf8
+    h0 <- hGetContents headerHandle
+    let parserOut = evalP parseTokens (('\n', [], removeComments h0), Set.empty)
+        header = eGenHeader parserOut
+    inputHandle <- openFile (jobSource job) ReadMode
+    hSetEncoding inputHandle utf8
+    s <- hGetContents inputHandle
+    res <-
+        runExceptT $ do 
+            let ast = evalP parseTokens (('\n', [], removeComments s), Set.empty)
+            case jobOutFormat job of
+                TC -> liftEIO (Right ()) -- By now, we should have thrown any typechecking errors
+                Asm -> writeString (jobOut job) $ show ast
+                Abs -> writeString (jobOut job) $ show ast
+                east = eGen ast header
+            liftEIO $ checkEAST east header
+            let optEast = optEAST east
+            case jobOutFormat job of
+                TC -> liftEIO (Right ()) -- By now, we should have thrown any typechecking errors
+                Asm -> writeString (jobOut job) $ asmGen optEast header
+                Abs -> writeString (jobOut job) $ testPrintAAsm (codeGen optEast) (jobOut job)
+    case res of
+        Left msg -> error msg
+        Right () -> return ()
 
 addHeader :: String -> IO String
 addHeader pgm = do

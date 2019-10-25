@@ -1,0 +1,27 @@
+//test return 9
+
+//try a linkedlist
+struct node{
+    int val;
+    struct node *next;
+};
+
+typedef struct node *linkedlist;
+
+int main(){
+    linkedlist ok = alloc(struct node);
+    linkedlist start = ok;
+    for(int i = 0; i < 10; i++){
+        ok->val = i*i;
+        ok->next = alloc(struct node);
+        ok = ok->next;
+    }
+    ok->next = NULL;
+    for(int j = 0; j < 3; j++){
+        start = start->next;
+    }
+    return start->val;
+}
+
+
+

@@ -4,6 +4,7 @@ module Compile.Parser where
 import Compile.Lexer
 import Compile.Types.Ops
 import Compile.Types.AST
+import Control.Monad.State
 import qualified Data.Set as Set
 import qualified Data.Array as Happy_Data_Array
 import qualified Data.Bits as Bits
@@ -44,7 +45,7 @@ data HappyAbsSyn t4 t5 t6 t7 t8 t9 t10 t11 t12 t13 t14 t15 t16 t17 t18 t19 t20 t
 	| HappyAbsSyn30 t30
 
 happyExpList :: Happy_Data_Array.Array Int Int
-happyExpList = Happy_Data_Array.listArray (0,1055) ([0,0,25600,1536,8,0,0,0,50,1027,0,0,0,0,0,0,0,0,32768,49164,256,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1024,0,0,0,0,256,128,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,64,0,0,0,0,36864,2049,32,0,0,0,0,0,0,0,0,0,0,0,0,0,0,4,0,0,0,0,512,0,0,0,0,2560,0,0,0,0,32768,0,0,0,0,0,0,0,0,0,0,1024,0,0,0,0,0,0,0,0,0,0,20480,0,0,0,0,0,12801,256,4,0,0,0,0,0,0,0,0,3200,64,1,0,0,0,0,0,0,0,0,0,0,0,0,0,256,0,0,0,0,0,0,0,0,0,0,25600,512,8,0,0,4096,0,0,0,0,0,512,0,0,0,0,4096,0,0,0,0,0,128,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,65058,46981,63,0,0,0,0,0,0,0,0,1024,0,0,0,0,0,0,0,0,0,0,4,0,0,0,0,61712,48175,509,0,0,0,2,0,0,0,0,0,0,0,0,0,2432,16128,32832,32766,0,0,0,0,0,0,0,0,0,0,0,0,16384,41664,45168,1,0,0,57888,30815,1019,0,0,0,0,0,0,0,0,0,0,0,0,0,1024,0,0,0,0,0,5762,33669,13,0,0,256,49803,1729,0,0,32768,17792,24801,3,0,0,0,0,0,0,0,8192,0,0,0,0,0,16,0,0,0,0,2048,0,0,0,0,0,4,0,0,0,0,512,34070,3459,0,0,0,35585,49602,6,0,0,128,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,4096,0,0,0,0,0,0,0,0,0,0,2048,0,0,0,0,0,51200,1024,16,0,0,16384,0,0,0,0,0,32,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,4,0,0,0,0,0,0,0,0,0,512,34070,3459,0,0,0,61185,50114,14,0,0,608,0,0,0,0,12288,1,0,0,0,0,24608,14417,216,0,0,4096,10416,27676,0,0,0,8192,4099,64,0,0,0,400,8200,0,0,32768,9,0,0,0,0,1216,0,0,0,0,24576,49186,4103,65440,7,0,0,0,0,0,0,0,0,0,0,0,0,45104,7208,108,0,0,0,1,0,0,0,0,27,32830,64768,63,0,0,16,0,0,0,0,2048,0,0,0,0,32896,57669,864,0,0,16384,41664,45168,1,0,0,24608,14417,216,0,0,4096,10416,27676,0,0,0,22536,3604,54,0,0,1024,2604,6919,0,0,0,5634,33669,13,0,0,256,49803,1729,0,0,32768,17792,24801,3,0,0,49216,28834,432,0,0,8192,20832,55352,0,0,0,45072,7208,108,0,0,2048,5208,13838,0,0,0,11268,1802,27,0,0,512,34070,3459,0,0,0,35585,49602,6,0,0,32896,57669,864,0,0,16384,41664,45168,1,0,0,24608,14417,216,0,0,4096,10416,27676,0,0,0,22536,3604,54,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,0,0,0,45072,7208,108,0,0,9728,31744,0,0,0,0,19,62,0,0,0,2432,7936,64,6782,0,49152,32772,15,16128,12,0,608,1984,32784,1983,0,12288,57345,2051,53184,3,0,152,496,57344,385,0,19456,63488,0,49392,0,0,38,124,0,96,0,4864,15872,0,12288,0,32768,9,31,0,24,0,1216,3968,0,3072,0,24576,49154,4103,65504,7,0,304,992,49152,847,0,38912,61440,1025,65512,1,0,76,0,0,0,0,9728,0,0,0,0,0,19,0,0,0,0,2432,7168,0,0,0,49152,4,14,0,0,0,1632,1984,40976,2047,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,4864,15874,128,16381,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,8192,0,0,0,0,55296,61440,1025,65512,1,0,108,248,62466,255,0,0,0,0,0,0,0,256,0,0,0,0,3456,7936,32832,8190,0,0,0,0,0,0,0,34944,57727,4077,0,0,16384,41664,45168,1,0,0,57888,30815,1019,0,0,0,4,0,0,0,0,22536,3604,54,0,0,0,0,0,0,0,0,4,0,0,0,0,256,49803,1729,0,0,0,0,0,0,0,0,49216,28834,432,0,0,38912,61440,1025,65512,1,0,76,248,62466,255,0,9728,31748,256,32762,0,0,0,0,0,0,0,3456,7936,32832,8190,0,0,0,0,0,0,0,0,0,0,0,0,12288,57361,2051,65488,3,0,0,0,1024,0,0,0,0,0,0,0,0,63624,56855,254,0,0,1024,3004,15119,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,8192,24546,64376,3,0,0,0,0,0,0,0
+happyExpList = Happy_Data_Array.listArray (0,1055) ([0,0,25600,1536,8,0,0,0,50,1027,0,0,0,0,0,0,0,0,32768,49164,256,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1026,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,64,0,0,0,0,36864,2049,32,0,0,0,0,0,0,0,0,0,0,0,0,0,512,260,0,0,0,0,512,0,0,0,0,2560,0,0,0,0,32768,0,0,0,0,0,8,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,20480,0,0,0,0,0,12801,256,4,0,0,0,0,0,0,0,0,3200,64,1,0,0,0,0,0,0,0,0,0,0,0,0,0,256,0,0,0,0,0,0,0,0,0,0,25600,512,8,0,0,4096,0,0,0,0,0,33281,0,0,0,0,4096,0,0,0,0,16384,8320,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,65058,46981,63,0,0,0,0,0,0,0,0,1026,1,0,0,0,0,0,0,0,0,0,4,0,0,0,0,61712,48175,509,0,0,0,2,0,0,0,0,0,0,0,0,0,2432,16128,32832,32766,0,0,0,0,0,0,0,0,0,0,0,0,16384,41664,45168,1,0,0,57888,30815,1019,0,0,0,0,0,0,0,0,0,0,0,0,0,1024,0,0,0,0,0,5762,33669,13,0,0,256,49803,1729,0,0,32768,17792,24801,3,0,0,0,0,0,0,0,8192,0,0,0,0,0,16,0,0,0,0,2048,0,0,0,0,0,4,0,0,0,0,512,34070,3459,0,0,0,35585,49602,6,0,0,128,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,4096,0,0,0,0,0,0,0,0,0,0,2048,0,0,0,0,0,51200,1024,16,0,0,16384,0,0,0,0,0,32,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,4,0,0,0,0,0,0,0,0,0,512,34070,3459,0,0,0,61185,50114,14,0,0,608,0,0,0,0,12288,1,0,0,0,0,24608,14417,216,0,0,4096,10416,27676,0,0,0,8192,4099,64,0,0,0,400,8200,0,0,32768,9,0,0,0,0,1216,0,0,0,0,24576,49186,4103,65440,7,0,0,0,0,0,0,0,0,0,0,0,0,45104,7208,108,0,0,0,1,0,0,0,0,27,32830,64768,63,0,0,16,0,0,0,0,2048,0,0,0,0,32896,57669,864,0,0,16384,41664,45168,1,0,0,24608,14417,216,0,0,4096,10416,27676,0,0,0,22536,3604,54,0,0,1024,2604,6919,0,0,0,5634,33669,13,0,0,256,49803,1729,0,0,32768,17792,24801,3,0,0,49216,28834,432,0,0,8192,20832,55352,0,0,0,45072,7208,108,0,0,2048,5208,13838,0,0,0,11268,1802,27,0,0,512,34070,3459,0,0,0,35585,49602,6,0,0,32896,57669,864,0,0,16384,41664,45168,1,0,0,24608,14417,216,0,0,4096,10416,27676,0,0,0,22536,3604,54,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,0,0,0,45072,7208,108,0,0,9728,31744,0,0,0,0,19,62,0,0,0,2432,7936,64,6782,0,49152,32772,15,16128,12,0,608,1984,32784,1983,0,12288,57345,2051,53184,3,0,152,496,57344,385,0,19456,63488,0,49392,0,0,38,124,0,96,0,4864,15872,0,12288,0,32768,9,31,0,24,0,1216,3968,0,3072,0,24576,49154,4103,65504,7,0,304,992,49152,847,0,38912,61440,1025,65512,1,0,76,0,0,0,0,9728,0,0,0,0,0,19,0,0,0,0,2432,7168,0,0,0,49152,4,14,0,0,0,1632,1984,40976,2047,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,4864,15874,128,16381,0,0,0,0,0,0,0,0,0,0,0,0,0,3,1,0,0,0,8448,128,0,0,0,55296,61440,1025,65512,1,0,108,248,62466,255,0,0,0,0,0,0,0,256,0,0,0,0,3456,7936,32832,8190,0,0,0,0,0,0,0,34944,57727,4077,0,0,16384,41664,45168,1,0,0,57888,30815,1019,0,0,0,4,0,0,0,0,22536,3604,54,0,0,0,0,0,0,0,0,4,0,0,0,0,256,49803,1729,0,0,0,0,0,0,0,0,49216,28834,432,0,0,38912,61440,1025,65512,1,0,76,248,62466,255,0,9728,31748,256,32762,0,0,0,0,0,0,0,3456,7936,32832,8190,0,0,0,0,0,0,0,0,0,0,0,0,12288,57361,2051,65488,3,0,0,0,1024,0,0,0,0,0,0,0,0,63624,56855,254,0,0,1024,3004,15119,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,8192,24546,64376,3,0,0,0,0,0,0,0
 	])
 
 {-# NOINLINE happyExpListPerState #-}
@@ -121,11 +122,11 @@ action_7 _ = happyReduce_7
 
 action_8 _ = happyReduce_8
 
-action_9 (44) = happyShift action_22
+action_9 (35) = happyShift action_20
+action_9 (44) = happyShift action_21
+action_9 (50) = happyShift action_22
 action_9 _ = happyFail (happyExpListPerState 9)
 
-action_10 (35) = happyShift action_20
-action_10 (50) = happyShift action_21
 action_10 _ = happyReduce_25
 
 action_11 _ = happyReduce_23
@@ -148,7 +149,9 @@ action_15 _ = happyReduce_24
 action_16 (87) = happyAccept
 action_16 _ = happyFail (happyExpListPerState 16)
 
+action_17 (35) = happyShift action_20
 action_17 (44) = happyShift action_30
+action_17 (50) = happyShift action_22
 action_17 _ = happyFail (happyExpListPerState 17)
 
 action_18 (44) = happyShift action_29
@@ -161,11 +164,11 @@ action_19 _ = happyReduce_29
 action_20 (36) = happyShift action_26
 action_20 _ = happyFail (happyExpListPerState 20)
 
-action_21 _ = happyReduce_28
+action_21 (33) = happyShift action_25
+action_21 (11) = happyGoto action_24
+action_21 _ = happyFail (happyExpListPerState 21)
 
-action_22 (33) = happyShift action_25
-action_22 (11) = happyGoto action_24
-action_22 _ = happyFail (happyExpListPerState 22)
+action_22 _ = happyReduce_28
 
 action_23 _ = happyReduce_3
 
@@ -218,14 +221,18 @@ action_32 _ = happyReduce_19
 action_33 (38) = happyShift action_73
 action_33 _ = happyFail (happyExpListPerState 33)
 
+action_34 (35) = happyShift action_20
 action_34 (44) = happyShift action_72
+action_34 (50) = happyShift action_22
 action_34 _ = happyFail (happyExpListPerState 34)
 
 action_35 (40) = happyShift action_71
 action_35 (10) = happyGoto action_70
 action_35 _ = happyReduce_12
 
+action_36 (35) = happyShift action_20
 action_36 (44) = happyShift action_69
+action_36 (50) = happyShift action_22
 action_36 _ = happyFail (happyExpListPerState 36)
 
 action_37 _ = happyReduce_14
@@ -269,7 +276,9 @@ action_39 _ = happyReduce_32
 
 action_40 _ = happyReduce_9
 
+action_41 (35) = happyShift action_20
 action_41 (44) = happyShift action_123
+action_41 (50) = happyShift action_22
 action_41 _ = happyFail (happyExpListPerState 41)
 
 action_42 _ = happyReduce_40
@@ -1508,9 +1517,13 @@ action_151 _ = happyReduce_69
 action_152 _ = happyReduce_49
 
 action_153 (34) = happyShift action_166
+action_153 (35) = happyShift action_20
+action_153 (50) = happyShift action_22
 action_153 _ = happyFail (happyExpListPerState 153)
 
+action_154 (35) = happyShift action_20
 action_154 (40) = happyShift action_165
+action_154 (50) = happyShift action_22
 action_154 _ = happyFail (happyExpListPerState 154)
 
 action_155 (31) = happyShift action_95
@@ -2150,7 +2163,7 @@ happyReduction_21 (_ `HappyStk`
 	(HappyAbsSyn18  happy_var_2) `HappyStk`
 	_ `HappyStk`
 	happyRest) tk
-	 = happyThen ((( typeDefHandle happy_var_2 happy_var_3))
+	 = happyThen ((( wrapTypeDef (Typedef happy_var_2 happy_var_3) happy_var_3))
 	) (\r -> happyReturn (HappyAbsSyn16 r))
 
 happyReduce_22 = happySpecReduce_3  17 happyReduction_22
@@ -2175,7 +2188,7 @@ happyReduction_24 _
 	)
 
 happyReduce_25 = happySpecReduce_1  18 happyReduction_25
-happyReduction_25 (HappyTerminal (TokTypeIdent happy_var_1))
+happyReduction_25 (HappyTerminal (TokTypeDefIdent happy_var_1))
 	 =  HappyAbsSyn18
 		 (DEF happy_var_1
 	)
@@ -2190,7 +2203,7 @@ happyReduction_26 _
 happyReduce_27 = happySpecReduce_3  18 happyReduction_27
 happyReduction_27 _
 	_
-	(HappyTerminal (TokTypeIdent happy_var_1))
+	(HappyAbsSyn18  happy_var_1)
 	 =  HappyAbsSyn18
 		 (ARRAY happy_var_1
 	)
@@ -2198,7 +2211,7 @@ happyReduction_27 _ _ _  = notHappyAtAll
 
 happyReduce_28 = happySpecReduce_2  18 happyReduction_28
 happyReduction_28 _
-	(HappyTerminal (TokTypeIdent happy_var_1))
+	(HappyAbsSyn18  happy_var_1)
 	 =  HappyAbsSyn18
 		 (POINTER happy_var_1
 	)
@@ -2759,7 +2772,7 @@ happyReduction_93 (HappyTerminal (TokHex happy_var_1))
 happyReduction_93 _  = notHappyAtAll 
 
 happyNewToken action sts stk
-	= lexTokens(\tk -> 
+	= lexer(\tk -> 
 	let cont i = action i i tk (HappyState action) sts stk in
 	case tk of {
 	TokEOF -> action 87 87 tk (HappyState action) sts stk;
@@ -2775,7 +2788,7 @@ happyNewToken action sts stk
 	TokComma -> cont 40;
 	TokDec happy_dollar_dollar -> cont 41;
 	TokHex happy_dollar_dollar -> cont 42;
-	TokTypeIdent happy_dollar_dollar -> cont 43;
+	TokTypeDefIdent happy_dollar_dollar -> cont 43;
 	TokIdent happy_dollar_dollar -> cont 44;
 	TokReturn -> cont 45;
 	TokInt -> cont 46;
@@ -2825,15 +2838,15 @@ happyNewToken action sts stk
 happyError_ explist 87 tk = happyError' (tk, explist)
 happyError_ explist _ tk = happyError' (tk, explist)
 
-happyThen :: () => Alex a -> (a -> Alex b) -> Alex b
+happyThen :: () => P a -> (a -> P b) -> P b
 happyThen = (>>=)
-happyReturn :: () => a -> Alex a
+happyReturn :: () => a -> P a
 happyReturn = (return)
-happyThen1 :: () => Alex a -> (a -> Alex b) -> Alex b
+happyThen1 :: () => P a -> (a -> P b) -> P b
 happyThen1 = happyThen
-happyReturn1 :: () => a -> Alex a
+happyReturn1 :: () => a -> P a
 happyReturn1 = happyReturn
-happyError' :: () => ((Token), [String]) -> Alex a
+happyError' :: () => ((Token), [String]) -> P a
 happyError' tk = (\(tokens, _) -> parseError tokens) tk
 parseTokens = happySomeParser where
  happySomeParser = happyThen (happyParse action_0) (\x -> case x of {HappyAbsSyn4 z -> happyReturn z; _other -> notHappyAtAll })
@@ -2841,43 +2854,19 @@ parseTokens = happySomeParser where
 happySeq = happyDontSeq
 
 
-lexTokens :: (Token -> Alex a) -> Alex a
-lexTokens cont = do
-      token <- alexMonadScan
-      case token of
-            TokIdent s -> let
-                        Alex Right(_, defset) = getDefinedSet
-                  in
-                        if(Set.member s defset) then cont (TokTypeIdent s)
-                        else cont (TokIdent s)
-            _ -> cont token
-
-parseError :: [Token] -> Alex a
-parseError t = alexError ("Parse Error " ++ (show t))
-
-typeDefHandle :: Type -> Ident -> Gdecl 
-typeDefHandle tp name = do
-      addDefinedState name 
-      return $ TypeDef tp name
+parseError :: Token -> P a
+parseError t = error ("Parse Error " ++ (show t))
 
 checkSimpAsgn :: Exp -> Asnop -> Exp -> Simp
 checkSimpAsgn id op e =
     case id of
-        Ident _ -> Asgn id op e
-        Ptrderef _ -> Asgn id op e
-        Access _ _ -> Asgn id op e
-        Field _ _ -> Asgn id op e
-        ArrayAccess _ _ -> Asgn id op e
+        Ident a -> Asgn id op e
         _ -> error "Invalid assignment to non variables"
 
 checkSimpAsgnP :: Exp -> Postop -> Simp
 checkSimpAsgnP id op =
     case id of
-        Ident _ -> AsgnP id op
-        Ptrderef _ -> AsgnP id op
-        Access _ _ -> AsgnP id op
-        Field _ _ -> AsgnP id op
-        ArrayAccess _ _ -> AsgnP id op
+        Ident a -> AsgnP id op
         _ -> error "Invalid postop assignment to non variables"
 
 checkDeclAsgn :: Ident -> Asnop -> Type -> Exp -> Decl
@@ -2889,7 +2878,10 @@ checkDeclAsgn v op tp e =
 checkDec n = if (n > 2^31) then error "Decimal too big" else Int (fromIntegral n)
 checkHex n = if (n >= 2^32) then error "Hex too big" else Int (fromIntegral n)
 
-parseInput input = runAlex input parseTokens
+wrapTypeDef td name = do
+    (str, typedefs) <- get
+    put (str, Set.insert name typedefs)
+    return td
 {-# LINE 1 "templates/GenericTemplate.hs" #-}
 {-# LINE 1 "templates/GenericTemplate.hs" #-}
 {-# LINE 1 "<built-in>" #-}

@@ -1,6 +1,6 @@
 {- Defines the Elaborated AST after the elaboration process
 -}
-
+--TODO: Add new Exps to the EAST
 module Compile.Types.EAST where
 
 import Compile.Types.AST

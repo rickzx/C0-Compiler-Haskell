@@ -4,14 +4,17 @@ module Compile.Parser where
 import Compile.Lexer
 import Compile.Types.Ops
 import Compile.Types.AST
+import Control.Monad.State
 import qualified Data.Set as Set
+import Debug.Trace
+
 }
 
 %name parseTokens
 %tokentype { Token }
 %error { parseError }
-%monad { Alex }
-%lexer { lexTokens } { TokEOF }
+%monad { P }
+%lexer { lexer } { TokEOF }
 
 %token
   '.'     {TokField}
@@ -26,7 +29,7 @@ import qualified Data.Set as Set
   ','     {TokComma}
   dec     {TokDec $$}
   hex     {TokHex $$}
-  typeIdent {TokTypeIdent $$}
+  typeIdent {TokTypeDefIdent $$}
   ident   {TokIdent $$}
   ret     {TokReturn}
   int     {TokInt}
@@ -85,7 +88,7 @@ import qualified Data.Set as Set
 %left '<<' '>>'
 %left '+' '-'
 %left '*' '/' '%'
-%right NEG '~' '!' PTR '++' '--' 
+%right NEG '~' '!' PTR '++' '--'
 %nonassoc '[' ']' '.' '->'
 %%
 
@@ -98,7 +101,7 @@ Gdecl : Fdecl {$1}
       | Fdefn {$1}
       | Sdecl {$1}
       | Sdef {$1}
-      | Typedef {$1}
+      | Typedef ';'{$1}
 
 Fdecl : Type ident Paramlist ';' {Fdecl $1 $2 $3}
 Fdefn : Type ident Paramlist Block {Fdefn $1 $2 $3 $4}
@@ -117,7 +120,7 @@ Field : Type ident ';' {($1, $2)}
 Fieldlist : {- Empty -} {[]}
       | Field Fieldlist {$1 : $2}
 
-Typedef : typedef Type ident ';' {% typeDefHandle $2 $3}
+Typedef : typedef Type ident {% wrapTypeDef (Typedef $2 $3) $3}
 
 Block : '{' Stmts '}' {$2}
 
@@ -125,8 +128,8 @@ Type  : int {INTEGER}
       | bool {BOOLEAN}
       | typeIdent {DEF $1}
       | void {VOID}
-      | typeIdent '[' ']'{ARRAY $1}
-      | typeIdent '*'{POINTER $1}
+      | Type '[' ']'{ARRAY $1}
+      | Type '*'{POINTER $1}
       | struct ident {STRUCT $2}
 
 Decl  : Type ident asgnop Exp {checkDeclAsgn $2 $3 $1 $4}
@@ -206,43 +209,19 @@ Intconst  : dec {checkDec $1}
           | hex {checkHex $1}
 
 {
-lexTokens :: (Token -> Alex a) -> Alex a
-lexTokens cont = do
-      token <- alexMonadScan
-      case token of
-            TokIdent s -> let
-                        Alex Right(_, defset) = getDefinedSet
-                  in
-                        if(Set.member s defset) then cont (TokTypeIdent s)
-                        else cont (TokIdent s)
-            _ -> cont token
-
-parseError :: [Token] -> Alex a
-parseError t = alexError ("Parse Error " ++ (show t))
-
-typeDefHandle :: Type -> Ident -> Gdecl 
-typeDefHandle tp name = do
-      addDefinedState name 
-      return $ TypeDef tp name
+parseError :: Token -> P a
+parseError t = error ("Parse Error " ++ (show t))
 
 checkSimpAsgn :: Exp -> Asnop -> Exp -> Simp
 checkSimpAsgn id op e =
     case id of
-        Ident _ -> Asgn id op e
-        Ptrderef _ -> Asgn id op e
-        Access _ _ -> Asgn id op e
-        Field _ _ -> Asgn id op e
-        ArrayAccess _ _ -> Asgn id op e
+        Ident a -> Asgn id op e
         _ -> error "Invalid assignment to non variables"
 
 checkSimpAsgnP :: Exp -> Postop -> Simp
 checkSimpAsgnP id op =
     case id of
-        Ident _ -> AsgnP id op
-        Ptrderef _ -> AsgnP id op
-        Access _ _ -> AsgnP id op
-        Field _ _ -> AsgnP id op
-        ArrayAccess _ _ -> AsgnP id op
+        Ident a -> AsgnP id op
         _ -> error "Invalid postop assignment to non variables"
 
 checkDeclAsgn :: Ident -> Asnop -> Type -> Exp -> Decl
@@ -254,5 +233,8 @@ checkDeclAsgn v op tp e =
 checkDec n = if (n > 2^31) then error "Decimal too big" else Int (fromIntegral n)
 checkHex n = if (n >= 2^32) then error "Hex too big" else Int (fromIntegral n)
 
-parseInput input = runAlex input parseTokens
+wrapTypeDef td name = do
+    (str, typedefs) <- get
+    put (str, Set.insert name typedefs)
+    return td
 }

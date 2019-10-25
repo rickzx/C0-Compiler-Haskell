@@ -1,11 +1,14 @@
 {-# OPTIONS_GHC -fno-warn-unused-binds -fno-warn-missing-signatures #-}
 {-# LANGUAGE CPP #-}
-{-# LINE 1 "lex.x" #-}
+{-# LINE 1 "Lex.x" #-}
 
 module Compile.Lexer where
 
 import Compile.Types.Ops
+import Control.Monad.State
 import qualified Data.Set as Set
+import Data.Word
+
 
 #if __GLASGOW_HASKELL__ >= 603
 #include "ghcconfig.h"
@@ -26,8 +29,8 @@ import Array
 -- it for any purpose whatsoever.
 
 
-import Control.Applicative as App (Applicative (..))
-import qualified Control.Monad (ap)
+
+
 
 
 import Data.Word (Word8)
@@ -79,23 +82,23 @@ type Byte = Word8
 -- The input type
 
 
-type AlexInput = (AlexPosn,     -- current position,
-                  Char,         -- previous char
-                  [Byte],       -- pending bytes on current char
-                  String)       -- current input string
 
-ignorePendingBytes :: AlexInput -> AlexInput
-ignorePendingBytes (p,c,_ps,s) = (p,c,[],s)
 
-alexInputPrevChar :: AlexInput -> Char
-alexInputPrevChar (_p,c,_bs,_s) = c
 
-alexGetByte :: AlexInput -> Maybe (Byte,AlexInput)
-alexGetByte (p,c,(b:bs),s) = Just (b,(p,c,bs,s))
-alexGetByte (_,_,[],[]) = Nothing
-alexGetByte (p,_,[],(c:s))  = let p' = alexMove p c
-                                  (b:bs) = utf8Encode c
-                              in p' `seq`  Just (b, (p', c, bs, s))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -168,129 +171,129 @@ alexGetByte (p,_,[],(c:s))  = let p' = alexMove p c
 -- assuming the usual eight character tab stops.
 
 
-data AlexPosn = AlexPn !Int !Int !Int
-        deriving (Eq,Show)
 
-alexStartPos :: AlexPosn
-alexStartPos = AlexPn 0 1 1
 
-alexMove :: AlexPosn -> Char -> AlexPosn
-alexMove (AlexPn a l c) '\t' = AlexPn (a+1)  l     (((c+alex_tab_size-1) `div` alex_tab_size)*alex_tab_size+1)
-alexMove (AlexPn a l _) '\n' = AlexPn (a+1) (l+1)   1
-alexMove (AlexPn a l c) _    = AlexPn (a+1)  l     (c+1)
+
+
+
+
+
+
+
+
 
 
 -- -----------------------------------------------------------------------------
 -- Default monad
 
 
-data AlexState = AlexState {
-        alex_pos :: !AlexPosn,  -- position at current input location
-        alex_inp :: String,     -- the current input
-        alex_chr :: !Char,      -- the character before the input
-        alex_bytes :: [Byte],
-        alex_scd :: !Int        -- the current startcode
-
-      , alex_ust :: AlexUserState -- AlexUserState will be defined in the user program
-
-    }
-
--- Compile with -funbox-strict-fields for best results!
-
-runAlex :: String -> Alex a -> Either String a
-runAlex input__ (Alex f)
-   = case f (AlexState {alex_pos = alexStartPos,
-                        alex_inp = input__,
-                        alex_chr = '\n',
-                        alex_bytes = [],
-
-                        alex_ust = alexInitUserState,
-
-                        alex_scd = 0}) of Left msg -> Left msg
-                                          Right ( _, a ) -> Right a
-
-newtype Alex a = Alex { unAlex :: AlexState -> Either String (AlexState, a) }
-
-instance Functor Alex where
-  fmap f a = Alex $ \s -> case unAlex a s of
-                            Left msg -> Left msg
-                            Right (s', a') -> Right (s', f a')
-
-instance Applicative Alex where
-  pure a   = Alex $ \s -> Right (s, a)
-  fa <*> a = Alex $ \s -> case unAlex fa s of
-                            Left msg -> Left msg
-                            Right (s', f) -> case unAlex a s' of
-                                               Left msg -> Left msg
-                                               Right (s'', b) -> Right (s'', f b)
-
-instance Monad Alex where
-  m >>= k  = Alex $ \s -> case unAlex m s of
-                                Left msg -> Left msg
-                                Right (s',a) -> unAlex (k a) s'
-  return = App.pure
-
-alexGetInput :: Alex AlexInput
-alexGetInput
- = Alex $ \s@AlexState{alex_pos=pos,alex_chr=c,alex_bytes=bs,alex_inp=inp__} ->
-        Right (s, (pos,c,bs,inp__))
-
-alexSetInput :: AlexInput -> Alex ()
-alexSetInput (pos,c,bs,inp__)
- = Alex $ \s -> case s{alex_pos=pos,alex_chr=c,alex_bytes=bs,alex_inp=inp__} of
-                  state__@(AlexState{}) -> Right (state__, ())
-
-alexError :: String -> Alex a
-alexError message = Alex $ const $ Left message
-
-alexGetStartCode :: Alex Int
-alexGetStartCode = Alex $ \s@AlexState{alex_scd=sc} -> Right (s, sc)
-
-alexSetStartCode :: Int -> Alex ()
-alexSetStartCode sc = Alex $ \s -> Right (s{alex_scd=sc}, ())
 
 
-alexGetUserState :: Alex AlexUserState
-alexGetUserState = Alex $ \s@AlexState{alex_ust=ust} -> Right (s,ust)
-
-alexSetUserState :: AlexUserState -> Alex ()
-alexSetUserState ss = Alex $ \s -> Right (s{alex_ust=ss}, ())
 
 
-alexMonadScan = do
-  inp__ <- alexGetInput
-  sc <- alexGetStartCode
-  case alexScan inp__ sc of
-    AlexEOF -> alexEOF
-    AlexError ((AlexPn _ line column),_,_,_) -> alexError $ "lexical error at line " ++ (show line) ++ ", column " ++ (show column)
-    AlexSkip  inp__' _len -> do
-        alexSetInput inp__'
-        alexMonadScan
-    AlexToken inp__' len action -> do
-        alexSetInput inp__'
-        action (ignorePendingBytes inp__) len
 
--- -----------------------------------------------------------------------------
--- Useful token actions
 
-type AlexAction result = AlexInput -> Int -> Alex result
 
--- just ignore this token and scan another one
--- skip :: AlexAction result
-skip _input _len = alexMonadScan
 
--- ignore this token, but set the start code to a new value
--- begin :: Int -> AlexAction result
-begin code _input _len = do alexSetStartCode code; alexMonadScan
 
--- perform an action for this token, and set the start code to a new value
-andBegin :: AlexAction result -> Int -> AlexAction result
-(action `andBegin` code) input__ len = do
-  alexSetStartCode code
-  action input__ len
 
-token :: (AlexInput -> Int -> token) -> AlexAction token
-token t input__ len = return (t input__ len)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -403,26 +406,26 @@ token t input__ len = return (t input__ len)
 -- Basic wrapper
 
 
+type AlexInput = (Char,[Byte],String)
 
+alexInputPrevChar :: AlexInput -> Char
+alexInputPrevChar (c,_,_) = c
 
+-- alexScanTokens :: String -> [token]
+alexScanTokens str = go ('\n',[],str)
+  where go inp__@(_,_bs,s) =
+          case alexScan inp__ 0 of
+                AlexEOF -> []
+                AlexError _ -> error "lexical error"
+                AlexSkip  inp__' _ln     -> go inp__'
+                AlexToken inp__' len act -> act (take len s) : go inp__'
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+alexGetByte :: AlexInput -> Maybe (Byte,AlexInput)
+alexGetByte (c,(b:bs),s) = Just (b,(c,bs,s))
+alexGetByte (_,[],[])    = Nothing
+alexGetByte (_,[],(c:s)) = case utf8Encode c of
+                             (b:bs) -> Just (b, (c, bs, s))
+                             [] -> Nothing
 
 
 
@@ -702,8 +705,8 @@ alex_table = listArray (0 :: Int, 7761)
   , 34
   , 43
   , 0
-  , 141
-  , 142
+  , 143
+  , 144
   , 32
   , 31
   , 148
@@ -753,9 +756,9 @@ alex_table = listArray (0 :: Int, 7761)
   , 107
   , 107
   , 107
-  , 143
+  , 141
   , 42
-  , 144
+  , 142
   , 51
   , 107
   , 11
@@ -16649,10 +16652,10 @@ alex_actions = array (0 :: Int, 137)
   , (0,alex_action_69)
   ]
 
-{-# LINE 101 "lex.x" #-}
+{-# LINE 105 "Lex.x" #-}
 
--- Each action has type :: (Alex $Posn, Char, [Byte], String) -> Token
--- The Alex $ token type:
+-- Each action has type :: String -> Token
+-- The token type:
 data Token =
   TokLParen |
   TokRParen |
@@ -16708,29 +16711,36 @@ data Token =
   TokEOF |
   TokArrayAlloc |
   TokField |
-  TokTypeIdent String |
+  TokTypeDefIdent String |
   TokReserved
   deriving (Eq,Show)
 
-alexEOF = return TokEOF
+-- Our Parser monad
+type P a = State (AlexInput, Set.Set String) a
 
-data AlexUserState = AlexUserState
-  {
-    tdefset :: (Set.Set String)
-  }
+evalP::P a -> (AlexInput, Set.Set String) -> a
+evalP = evalState
 
-alexInitUserState :: AlexUserState
-alexInitUserState = AlexUserState
-  {
-    tdefset = Set.empty
-  }
+-- Action to read a token
+readToken :: P Token
+readToken = do
+    (s@(_, _, str), typedefs) <- get
+    case alexScan s 0 of
+        AlexEOF -> return TokEOF
+        AlexError _ -> error "Lexical Error"
+        AlexSkip inp' _ -> do
+            put (inp', typedefs)
+            readToken
+        AlexToken inp' len act -> do
+            put (inp', typedefs)
+            let tk = act (take len str)
+            case tk of
+                TokIdent x -> if (Set.member x typedefs) then return (TokTypeDefIdent x) else return tk
+                _ -> return tk
 
-getDefinedSet :: Alex (Set.Set String)
-getDefinedSet = Alex $ \s@AlexState{alex_ust=ust} -> Right (s, tdefset ust)
-
-addDefinedSet :: String -> Alex ()
-addDefinedSet ds = Alex $ \s -> Right (s{alex_ust=(alex_ust s){tdefset=
-  Set.insert ds (tdefset(alex_ust s))}}, ())
+-- The lexer function to be passed to Happy
+lexer :: (Token -> P a)->P a
+lexer cont = readToken >>= cont
 
 removeComments :: String -> String
 removeComments s = removeCommentsHelp 0 s
@@ -16747,7 +16757,7 @@ removeCommentsHelp n (x:y:xs) =
     "/*" -> removeCommentsHelp (n+1) xs
     "*/" ->
       if (n > 0)
-      then removeCommentsHelp (n-1) xs
+      then (' ':(removeCommentsHelp (n-1) xs))
       else error "Unmatched block comment closer"
     "//" ->
       if (n > 0)
@@ -16764,78 +16774,75 @@ removeLineComment (x:xs) =
   if (x == '\n')
   then (x:xs)
   else removeLineComment xs
-
-lexProgram s = removeComments s
-
-alex_action_0 = Alex (TokReserved)
-alex_action_1 = Alex (TokStruct)
-alex_action_2 = Alex (TokTypeDef)
-alex_action_3 = Alex (TokReserved)
-alex_action_4 = Alex (TokAssert)
-alex_action_5 = Alex (TokNULL)
-alex_action_6 = Alex (TokAlloc)
-alex_action_7 = Alex (TokArrayAlloc)
-alex_action_8 = Alex (TokVoid)
-alex_action_9 = Alex (TokReserved)
-alex_action_10 = Alex (TokReserved)
-alex_action_11 = Alex (TokIf)
-alex_action_12 = Alex (TokElse)
-alex_action_13 = Alex (TokWhile)
-alex_action_14 = Alex (TokFor)
-alex_action_15 = Alex (TokTrue)
-alex_action_16 = Alex (TokFalse)
-alex_action_17 = Alex (TokAccess)
-alex_action_18 = Alex (TokMinus)
-alex_action_19 = Alex (TokPlus)
-alex_action_20 = Alex (TokTimes)
-alex_action_21 = Alex (TokDiv)
-alex_action_22 = Alex (TokMod)
-alex_action_23 = Alex (TokLess)
-alex_action_24 = Alex (TokGreater)
-alex_action_25 = Alex (TokGeq)
-alex_action_26 = Alex (TokLeq)
-alex_action_27 = Alex (TokBoolEq)
-alex_action_28 = Alex (TokNotEq)
-alex_action_29 = Alex (TokBoolAnd)
-alex_action_30 = Alex (TokBoolOr)
-alex_action_31 = Alex (TokAnd)
-alex_action_32 = Alex (TokOr)
-alex_action_33 = Alex (TokLshift)
-alex_action_34 = Alex (TokRshift)
-alex_action_35 = Alex (TokIncr)
-alex_action_36 = Alex (TokDecr)
-alex_action_37 = Alex (TokTIf)
-alex_action_38 = Alex (TokTElse)
-alex_action_39 = Alex (TokXor)
-alex_action_40 = Alex (TokUnop (LNot))
-alex_action_41 = Alex (TokUnop (BNot))
-alex_action_42 = Alex (TokAsgnop Equal)
-alex_action_43 = Alex (TokAsgnop (AsnOp Add))
-alex_action_44 = Alex (TokAsgnop (AsnOp Sub))
-alex_action_45 = Alex (TokAsgnop (AsnOp Mul))
-alex_action_46 = Alex (TokAsgnop (AsnOp Div))
-alex_action_47 = Alex (TokAsgnop (AsnOp Mod))
-alex_action_48 = Alex (TokAsgnop (AsnOp Xor))
-alex_action_49 = Alex (TokAsgnop (AsnOp BOr))
-alex_action_50 = Alex (TokAsgnop (AsnOp BAnd))
-alex_action_51 = Alex (TokAsgnop (AsnOp Sal))
-alex_action_52 = Alex (TokAsgnop (AsnOp Sar))
-alex_action_54 = Alex (TokDec 0)
-alex_action_55 = (\(_, _, _, s) _ -> Alex $ TokDec (read(s)))
-alex_action_56 = (\(_, _, _, s) _ -> Alex $ TokHex (read(s)))
-alex_action_57 = Alex (TokReturn)
-alex_action_58 = Alex (TokInt)
-alex_action_59 = Alex (TokBool)
-alex_action_60 = \(_, _, _, s) _-> Alex $ TokIdent (read(s))
-alex_action_61 = Alex (TokLParen)
-alex_action_62 = Alex (TokRParen)
-alex_action_63 = Alex (TokLBracket)
-alex_action_64 = Alex (TokRBracket)
-alex_action_65 = Alex (TokLBrace)
-alex_action_66 = Alex (TokRBrace)
-alex_action_67 = Alex (TokSemi)
-alex_action_68 = Alex (TokComma)
-alex_action_69 = Alex (TokField)
+alex_action_0 = \_ -> TokReserved
+alex_action_1 = \_ -> TokStruct
+alex_action_2 = \_ -> TokTypeDef
+alex_action_3 = \_ -> TokReserved
+alex_action_4 = \_ -> TokAssert
+alex_action_5 = \_ -> TokReserved
+alex_action_6 = \_ -> TokAlloc
+alex_action_7 = \_ -> TokArrayAlloc
+alex_action_8 = \_ -> TokVoid
+alex_action_9 = \_ -> TokReserved
+alex_action_10 = \_ -> TokReserved
+alex_action_11 = \_ -> TokIf
+alex_action_12 = \_ -> TokElse
+alex_action_13 = \_ -> TokWhile
+alex_action_14 = \_ -> TokFor
+alex_action_15 = \_ -> TokTrue
+alex_action_16 = \_ -> TokFalse
+alex_action_17 = \_ -> TokAccess
+alex_action_18 = \_ -> TokMinus
+alex_action_19 = \_ -> TokPlus
+alex_action_20 = \_ -> TokTimes
+alex_action_21 = \_ -> TokDiv
+alex_action_22 = \_ -> TokMod
+alex_action_23 = \_ -> TokLess
+alex_action_24 = \_ -> TokGreater
+alex_action_25 = \_ -> TokGeq
+alex_action_26 = \_ -> TokLeq
+alex_action_27 = \_ -> TokBoolEq
+alex_action_28 = \_ -> TokNotEq
+alex_action_29 = \_ -> TokBoolAnd
+alex_action_30 = \_ -> TokBoolOr
+alex_action_31 = \_ -> TokAnd
+alex_action_32 = \_ -> TokOr
+alex_action_33 = \_ -> TokLshift
+alex_action_34 = \_ -> TokRshift
+alex_action_35 = \_ -> TokIncr
+alex_action_36 = \_ -> TokDecr
+alex_action_37 = \_ -> TokTIf
+alex_action_38 = \_ -> TokTElse
+alex_action_39 = \_ -> TokXor
+alex_action_40 = \_ -> TokUnop (LNot)
+alex_action_41 = \_ -> TokUnop (BNot)
+alex_action_42 = \_ -> TokAsgnop Equal
+alex_action_43 = \_ -> TokAsgnop (AsnOp Add)
+alex_action_44 = \_ -> TokAsgnop (AsnOp Sub)
+alex_action_45 = \_ -> TokAsgnop (AsnOp Mul)
+alex_action_46 = \_ -> TokAsgnop (AsnOp Div)
+alex_action_47 = \_ -> TokAsgnop (AsnOp Mod)
+alex_action_48 = \_ -> TokAsgnop (AsnOp Xor)
+alex_action_49 = \_ -> TokAsgnop (AsnOp BOr)
+alex_action_50 = \_ -> TokAsgnop (AsnOp BAnd)
+alex_action_51 = \_ -> TokAsgnop (AsnOp Sal)
+alex_action_52 = \_ -> TokAsgnop (AsnOp Sar)
+alex_action_54 = \_ -> TokDec 0
+alex_action_55 = \s -> TokDec (read s)
+alex_action_56 = \s -> TokHex (read s)
+alex_action_57 = \_ -> TokReturn
+alex_action_58 = \_ -> TokInt
+alex_action_59 = \_ -> TokBool
+alex_action_60 = \s -> TokIdent s
+alex_action_61 = \_ -> TokLBracket
+alex_action_62 = \_ -> TokRBracket
+alex_action_63 = \_ -> TokLParen
+alex_action_64 = \_ -> TokRParen
+alex_action_65 = \_ -> TokLBrace
+alex_action_66 = \_ -> TokRBrace
+alex_action_67 = \_ -> TokSemi
+alex_action_68 = \_ -> TokComma
+alex_action_69 = \_ -> TokField
 {-# LINE 1 "templates/GenericTemplate.hs" #-}
 -- -----------------------------------------------------------------------------
 -- ALEX TEMPLATE

@@ -342,49 +342,49 @@ eElse eopt context allDef =
         ElseNop -> ENop
         Else stmt -> eStmt stmt context allDef
 
---compute the factorial of a number example.
-exAST :: AST
-exAST =
-    Program
-        [ Typedef INTEGER "hh"
-        , Fdecl VOID "o98k" [(INTEGER, "n"), (DEF "hh", "j")]
-        , Fdefn
-              (DEF "hh")
-              "fact_spec"
-              [(INTEGER, "n")]
-              [ ControlStmt
-                    (Condition
-                         (Binop Eql (Ident "n") (Int 0))
-                         (ControlStmt $ Retn (Int 1))
-                         (Else $
-                          ControlStmt $
-                          Retn (Binop Mul (Ident "n") (Function "fast_spec" [(Binop Sub (Ident "n") (Int 1))]))))
-              ]
-        , Fdefn
-              (DEF "hh")
-              "factorial"
-              [(INTEGER, "n")]
-              [ Simp $ Decl $ DeclAsgn "total" (DEF "hh") (Int 1)
-              , Simp $ Decl $ DeclAsgn "count" INTEGER (Int 0)
-              , ControlStmt $
-                While
-                    (Binop Lt (Ident "count") (Ident "n"))
-                    (Stmts [Simp (AsgnP "count" Incr), Simp (Asgn "total" (AsnOp Mul) (Ident "count"))])
-              , ControlStmt $ Retn (Ident "total")
-              ]
-        , Fdefn
-              INTEGER
-              "main"
-              []
-              [ ControlStmt $
-                For
-                    (Opt $ Decl (DeclAsgn "i" (DEF "hh") (Int 0)))
-                    (Binop Lt (Ident "i") (Int 10))
-                    (Opt (AsgnP "i" Incr))
-                    (Stmts [Simp $ Exp $ Function "factorial" [Ident "i"]])
-              , ControlStmt $ Retn (Int 0)
-              ]
-        ]
+----compute the factorial of a number example.
+--exAST :: AST
+--exAST =
+--    Program
+--        [ Typedef INTEGER "hh"
+--        , Fdecl VOID "o98k" [(INTEGER, "n"), (DEF "hh", "j")]
+--        , Fdefn
+--              (DEF "hh")
+--              "fact_spec"
+--              [(INTEGER, "n")]
+--              [ ControlStmt
+--                    (Condition
+--                         (Binop Eql (Ident "n") (Int 0))
+--                         (ControlStmt $ Retn (Int 1))
+--                         (Else $
+--                          ControlStmt $
+--                          Retn (Binop Mul (Ident "n") (Function "fast_spec" [(Binop Sub (Ident "n") (Int 1))]))))
+--              ]
+--        , Fdefn
+--              (DEF "hh")
+--              "factorial"
+--              [(INTEGER, "n")]
+--              [ Simp $ Decl $ DeclAsgn "total" (DEF "hh") (Int 1)
+--              , Simp $ Decl $ DeclAsgn "count" INTEGER (Int 0)
+--              , ControlStmt $
+--                While
+--                    (Binop Lt (Ident "count") (Ident "n"))
+--                    (Stmts [Simp (AsgnP "count" Incr), Simp (Asgn "total" (AsnOp Mul) (Ident "count"))])
+--              , ControlStmt $ Retn (Ident "total")
+--              ]
+--        , Fdefn
+--              INTEGER
+--              "main"
+--              []
+--              [ ControlStmt $
+--                For
+--                    (Opt $ Decl (DeclAsgn "i" (DEF "hh") (Int 0)))
+--                    (Binop Lt (Ident "i") (Int 10))
+--                    (Opt (AsgnP "i" Incr))
+--                    (Stmts [Simp $ Exp $ Function "factorial" [Ident "i"]])
+--              , ControlStmt $ Retn (Int 0)
+--              ]
+--        ]
 --testEAST :: IO ()
 --testEAST =
 --    let (east, globs) = eGen exAST
