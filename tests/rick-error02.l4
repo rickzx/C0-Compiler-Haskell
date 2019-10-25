@@ -1,8 +1,10 @@
 //test memerror
 //test array out of bound
 
+typedef int abc;
+
 struct S {
-	int[] A;
+	abc[] A;
 };
 
 int main() {
