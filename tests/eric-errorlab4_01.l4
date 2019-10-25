@@ -1,0 +1,21 @@
+//test error
+
+struct node{
+    int ojbk;
+    struct node* ozbk;
+};
+
+typedef struct node *node;
+
+struct slice{
+    node isCool;
+    bool notcool;
+};
+
+typedef struct slice *sll;
+int main(){
+    struct slice* slc = alloc(struct slice);
+    node t = slc.isCool;
+    assert(t->ozbk == NULL);
+    return 1;
+}

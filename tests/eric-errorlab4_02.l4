@@ -1,5 +1,6 @@
-//test memerror
+//test error
 
+//check NULL stuff
 struct node{
     int ojbk;
     struct node* ozbk;
@@ -14,8 +15,8 @@ struct slice{
 
 typedef struct slice* sll;
 int main(){
-    struct slice* slc = alloc(struct slice);
-    node t = slc->isCool;
-    assert(t->ozbk == NULL);
+    struct slice* slc = NULL;
+    node t = NULL;
+    assert(slc== t);
     return 1;
 }
