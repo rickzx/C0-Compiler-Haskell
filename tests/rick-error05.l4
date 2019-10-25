@@ -1,0 +1,11 @@
+//test error
+//test struct name
+
+struct S {
+	int S;
+	bool S;
+};
+
+int main() {
+	return 0;
+}
