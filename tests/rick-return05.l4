@@ -1,0 +1,50 @@
+//test return 5050;
+//test Binary Indexed Tree(Fenwick Tree) (https://www.hackerearth.com/practice/data-structures/advanced-data-structures/fenwick-binary-indexed-trees/tutorial/)
+
+struct bit {
+	int size;
+	int[] sum;
+};
+
+typedef struct bit BIT;
+
+BIT* bit_create(int n) {
+	BIT* bit = alloc(BIT);
+	bit -> sum = alloc_array(int, n + 1);
+	bit -> size = n + 1;
+
+	return bit;
+}
+
+void bit_update(BIT* bit, int i, int val) {
+	i++;
+
+	while (i < bit -> size) {
+		bit -> sum[i] += val;
+		i += i & -i;
+	}
+}
+
+int bit_getSum(BIT* bit, int i) {
+	i++;
+
+	int r = 0;
+	while (i > 0) {
+		r += bit -> sum[i];
+		i -= i & -i;
+	}
+
+	return r;
+}
+
+int main() {
+	int size = 1000;
+
+	BIT* bit = bit_create(size);
+
+	for (int i = 0; i < size; i++) {
+		bit_update(bit, i, i);
+	}
+
+	return bit_getSum(bit, 100);
+}

@@ -1,0 +1,42 @@
+//test return 49
+//test array of structs
+
+struct student {
+	bool gender;
+	int year;
+	int grades;
+};
+
+typedef struct student STUDENT;
+
+struct class {
+	int size;
+	STUDENT[] students;
+};
+
+typedef struct class CLASS;
+
+int average(CLASS* class) {
+	int size = class -> size;
+	int sum = 0;
+
+	for (int i = 0; i < size; i++) {
+		sum += class -> students[i].grades;
+	}
+
+	return sum / size;
+} 
+
+int main() {
+	CLASS* c = alloc(CLASS);
+	c -> size = 100;
+	c -> students = alloc_array(STUDENT, c -> size);
+
+	for (int i = 0; i < 100; i++) {
+		c -> students[i].gender = true;
+		c -> students[i].year = i % 4 + 1;
+		c -> students[i].grades = i;
+	}
+	
+	return average(c);
+}

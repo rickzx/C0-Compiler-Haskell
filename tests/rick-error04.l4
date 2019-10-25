@@ -1,0 +1,13 @@
+//test error
+//test shadowing
+
+typedef int abc;
+
+struct abc {
+	int x;
+};
+
+int main() {
+	int abc = 5;
+	return abc;
+}
