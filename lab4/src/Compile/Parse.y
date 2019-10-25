@@ -101,7 +101,7 @@ Gdecl : Fdecl {$1}
       | Fdefn {$1}
       | Sdecl {$1}
       | Sdef {$1}
-      | Typedef ';'{$1}
+      | Typedef ';' {$1}
 
 Fdecl : Type ident Paramlist ';' {Fdecl $1 $2 $3}
 Fdefn : Type ident Paramlist Block {Fdefn $1 $2 $3 $4}
@@ -233,6 +233,7 @@ checkDeclAsgn v op tp e =
 checkDec n = if (n > 2^31) then error "Decimal too big" else Int (fromIntegral n)
 checkHex n = if (n >= 2^32) then error "Hex too big" else Int (fromIntegral n)
 
+wrapTypeDef :: a -> String -> P a
 wrapTypeDef td name = do
     (str, typedefs) <- get
     put (str, Set.insert name typedefs)

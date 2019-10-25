@@ -84,7 +84,7 @@ elabHeader (x:xs) =
                         elabHeader xs
         Typedef typ nme -> do
             declared <- gets funDeclared
-            if typ == VOID then throwE "Cannot typdef VOID" else 
+            if typ == VOID then throwE "Cannot typdef VOID" else
                 if Map.member nme declared then throwE $ "Typdef uses a function name " ++ nme else do
                 typDefed <- gets typeDefined
                 case Map.lookup nme typDefed of
@@ -138,8 +138,8 @@ elabGdecls (x:xs) header allDef =
             declared <- gets funDeclared
             defined <- gets funDefined
             typDefed <- gets typeDefined
-            if Map.member nme typDefed || Map.member nme (typDef header) then throwE $ "Function uses a typedef name " ++ nme else 
-                if nme == "main" && (findType rtp (typDefed, typDef header) /= INTEGER || length param > 0) then throwE "Bad declaration for main" else do 
+            if Map.member nme typDefed || Map.member nme (typDef header) then throwE $ "Function uses a typedef name " ++ nme else
+                if nme == "main" && (findType rtp (typDefed, typDef header) /= INTEGER || length param > 0) then throwE "Bad declaration for main" else do
                     let !argtyp = extractParam param (typDefed, typDef header)
                         typ = ARROW argtyp (findType rtp (typDefed, typDef header))
                     _ <- elabGdecls [Fdecl rtp nme param] header allDef

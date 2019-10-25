@@ -23,12 +23,18 @@ data EAST
 data EExp
     = EInt Int
     | ET
-    | EF 
+    | EF
+    | ENULL 
     | EIdent Ident
     | EBinop Binop EExp EExp
     | ETernop EExp EExp EExp
     | EUnop Unop EExp
     | EFunc Ident [EExp]
+    | EAlloc Type
+    | EArrAlloc Type EExp
+    | EArrAccess EExp EExp
+    | EField EExp Ident
+    | EDeref EExp
     deriving Eq
 
 instance Show EAST where
@@ -48,6 +54,7 @@ instance Show EExp where
     show (EIdent x) = x
     show ET = "True"
     show EF = "False"
+    show ENULL = "NULL"
     show (EBinop b expr1 expr2) = show expr1 ++ " " ++ show b ++ " " ++ show expr2
     show (ETernop expr1 expr2 expr3) = show expr1 ++ " ? " ++ show expr2 ++ " : " ++ show expr3
     show (EUnop u expr1) = show u ++ show expr1
@@ -56,3 +63,8 @@ instance Show EExp where
         where 
             redu_fn :: EExp -> String -> String
             redu_fn e stri = show e ++ "," ++ stri
+    show (EAlloc t) = "alloc(" ++ show t ++ ")" 
+    show (EArrAlloc t expr) = "arrAlloc(" ++ show t ++ ", " ++ show expr ++ ")"
+    show (EArrAccess expr1 expr2) = show expr1 ++ "[" ++ show expr2 ++ "]"
+    show (EField expr nme) = show expr ++ "." ++ nme
+    show (EDeref expr) = "*" ++ show expr
