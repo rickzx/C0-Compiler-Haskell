@@ -3,11 +3,11 @@
 //test the pixel lab from 15122
 
 typedef int pixel;       // Library (concrete) view of a pixel
-typedef pixel pixel_t;   // Client  (abstract) view of a pixel
+typedef pixel pixelt;   // Client  (abstract) view of a pixel
 
 // Returns the red component of the given pixel p.
 // @ensures \result <= 255 && \result >= 0;
-int get_red(pixel p)
+int getred(pixel p)
 //@ensures \result <= 255 && \result >= 0;
 {
  return ( (p& 0x00FF0000) >> 16);
@@ -15,7 +15,7 @@ int get_red(pixel p)
 
 // Returns the green component of the given pixel p.
 // @ensures \result <= 255 && \result >= 0;
-int get_green(pixel p)
+int getgreen(pixel p)
 //@ensures \result <= 255 && \result >= 0;
 {
  return ((p & 0x0000FF00) >> 8);
@@ -23,7 +23,7 @@ int get_green(pixel p)
 
 // Returns the blue component of the given pixel p.
 // @ensures \result <= 255 && \result >= 0;
-int get_blue(pixel p)
+int getblue(pixel p)
 //@ensures \result <= 255 && \result >= 0;
 {
  return (p & 0x000000FF);
@@ -31,13 +31,13 @@ int get_blue(pixel p)
 
 // Returns the alpha component of the given pixel p.
 // @ensures \result <= 255 && \result >= 0;
-int get_alpha(pixel p)
+int getalpha(pixel p)
 //@ensures \result <= 255 && \result >= 0;
 {
  return ((p >> 24)&(0x000000FF));
 }
 
-pixel make_pixel(int alpha, int red, int green, int blue)
+pixel makepixel(int alpha, int red, int green, int blue)
 /*@requires alpha >= 0 && alpha <= 255
  @     && red >= 0 && red <= 255
  @      && green >= 0 && green <= 255
@@ -48,17 +48,17 @@ pixel make_pixel(int alpha, int red, int green, int blue)
 }
                                                                                      
 
-void histogram(pixel_t[] A, int length, int[] results)
+void histogram(pixelt[] A, int length, int[] results)
 //@requires \length(A) == length;
 //@requires \length(results) == 256;
 {
   int[] tempArray = alloc_array(int, 256);
 
   for (int i = 0; i < length; i++)
-  //@loop_invariant 0 <= i;
+  //@loopinvariant 0 <= i;
   {
-    pixel_t p = A[i];
-    int average = (get_red(p) + get_green(p) + get_blue(p)) / 3;
+    pixelt p = A[i];
+    int average = (getred(p) + getgreen(p) + getblue(p)) / 3;
     tempArray[average] = tempArray[average] + 1;
   }
   for(int i = 0; i < 256; i++)
@@ -67,19 +67,19 @@ void histogram(pixel_t[] A, int length, int[] results)
   }
 }
 int main() {
-  pixel_t[] A;
-  pixel_t[] C;
+  pixelt[] A;
+  pixelt[] C;
   int[] results = alloc_array(int, 256);
-  A = alloc_array(pixel_t, 9);
-  A[0] = make_pixel(0xFF, 0x01, 0x01, 0x01);
-  A[1] = make_pixel(0x01, 0x00, 0xFF, 0xEE);
-  A[2] = make_pixel(0xFF, 0xFF, 0xFF, 0xFF);
-  A[3] = make_pixel(0xEE, 0xFF, 0xDD, 0x00);
-  A[4] = make_pixel(0xDD, 0xCC, 0x00, 0xFF);
-  A[5] = make_pixel(0xCC, 0x00, 0xDD, 0xEE);
-  A[6] = make_pixel(0x00, 0xEE, 0xFF, 0xDD);
-  A[7] = make_pixel(0x00, 0x00, 0x00, 0x00);
-  A[8] = make_pixel(0x00, 0xDD, 0xCC, 0xBB);
+  A = alloc_array(pixelt, 9);
+  A[0] = makepixel(0xFF, 0x01, 0x01, 0x01);
+  A[1] = makepixel(0x01, 0x00, 0xFF, 0xEE);
+  A[2] = makepixel(0xFF, 0xFF, 0xFF, 0xFF);
+  A[3] = makepixel(0xEE, 0xFF, 0xDD, 0x00);
+  A[4] = makepixel(0xDD, 0xCC, 0x00, 0xFF);
+  A[5] = makepixel(0xCC, 0x00, 0xDD, 0xEE);
+  A[6] = makepixel(0x00, 0xEE, 0xFF, 0xDD);
+  A[7] = makepixel(0x00, 0x00, 0x00, 0x00);
+  A[8] = makepixel(0x00, 0xDD, 0xCC, 0xBB);
   histogram(A, 9, results);
   for (int i = 0; i < 256; i++) {
          if (i == 0x00) assert(results[i] == 1);

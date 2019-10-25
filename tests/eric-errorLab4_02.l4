@@ -3,7 +3,7 @@
 //check NULL stuff
 struct node{
     int ojbk;
-    struct node *o98k;
+    struct node *ozbk;
 };
 
 typedef struct node *node;
