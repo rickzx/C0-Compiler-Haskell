@@ -1,0 +1,20 @@
+//test typecheck
+
+int main(){
+    pixel p = make_pixel(255, 255, 255, 255);
+    pixel q = make_pixel(0, 0 , 0, 0);
+    pixel r = make_pixel(230,238,127, 45);
+    int a = get_blue(p);
+    int b = get_blue(q);
+    int c = get_green(p);
+    int d = get_green(q);
+    int e = get_red(p);
+    int f = get_red(q);
+    int g = get_alpha(p);
+    int h = get_alpha(q);
+    assert(get_blue(r) == 45);
+    assert(get_green(r) == 127);
+    assert (get_red(r) == 238);
+    assert (get_alpha(r) == 230);
+    return 0;
+}
