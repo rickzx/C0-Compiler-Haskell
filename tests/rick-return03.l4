@@ -1,0 +1,44 @@
+//test return 1
+//reverse linked-list
+
+struct node {
+	int val;
+	struct node* next;
+};
+
+typedef struct node NODE;
+
+NODE* reverse(NODE* head) {
+	NODE* prev = NULL;
+	NODE* cur = head;
+
+	while(cur -> next != NULL) {
+		NODE* next = cur -> next;
+		cur -> next = prev;
+		prev = cur;
+		cur = next;
+	}
+
+	return prev;
+}
+
+int main() {
+	NODE* head = alloc(NODE);
+	NODE* node = head;
+	
+	for (int i = 0; i < 100; i++) {
+		node -> val = i;
+		node -> next = alloc(NODE);
+		node = node -> next;
+	}
+
+	NODE* nhead = reverse(head);
+	node = nhead;
+
+	for (int i = 99; i >= 0; i--) {
+		assert(node -> val == i);
+		node = node -> next;
+	}
+
+	return 1;
+}

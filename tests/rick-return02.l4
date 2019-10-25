@@ -1,0 +1,12 @@
+//test return 1073741824
+//test nested pointers
+
+int main() {
+	int*** a = alloc(int**);
+
+	* a = alloc(int*);
+	** a = alloc(int);
+	*** a = 1024;
+
+	return *** a * *** a * *** a;
+}

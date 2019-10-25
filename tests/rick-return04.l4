@@ -1,0 +1,64 @@
+//test return 1
+//test merge sort
+
+void merge(int[] freq, int lo, int mid, int hi) {
+	int[] B = alloc_array(int, hi - lo);
+
+	int i = lo;
+	int j = mid;
+	int k = 0;
+
+	while (i < mid && j < hi) {
+		if (freq[i] < freq[j]) {
+			B[k] = freq[i];
+			i++;
+		}
+		else {
+			B[k] = freq[j];
+			j++;
+		}
+		k++;
+	}
+
+	while (i < mid) {
+		B[k] = freq[i];
+		i++;
+		k++;
+	}
+
+	while (j < hi) {
+		B[k] = freq[j];
+		j++;
+		k++;
+	}
+
+	for (k = 0; k < hi-lo; k++) {
+		freq[lo + k] = B[k];
+	}
+}
+
+void sort(int[] freq, int lo, int hi) {
+	if (hi-lo <= 1) return;
+	int mid = lo + (hi - lo) / 2;
+	sort(freq, lo, mid);
+	sort(freq, mid, hi);
+	merge(freq, lo, mid, hi);
+	return;
+}
+
+int main() {
+	int size = 100;
+	int[] arr = alloc_array(int, size);
+
+	for (int i = 0; i < 100; i++) {
+		arr[i] = 100 - i + 1;
+	}
+
+	sort(arr, 0, 100);
+
+	for (int i = 0; i < 99; i++) {
+		assert(arr[i] < arr[i+1]);
+	}
+
+	return 1;
+}

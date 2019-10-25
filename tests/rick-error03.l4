@@ -1,0 +1,13 @@
+//test memerror
+//test NULL behavior
+
+int main() {
+	int* x = NULL;
+	int* y = NULL;
+
+	if (x == y) {
+		return *x;
+	} else {
+		return 0;
+	}
+}
