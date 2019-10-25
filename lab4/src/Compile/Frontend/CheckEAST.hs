@@ -58,20 +58,32 @@ checkInit (ESeq et1 et2) = do
     t1 <- checkInit et1
     t2 <- checkInit et2
     return $ t1 || t2
-checkInit (EAssign x e True) = do
-    (declared, defined) <- get
-    let newdecl = Set.delete x declared
-    put (newdecl, defined)
-    t <- checkUse e
-    assertMsg ("Variable used before initialization" ++ show e) t
-    put (declared, Set.insert x defined)
-    return False
-checkInit (EAssign x e False) = do
-    (declared, defined) <- get
-    t <- checkUse e
-    assertMsg ("Variable used before initialization" ++ show e) t
-    put (declared, Set.insert x defined)
-    return False
+checkInit (EAssign lval e True) =
+    case lval of
+        EVIdent x -> do
+            (declared, defined) <- get
+            let newdecl = Set.delete x declared
+            put (newdecl, defined)
+            t <- checkUse e
+            assertMsg ("Variable used before initialization" ++ show e) t
+            put (declared, Set.insert x defined)
+            return False
+        _ -> do
+            t <- checkUse e
+            assertMsg ("Variable used before initialization" ++ show e) t
+            return False
+checkInit (EAssign lval e False) =
+    case lval of
+        EVIdent x -> do
+            (declared, defined) <- get
+            t <- checkUse e
+            assertMsg ("Variable used before initialization" ++ show e) t
+            put (declared, Set.insert x defined)
+            return False
+        _ -> do
+            t <- checkUse e
+            assertMsg ("Variable used before initialization" ++ show e) t
+            return False
 checkInit (EIf e et1 et2) = do
     (declared, defined) <- get
     t <- checkUse e
@@ -103,6 +115,7 @@ checkInit (ERet e) = case e of
         return True
 checkInit ENop = return False
 checkInit (EDecl _x (ARROW _ _) et) = checkInit et
+checkInit (EDecl _x (STRUCT _) et) = checkInit et
 checkInit (EDecl x _t et) = do
     (declared, defined) <- get
     put (Set.insert x declared, defined)
@@ -120,6 +133,7 @@ checkInit (EDef fn (ARROW args ret) et) = do
         _ -> do
             assertMsg ("Function " ++ fn ++ "does not have return") t
             return t
+checkInit (ESDef _ _) = return False
 checkInit (EAssert e) = do
     t <- checkUse e
     assertMsg ("Variable used before initialization" ++ show e) t
@@ -128,6 +142,8 @@ checkInit (ELeaf e) = do
     t <- checkUse e
     assertMsg ("Variable used before initialization" ++ show e) t
     return False
+    
+
 
 synthValid :: (Context, Context) -> EAST -> ExceptT String (State TypeCheckState) ()
 --synthValid _ e | (trace $ show e) False = undefined
@@ -136,14 +152,16 @@ synthValid (ctx, fctx) east =
         ESeq et1 et2 -> do
             synthValid (ctx, fctx)  et1
             synthValid (ctx, fctx) et2
-        EAssign x e _b ->
-            case Map.lookup x ctx of
-                Just t -> do
-                    te <- synthType (ctx, fctx) e
-                    case te of
-                        Just t' -> assertMsg "Tycon mismatch" (t == t')
+        EAssign lval e _b ->
+            case lval of
+                EVIdent x -> 
+                    case Map.lookup x ctx of
+                        Just t -> do
+                            te <- synthType (ctx, fctx) e
+                            case te of
+                                Just t' -> assertMsg "Tycon mismatch" (t == t')
+                                _ -> throwE $ "Variable used before declared " ++ x
                         _ -> throwE $ "Variable used before declared " ++ x
-                _ -> throwE $ "Variable used before declared " ++ x
         EIf e et1 et2 -> do
             te <- synthType (ctx, fctx) e
             case te of

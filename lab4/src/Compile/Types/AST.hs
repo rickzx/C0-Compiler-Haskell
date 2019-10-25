@@ -16,8 +16,10 @@ data Type =
     INTEGER 
   | BOOLEAN 
   | VOID
-  | NONE --for debug
   | DEF Ident
+  | POINTER Type
+  | ARRAY Type
+  | STRUCT Ident
   | ARROW [(Ident, Type)] Type deriving Eq
 
 data AST = Program [Gdecl] deriving Eq
@@ -34,7 +36,7 @@ data Stmt
   | ControlStmt Control
   deriving Eq
 
-data Simpopt 
+data Simpopt
   = SimpNop
   | Opt Simp
   deriving Eq
@@ -91,7 +93,7 @@ instance Show Stmt where
   show (Simp simp) = show simp
   show (Exp e) = show e
 
-instance Show Control where 
+instance Show Control where
   show (Condition b t e) = "if " + show b + " then " + show t + " else " + show e
   show (Retn e) = "return " ++ show e ++ ";"
 
@@ -107,7 +109,6 @@ instance Show Type where
   show BOOLEAN = "bool"
   show VOID = "void"
   show (ARROW args res) = show args ++ " -> " ++ show res
-  show NONE = "error"
   show (DEF a) = "def " ++ a
 
 instance Show Exp where
@@ -117,11 +118,11 @@ instance Show Exp where
   show F = "False"
   show (Binop binop expr1 expr2) =
     show expr1 ++ " " ++ show binop ++ " " ++ show expr2
-  show (Ternop expr1 expr2 expr3) = 
+  show (Ternop expr1 expr2 expr3) =
     show expr1 ++ " ? " ++ show expr2 ++ " :" ++ show expr3
   show (Unop unop expr) = show unop ++ show expr
-  show (Function identi exprlist) = 
+  show (Function identi exprlist) =
       identi ++ "(" ++ (foldr redu_fn "" exprlist) ++ ")"
-      where 
+      where
         redu_fn :: Exp -> String -> String
         redu_fn e stri = show e ++ "," ++ stri
