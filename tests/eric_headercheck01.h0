@@ -1,6 +1,5 @@
 
 typedef int pixel;       // Library (concrete) view of a pixel
-typedef pixel pixel_t;   // Client  (abstract) view of a pixel
 
 int get_red(pixel p);
 

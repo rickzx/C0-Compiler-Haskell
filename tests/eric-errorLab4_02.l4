@@ -3,19 +3,19 @@
 //check NULL stuff
 struct node{
     int ojbk;
-    struct node *ozbk;
+    struct node* ozbk;
 };
 
-typedef struct node *node;
+typedef struct node* node;
 
 struct slice{
     node isCool;
     bool notcool;
 };
 
-typedef struct slice *sll;
+typedef struct slice* sll;
 int main(){
-    struct slice *slc = NULL;
+    struct slice* slc = NULL;
     node t = NULL;
     assert(slc== t);
     return 1;

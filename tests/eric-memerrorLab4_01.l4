@@ -2,7 +2,7 @@
 //hashtables are hard....
 struct node{
     int val;
-    struct node *next;
+    struct node* next;
 };
 
 typedef struct node* node;
@@ -40,7 +40,7 @@ hash inserthash(int key, hash ok, int value){
     return ok;
 }
 int hashfn(int a, hash h){
-    return (a * 0xDEADBEEF) % (h -> size);
+    return (a*  0xDEADBEEF) % (h -> size);
 }
 
 int main(){
