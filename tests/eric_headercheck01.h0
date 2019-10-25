@@ -1,11 +1,12 @@
 
-typedef pixel
+struct pixelt
 {
     int[] red;
     int* alphfffa;
     bool greeen;
     bool bluee;
 };       // Library (concrete) view of a pixel
+typedef struct pixelt* pixel;
 
 int get_red(pixel p);
 
