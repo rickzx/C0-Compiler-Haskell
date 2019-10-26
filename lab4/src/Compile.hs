@@ -21,14 +21,12 @@ import Control.Monad.Trans.Except
 import Compile.Types
 import Compile.Lexer
 import Compile.Parser
-{-
 import Compile.Frontend.Elaborate
 import Compile.Frontend.CheckEAST
 import Compile.CodeGen
--}
 import Data.Maybe (fromMaybe)
 import System.Environment
---import Compile.Frontend.EASTOptimize
+import Compile.Frontend.EASTOptimize
 import Debug.Trace
 import qualified Data.Set as Set
 
@@ -52,12 +50,8 @@ compile job = do
     hSetEncoding inputHandle utf8
     s <- hGetContents inputHandle
     res <-
-        runExceptT $ do 
-            let ast = evalP parseTokens (('\n', [], removeComments s), Set.empty)
-            case jobOutFormat job of
-                TC -> liftEIO (Right ()) -- By now, we should have thrown any typechecking errors
-                Asm -> writeString (jobOut job) $ show ast
-                Abs -> writeString (jobOut job) $ show ast
+        runExceptT $ do
+            let ast = evalP parseTokens (('\n', [], removeComments h0), Set.empty)
                 east = eGen ast header
             liftEIO $ checkEAST east header
             let optEast = optEAST east

@@ -116,7 +116,7 @@ Paramlist : '(' ')' {[]}
 Sdecl : struct ident ';' {Sdecl $2}
 
 Sdef : struct ident '{' Fieldlist '}' ';' {Sdef $2 $4}
-Field : Type ident ';' {($1, $2)}
+Field : Type ident ';' {($2, $1)}
 Fieldlist : {- Empty -} {[]}
       | Field Fieldlist {$1 : $2}
 
