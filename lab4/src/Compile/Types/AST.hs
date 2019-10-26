@@ -85,35 +85,14 @@ data Control
   | Void
   | Retn Exp
   deriving (Eq, Show)
-{-
+
 -- Note to the student: You will probably want to write a new pretty printer
 -- using the module Text.PrettyPrint.HughesPJ from the pretty package
 -- This is a quick and dirty pretty printer.
 -- Once that is written, you may find it helpful for debugging to switch
 -- back to the deriving Show instances.
 
---TODO: Change this to match our new structures
-instance Show AST where
-  show (Block stmts) =
-    "int main () {\n" ++ (unlines $ map (\stmt ->"\t" ++ show stmt) stmts) ++ "}\n"
 
-instance Show Stmt where
-  show (Stmts [Stmt]) = show Stmt
-  show (ControlStmt Control) = show Control
-  show (Simp simp) = show simp
-  show (Exp e) = show e
-
-instance Show Control where 
-  show (Condition b t e) = "if " + show b + " then " + show t + " else " + show e
-  show (Retn e) = "return " ++ show e ++ ";"
-
-instance Show Decl where
-  show (JustDecl i) = "int " ++ i ++ ";"
-  show (DeclAsgn x e) = "int " ++ x ++ " = " ++ show e ++ ";"
-
-instance Show Simp where
-  show (Asgn lval asnop expr) = lval ++ " " ++ show asnop ++ " " ++ show expr ++ ";"
--}
 instance Show Type where
   show INTEGER = "int"
   show BOOLEAN = "bool"
