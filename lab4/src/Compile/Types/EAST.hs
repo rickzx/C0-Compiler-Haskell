@@ -3,7 +3,6 @@
 
 module Compile.Types.EAST where
 
-<<<<<<< HEAD
 import Compile.Types.AST
 import Compile.Types.Ops
 import qualified Data.Maybe as Maybe

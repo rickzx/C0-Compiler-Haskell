@@ -539,7 +539,7 @@ happyReduction_18 happy_x_3
 	 =  case happyOut18 happy_x_1 of { happy_var_1 -> 
 	case happyOutTok happy_x_2 of { (TokIdent happy_var_2) -> 
 	happyIn14
-		 ((happy_var_1, happy_var_2)
+		 ((happy_var_2, happy_var_1)
 	)}}
 
 #if __GLASGOW_HASKELL__ >= 710
@@ -572,7 +572,7 @@ happyReduction_21 (happy_x_3 `HappyStk`
 	happyRest) tk
 	 = happyThen ((case happyOut18 happy_x_2 of { happy_var_2 -> 
 	case happyOutTok happy_x_3 of { (TokIdent happy_var_3) -> 
-	( (trace $ show "hi")wrapTypeDef (Typedef happy_var_2 happy_var_3) happy_var_3)}})
+	( wrapTypeDef (Typedef happy_var_2 happy_var_3) happy_var_3)}})
 	) (\r -> happyReturn (happyIn16 r))
 
 #if __GLASGOW_HASKELL__ >= 710
@@ -1565,15 +1565,16 @@ checkDeclAsgn v op tp e =
 checkDec n = if (n > 2^31) then error "Decimal too big" else Int (fromIntegral n)
 checkHex n = if (n >= 2^32) then error "Hex too big" else Int (fromIntegral n)
 
+wrapTypeDef :: a -> String -> P a
 wrapTypeDef td name = do
     (str, typedefs) <- get
-    (trace $ show typedefs)put (str, Set.insert name typedefs)
+    put (str, Set.insert name typedefs)
     return td
 {-# LINE 1 "templates/GenericTemplate.hs" #-}
 {-# LINE 1 "templates/GenericTemplate.hs" #-}
 {-# LINE 1 "<built-in>" #-}
 {-# LINE 18 "<built-in>" #-}
-{-# LINE 1 "/Users/ericyang/.stack/programs/x86_64-osx/ghc-8.6.5/lib/ghc-8.6.5/include/ghcversion.h" #-}
+{-# LINE 1 "/Users/rick/.stack/programs/x86_64-osx/ghc-8.6.5/lib/ghc-8.6.5/include/ghcversion.h" #-}
 
 
 
@@ -1591,7 +1592,7 @@ wrapTypeDef td name = do
 
 
 {-# LINE 19 "<built-in>" #-}
-{-# LINE 1 "/var/folders/wx/f248vdq55pxdyqh_sfw617nr0000gn/T/ghc74184_0/ghc_2.h" #-}
+{-# LINE 1 "/var/folders/r6/c7hn6nts1j7gqfp7plqpv1q40000gn/T/ghc47890_0/ghc_2.h" #-}
 
 
 
