@@ -20,7 +20,8 @@ data Type =
   | POINTER Type
   | ARRAY Type
   | STRUCT Ident
-  | ARROW [(Ident, Type)] Type deriving Eq
+  | ARROW [(Ident, Type)] Type
+  | ANY deriving Eq
 
 data AST = Program [Gdecl] deriving Eq
 
@@ -110,6 +111,10 @@ instance Show Type where
   show VOID = "void"
   show (ARROW args res) = show args ++ " -> " ++ show res
   show (DEF a) = "def " ++ a
+  show ANY = "any*"
+  show (POINTER t) = show t ++ "*"
+  show (ARRAY t) = show t ++ "[]"
+  show (STRUCT s) = "struct " ++ s
 
 instance Show Exp where
   show (Int x) = show x

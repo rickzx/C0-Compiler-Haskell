@@ -12,7 +12,7 @@ data EAST
     = ESeq EAST EAST
     | EAssign ELValue EExp Bool -- single variable assign -- last parameter bool indicates if the assignment is in a declaration
     | EDef Ident Type EAST -- Arg type list -> return type
-    | ESDef Ident [(Type, Ident)]  -- define struct
+    | ESDef Ident [(Ident, Type)] EAST  -- define struct
     | EIf EExp EAST EAST
     | EWhile EExp EAST
     | EAssert EExp
@@ -55,6 +55,7 @@ instance Show EAST where
     show (ELeaf e) = "ELeaf" ++ "(" ++ show e ++ ")"
     show (EDef ident types east) = "EDef" ++ "(" ++ ident ++ "  :  " ++ show types ++ " , " ++ show east ++ ")"
     show (EAssert e) = "EAssert" ++ "(" ++ show e ++ ")"
+    show (ESDef s fields east) = "ESDef" ++ "(" ++ s ++ ", " ++ show fields ++ ", " ++ show east ++ ")"
 
 instance Show ELValue where
     show (EVIdent x) = x
