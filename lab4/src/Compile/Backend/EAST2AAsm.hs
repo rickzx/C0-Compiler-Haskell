@@ -8,8 +8,8 @@ import qualified Data.Map as Map
 import Debug.Trace
 
 -- | The state during code generation.
-data Alloc =
-    Alloc
+data CodeGenState =
+    CodeGenState
         { variables :: Map.Map String Int
     -- ^ Map from source variable names to unique variable ids.
         , uniqueIDCounter :: Int
@@ -22,21 +22,21 @@ data Alloc =
     -- ^ current function we are in
         }
 
--- Using the state monad with Alloc as the state allows us to implicitly
+-- Using the state monad with CodeGenState as the state allows us to implicitly
 -- thread the variable map and the next unique ID through the entire
--- computation. (The M in AllocM stands for "Monad".)
-type AllocM = State.State Alloc
+-- computation. (The M in CodeGenStateM stands for "Monad".)
+type CodeGenStateM = State.State CodeGenState
 
-getNewUniqueID :: AllocM Int
+getNewUniqueID :: CodeGenStateM Int
 getNewUniqueID = do
     currentCount <- State.gets uniqueIDCounter
-    State.modify' $ \(Alloc vs counter lab genf cf) -> Alloc vs (counter + 1) lab genf cf
+    State.modify' $ \(CodeGenState vs counter lab genf cf) -> CodeGenState vs (counter + 1) lab genf cf
     return currentCount
 
-getNewUniqueLabel :: AllocM String
+getNewUniqueLabel :: CodeGenStateM String
 getNewUniqueLabel = do
     currentCount <- State.gets uniqueLabelCounter
-    State.modify' $ \(Alloc vs counter lab genf cf) -> Alloc vs counter (lab + 1) genf cf
+    State.modify' $ \(CodeGenState vs counter lab genf cf) -> CodeGenState vs counter (lab + 1) genf cf
     let lab = "L" ++ show currentCount
     return lab
 
@@ -45,17 +45,17 @@ aasmGen :: EAST -> [(Ident, ([AAsm], Int))]
 aasmGen east = State.evalState assemM initialState
   where
     initialState =
-        Alloc
+        CodeGenState
             { variables = Map.empty
             , uniqueIDCounter = 0
             , uniqueLabelCounter = 0
             , genFunctions = []
             , currentFunction = ""
             }
-    assemM :: AllocM [(Ident, ([AAsm], Int))]
+    assemM :: CodeGenStateM [(Ident, ([AAsm], Int))]
     assemM = do
         _genAAsm <- genEast east
-        Alloc _ _ _ genf _ <- State.get
+        CodeGenState _ _ _ genf _ <- State.get
         return (reverse genf)
 
 -- Get the decls from a sequence of stmts.
@@ -66,9 +66,9 @@ getDecls (EWhile _ e) = getDecls e
 getDecls (EDecl x _ e) = x : getDecls e
 getDecls _ = []
 
-genEast :: EAST -> AllocM [AAsm]
+genEast :: EAST -> CodeGenStateM [AAsm]
 genEast (ESeq e1 e2) = do
-    gen1 <- genEast e1 
+    gen1 <- genEast e1
     gen2 <- genEast e2
     return $ gen1 ++ gen2
 genEast (EAssign x expr _b) = do
@@ -80,12 +80,12 @@ genEast (EDef fn t e) = do
         args = map fst ts
         decls = args ++ getDecls e
         v' = Map.fromList $ zip decls [0 ..]
-    State.modify' $ \(Alloc _vs _counter lab genf _cf) -> Alloc v' (length decls) lab genf fn
+    State.modify' $ \(CodeGenState _vs _counter lab genf _cf) -> CodeGenState v' (length decls) lab genf fn
     let (inReg, inStk) = splitAt 6 (map (\a -> ATemp $ v' Map.! a) args)
         movArg = map (\(i, tmp) -> AAsm [tmp] ANop [ALoc $ argRegs !! i]) $ zip [0 ..] inReg
     gen <- genEast e
     let funGen = [AFun fn inStk] ++ movArg ++ gen
-    State.modify' $ \(Alloc vs counter lab genf cf) -> Alloc vs counter lab ((fn, (funGen, counter)) : genf) cf
+    State.modify' $ \(CodeGenState vs counter lab genf cf) -> CodeGenState vs counter lab ((fn, (funGen, counter)) : genf) cf
     return funGen
 genEast (EAssert expr) = do
     let trans = EIf expr ENop (ELeaf $ EFunc "abort" [])
@@ -122,7 +122,7 @@ genEast ENop = return []
 genEast (EDecl _ _ e) = genEast e
 genEast (ELeaf e) = genSideEffect e
 
-genSideEffect :: EExp -> AllocM [AAsm]
+genSideEffect :: EExp -> CodeGenStateM [AAsm]
 genSideEffect (EFunc fn args) = do
     let argLen = length args
     ids <- replicateM argLen getNewUniqueID
@@ -136,7 +136,7 @@ genSideEffect expr = do
     n <- getNewUniqueID
     genExp expr (ATemp n)
 
-genExp :: EExp -> ALoc -> AllocM [AAsm]
+genExp :: EExp -> ALoc -> CodeGenStateM [AAsm]
 -- genExp e _ | trace ("genExp " ++ show e ++ "\n") False = undefined
 genExp (EInt n) dest = return [AAsm [dest] ANop [AImm $ fromIntegral (fromIntegral n :: Int32)]]
 genExp (EIdent var) dest = do
@@ -187,14 +187,14 @@ genExp expr@(EBinop binop exp1 exp2) dest
                  n <- getNewUniqueID
                  codegen <- genExp exp1 (ATemp n)
                  let combine = [AAsm [dest] (genBinOp binop) [ALoc $ ATemp n, AImm x2]]
-                 return $ codegen ++ combine  
+                 return $ codegen ++ combine
             _ -> do
                  n <- getNewUniqueID
                  codegen1 <- genExp exp1 (ATemp n)
                  n' <- getNewUniqueID
                  codegen2 <- genExp exp2 (ATemp n')
                  let combine = [AAsm [dest] (genBinOp binop) [ALoc $ ATemp n, ALoc $ ATemp n']]
-                 return $ codegen1 ++ codegen2 ++ combine       
+                 return $ codegen1 ++ codegen2 ++ combine
     | otherwise = do
         n <- getNewUniqueID
         codegen1 <- genExp exp1 (ATemp n)
@@ -251,7 +251,7 @@ genExp (EFunc fn args) dest = do
         movArg = map (\(i, tmp) -> AAsm [argRegs !! i] ANop [ALoc tmp]) $ zip [0 ..] inReg
     return $ gen ++ movArg ++ [ACall fn inStk (length inReg), AAsm [dest] ANop [ALoc $ AReg 0]]
 
-genCmp :: EExp -> ALabel -> ALabel -> AllocM [AAsm]
+genCmp :: EExp -> ALabel -> ALabel -> CodeGenStateM [AAsm]
 -- genCmp e _ _ | trace ("genCmp " ++ show e ++ "\n") False = undefined
 genCmp (EBinop op e1 e2) l l'
     | isRelOp op = do

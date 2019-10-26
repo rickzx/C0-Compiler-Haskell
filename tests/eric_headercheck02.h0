@@ -1,0 +1,18 @@
+struct something{
+    int hi;
+    bool ok;
+    int[] oko;
+};
+
+typedef int[] seth;
+typedef int iss;
+
+struct ohhlala{
+    seth goldstein;
+    iss coool;
+    seth *hehe;
+};
+
+struct something *init_sth();
+struct ohhlala *loool();
+iss cool_fn(seth g, seth ng);

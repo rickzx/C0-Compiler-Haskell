@@ -1,0 +1,10 @@
+//test error
+
+typedef int yay; 
+//comparing pointers to lists
+int main(){
+    yay[] a = alloc_array(int, 154);
+    yay * b = NULL;
+    assert(a == b);
+    return 1;
+}

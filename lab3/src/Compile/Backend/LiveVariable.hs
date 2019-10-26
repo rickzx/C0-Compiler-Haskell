@@ -71,12 +71,21 @@ computePredicate ((idx, x):xs) mapping pr =
             let linemap = Map.insert idx (Set.fromList assign, [idx + 1], getLoc args) pr
              in computePredicate xs mapping linemap
         AFun l extraargs -> computePredicate xs mapping (Map.insert idx (Set.empty, [idx + 1], Set.empty) pr)
+<<<<<<< HEAD
+        ACall l extraargs number->
+            --need to include rax
+            let 
+                definedregs = [AReg 3, AReg 4, AReg 1, AReg 2, AReg 5, AReg 6, AReg 0, AReg 7, AReg 8]
+                usedregs = take number definedregs
+                linemap = Map.insert idx (Set.fromList definedregs, [idx + 1], Set.fromList (usedregs : extraargs)) pr
+=======
         ACall l extraargs number
             --need to include rax
          ->
             let definedregs = [AReg 3, AReg 4, AReg 1, AReg 2, AReg 5, AReg 6, AReg 0, AReg 7, AReg 8]
                 usedregs = take number definedregs
                 linemap = Map.insert idx (Set.fromList definedregs, [idx + 1], Set.fromList (usedregs ++ extraargs)) pr
+>>>>>>> master
              in computePredicate xs mapping linemap
         AControl c ->
             case c of
@@ -273,10 +282,17 @@ buildInterfere ((idx, x):xs) live pr g =
                             ginit
                             liveVars
                  in buildInterfere xs live pr newg
+<<<<<<< HEAD
+            ACall _ _ _ -> let
+                regused = [AReg 3, AReg 4, AReg 1, AReg 2, AReg 5, AReg 6, AReg 0, AReg 7, AReg 8]
+                res = foldl f_fn g regused 
+                    where 
+=======
             ACall _ _ _ ->
                 let regused = [AReg 3, AReg 4, AReg 1, AReg 2, AReg 5, AReg 6, AReg 0, AReg 7, AReg 8]
                     res = foldl f_fn g regused
                       where
+>>>>>>> master
                         f_fn :: Graph -> ALoc -> Graph
                         f_fn gra a =
                             let ginit =
@@ -286,6 +302,17 @@ buildInterfere ((idx, x):xs) live pr g =
                                 newg =
                                     foldl
                                         (\g' v ->
+<<<<<<< HEAD
+                                            if a /= v
+                                                then addEdge (v, a) (addEdge (a, v) g')
+                                                else g')
+                                        ginit
+                                        liveVars
+                            in newg
+                in
+                    buildInterfere xs live pr res
+
+=======
                                              if a /= v
                                                  then addEdge (v, a) (addEdge (a, v) g')
                                                  else g')
@@ -313,6 +340,7 @@ buildInterfere ((idx, x):xs) live pr g =
                                         liveVars
                              in newg
                  in buildInterfere xs live pr res
+>>>>>>> master
             _ -> buildInterfere xs live pr g
 
 --(function name, (AASM generated, # of var)

@@ -1,13 +1,19 @@
 //test div-by-zero
 
 int iReturnZero(){
+    curiosity * bar;
     return 0;
 }
 
 typedef bool curiosity;
+
+
 curiosity iReturnTrue(){
+    curiosity * bar;
+
     return 9999999 > 1234567;
 }
+
 int main(){
     int x = 5;
     if(iReturnTrue()){
