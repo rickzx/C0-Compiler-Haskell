@@ -109,6 +109,7 @@ instance Show Exp where
   show (Ident var) = var
   show T = "True"
   show F = "False"
+  show NULL = "NULL"
   show (Binop binop expr1 expr2) =
     show expr1 ++ " " ++ show binop ++ " " ++ show expr2
   show (Ternop expr1 expr2 expr3) = 
@@ -120,4 +121,8 @@ instance Show Exp where
         redu_fn :: Exp -> String -> String
         redu_fn e stri = show e ++ "," ++ stri
   show (Ptrderef e) = "*("++ show e ++ ")"
-
+  show (Alloc typ) = "alloc(" ++ show typ ++ ")"
+  show (ArrayAlloc typ len) = "alloc_array(" ++ show typ ++ "," ++ show len ++ ")"
+  show (ArrayAccess exp1 exp2) = show exp1 ++ "[" ++ show exp2 ++ "]"
+  show (Field exp1 nme) = show exp1 ++ "." ++ show nme
+  show (Access exp1 nme) = show exp1 ++ "->" ++ show nme 
