@@ -12,7 +12,7 @@ module Compile.Types.EAST where
         = ESeq EAST EAST
         | EAssign ELValue EExp Bool -- single variable assign -- last parameter bool indicates if the assignment is in a declaration
         | EDef Ident Type EAST -- Arg type list -> return type
-        | ESDef Ident [(Type, Ident)] EAST -- define struct
+        | ESDef Ident [(Ident, Type)] EAST -- define struct
         | EIf EExp EAST EAST
         | EWhile EExp EAST
         | EAssert EExp

@@ -14,14 +14,14 @@ import Debug.Trace
 
 --map each function to (Arg type, return type).
 type Fnmap = Map.Map Ident Type
-type Structmap = Map.Map Ident [(Type, Ident)]
+type Structmap = Map.Map Ident [(Ident, Type)]
 
 data GlobState =
     GlobState
         { funDeclared :: Map.Map Ident Type
         , funDefined :: Map.Map Ident Type
         , typeDefined :: Map.Map Ident Type
-        , structDefined :: Map.Map Ident [(Type, Ident)]
+        , structDefined :: Map.Map Ident [(Ident, Type)]
         }
 
 eGenHeader :: AST -> Header
@@ -74,10 +74,7 @@ checkArrayTypedef (typemap, strucmap) tpe@(ARRAY atype) =
             case Map.lookup idd typemap of
                 Just primTyp -> True
                 Nothing -> False
-        STRUCT ident ->
-            case Map.lookup ident strucmap of
-                Just _ -> True
-                Nothing -> False
+        STRUCT ident -> True
         ARRAY arrtype -> checkArrayTypedef (typemap, strucmap) atype
         POINTER ptype -> checkPointerTypedef (typemap, strucmap) ptype
         VOID -> error "Can't have an array of void type"
@@ -85,6 +82,7 @@ checkArrayTypedef (typemap, strucmap) tpe@(ARRAY atype) =
 checkArrayTypedef (typemap, strucmap) _ = False
 
 --check if a typedef for a pointer is valid
+--TODO: return the type after conversion, not bool
 checkPointerTypedef :: (Fnmap, Structmap) -> Type -> Bool
 checkPointerTypedef (typemap, strucmap) tpe@(POINTER ptype) = 
     case ptype of
@@ -92,10 +90,7 @@ checkPointerTypedef (typemap, strucmap) tpe@(POINTER ptype) =
             case Map.lookup idd typemap of
                 Just primTyp -> True
                 Nothing -> False
-        STRUCT ident ->
-            case Map.lookup ident strucmap of
-                Just _ -> True
-                Nothing -> False
+        STRUCT ident -> True
         ARRAY arrtype -> checkArrayTypedef (typemap, strucmap) ptype
         POINTER potype -> checkPointerTypedef (typemap, strucmap) potype
         VOID -> error "Can't have an array of void type"
@@ -128,37 +123,13 @@ elabHeader (x:xs) =
             if typ == VOID then throwE "Cannot typdef VOID" else
                 if Map.member nme declared then throwE $ "Typdef uses a function name " ++ nme else do
                 typDefed <- gets typeDefined
-                strucDefed <- gets structDefined
                 case Map.lookup nme typDefed of
                     Just _ -> throwE $ "Type defined more than once: " ++ nme
-                    Nothing ->
-                        case typ of
-                            DEF ident ->
-                                case Map.lookup ident typDefed of
-                                    Just primTyp -> do
-                                        modify' $ \(GlobState fdec fdef tdef sdef) ->
-                                            GlobState fdec fdef (Map.insert nme primTyp tdef) sdef
-                                        elabHeader xs
-                                    Nothing -> throwE $ "Undefined type: " ++ ident
-                            STRUCT ident ->
-                                case Map.lookup ident strucDefed of
-                                    Just _ -> do
-                                        modify' $ \(GlobState fdec fdef tdef sdef) -> GlobState fdec fdef (Map.insert nme typ tdef) sdef
-                                        elabHeader xs
-                                    Nothing -> throwE $ "Undefined struct type: " ++ ident
-                            ARRAY atype -> if checkArrayTypedef (typDefed, strucDefed) atype then 
-                                do
-                                    modify' $ \(GlobState fdec fdef tdef sdef) -> GlobState fdec fdef (Map.insert nme typ tdef) sdef
-                                    elabHeader xs
-                                else throwE $ "Undefined type: " ++ show atype 
-                            POINTER ptype -> if checkPointerTypedef (typDefed, strucDefed) ptype then 
-                                do
-                                    modify' $ \(GlobState fdec fdef tdef sdef) -> GlobState fdec fdef (Map.insert nme typ tdef) sdef
-                                    elabHeader xs
-                                else throwE $ "Undefined type: " ++ show ptype               
-                            _ -> do
-                                modify' $ \(GlobState fdec fdef tdef sdef) -> GlobState fdec fdef (Map.insert nme typ tdef) sdef
-                                elabHeader xs
+                    Nothing -> do
+                        let
+                            typ' = findType' typ typDefed
+                        modify' $ \(GlobState fdec fdef tdef sdef) -> GlobState (Map.insert nme typ fdec) fdef tdef sdef
+                        elabHeader xs           
         Sdecl nme -> do
             strucDefed <- gets structDefined
             case Map.lookup nme strucDefed of 
@@ -168,10 +139,16 @@ elabHeader (x:xs) =
                     elabHeader xs
         Sdef nme param -> do
             strucDefed <- gets structDefined
+            typDefed <- gets typeDefined
             case Map.lookup nme strucDefed of
                 Just (y:ys) -> throwE $ "struct" ++ nme ++ "is defined more than once"
                 _ -> do 
-                    modify' $ \(GlobState fdec fdef tdef sdef) -> GlobState fdec fdef tdef (Map.insert nme param sdef)
+                    let
+                        param' = map_fn param
+                            where
+                                map_fn:: [(Ident, Type)] -> [(Ident, Type)]
+                                map_fn l = map(\(a, tp) -> (a, findType' tp typDefed)) l
+                    modify' $ \(GlobState fdec fdef tdef sdef) -> GlobState fdec fdef tdef (Map.insert nme param' sdef)
                     elabHeader xs
 
         _ -> throwE "Header only supports function declaration and typedef!"
@@ -187,12 +164,7 @@ checkArrayTypedef' (typemap, strucmap) headertype headerstruct tpe@(ARRAY atype)
                 Nothing -> case Map.lookup idd headertype of
                     Just _ -> True
                     Nothing -> False
-        STRUCT ident ->
-            case Map.lookup ident strucmap of
-                Just _ -> True
-                Nothing -> case Map.lookup ident headerstruct of 
-                    Just _ -> True
-                    Nothing -> False
+        STRUCT ident -> True
         ARRAY arrtype -> checkArrayTypedef' (typemap, strucmap) headertype headerstruct atype
         POINTER ptype -> checkPointerTypedef' (typemap, strucmap) headertype headerstruct ptype
         VOID -> error "Can't have an array of void type"
@@ -210,12 +182,7 @@ checkPointerTypedef' (typemap, strucmap) headertype headerstruct tpe@(POINTER pt
                 Nothing -> case Map.lookup idd headertype of
                     Just _ -> True
                     Nothing -> False
-        STRUCT ident ->
-            case Map.lookup ident strucmap of
-                Just _ -> True
-                Nothing -> case Map.lookup ident headerstruct of 
-                    Just _ -> True
-                    Nothing -> False
+        STRUCT ident -> True
         ARRAY arrtype -> checkArrayTypedef' (typemap, strucmap) headertype headerstruct ptype
         POINTER potype -> checkPointerTypedef' (typemap, strucmap) headertype headerstruct potype
         _ -> True
@@ -276,52 +243,18 @@ elabGdecls (x:xs) header allDef =
             if typ == VOID then throwE "Cannot typdef VOID" else do
             typDefed <- gets typeDefined
             fnDeclared <- gets funDeclared
-            strucDefed <- gets structDefined
             if Map.member nme fnDeclared || Map.member nme (fnDecl header) then throwE $ "Typedef uses a function name " ++ nme else
                 case Map.lookup nme typDefed of
                     Just _ -> throwE $ "Type defined more than once: " ++ nme
                     Nothing ->
                         case Map.lookup nme (typDef header) of
                             Just _ -> throwE $ "Type defined more than once: " ++ nme
-                            Nothing ->
-                                case typ of
-                                    DEF ident ->
-                                        case Map.lookup ident typDefed of
-                                            Just primTyp -> do
-                                                modify' $ \(GlobState fdec fdef tdef sdef) ->
-                                                    GlobState fdec fdef (Map.insert nme primTyp tdef) sdef
-                                                elabGdecls xs header allDef
-                                            Nothing -> case Map.lookup ident (typDef header) of
-                                                Just primTyp -> do
-                                                    modify' $ \(GlobState fdec fdef tdef sdef) ->
-                                                        GlobState fdec fdef (Map.insert nme primTyp tdef) sdef
-                                                    elabGdecls xs header allDef
-                                                Nothing -> throwE $ "Undefined type: " ++ ident
-                                    STRUCT ident ->
-                                        case Map.lookup ident strucDefed of
-                                            Just _ -> do
-                                                modify' $ \(GlobState fdec fdef tdef sdef) -> GlobState fdec fdef (Map.insert nme typ tdef) sdef
-                                                elabGdecls xs header allDef
-                                            Nothing -> case Map.lookup ident (typDef header) of
-                                                Just primTyp -> do
-                                                    modify' $ \(GlobState fdec fdef tdef sdef) ->
-                                                        GlobState fdec fdef (Map.insert nme primTyp tdef) sdef
-                                                    elabGdecls xs header allDef
-                                                Nothing -> throwE $ "Undefined struct type: " ++ ident
-                                    ARRAY atype -> if checkArrayTypedef' (typDefed, strucDefed) (typDef header) (structDef header) atype then 
-                                        do
-                                            modify' $ \(GlobState fdec fdef tdef sdef) -> GlobState fdec fdef (Map.insert nme typ tdef) sdef
-                                            elabGdecls xs header allDef
-                                        else throwE $ "Undefiend type: " ++ show atype 
-                                    POINTER ptype -> if checkPointerTypedef' (typDefed, strucDefed) (typDef header) (structDef header) ptype then 
-                                        do
-                                            modify' $ \(GlobState fdec fdef tdef sdef) -> GlobState fdec fdef (Map.insert nme typ tdef) sdef
-                                            elabGdecls xs header allDef
-                                        else throwE $ "Undefiend type: " ++ show ptype               
-                                    _ -> do
-                                        modify' $ \(GlobState fdec fdef tdef sdef) ->
-                                            GlobState fdec fdef (Map.insert nme typ tdef) sdef
-                                        elabGdecls xs header allDef
+                            Nothing -> do
+                                let
+                                    typ' = findType typ (typDefed, typDef header)
+                                modify' $ \(GlobState fdec fdef tdef sdef) ->
+                                    GlobState fdec fdef (Map.insert nme typ tdef) sdef
+                                elabGdecls xs header allDef
         Sdecl nme -> do
             strucDefed <- gets structDefined
             case Map.lookup nme strucDefed of 
@@ -338,6 +271,7 @@ elabGdecls (x:xs) header allDef =
                         return $ EDecl nme (STRUCT nme) elab'
         Sdef nme param -> do
             structDefed <- gets structDefined
+            typDefed <- gets typeDefined
             case Map.lookup nme structDefed of
                 Just (y:ys) -> throwE $ "struct" ++ nme ++ "is defined more than once"
                 _ -> case Map.lookup nme (structDef header) of
@@ -345,13 +279,18 @@ elabGdecls (x:xs) header allDef =
                     _ -> do 
                         modify' $ \(GlobState fdec fdef tdef sdef) -> GlobState fdec fdef tdef (Map.insert nme param sdef)
                         elab' <- elabGdecls xs header allDef
-                        return $ ESDef nme param elab'
+                        return $ ESDef nme (map_fn param) elab'
+                        where 
+                            map_fn:: [(Ident, Type)] -> [(Ident, Type)]
+                            map_fn l = map(\(a, tp) -> (a, findType tp (typDefed, typDef header))) l
 
 
 findType' :: Type -> Map.Map Ident Type -> Type
 findType' typ typGlob =
     case typ of
         DEF tname -> Maybe.fromMaybe (error $ "Type undefined " ++ tname) (Map.lookup tname typGlob)
+        POINTER tname -> POINTER (findType' tname typGlob)
+        ARRAY tname -> ARRAY (findType' tname typGlob)
         _ -> typ
 
 extractParam' :: [(Type, Ident)] -> Map.Map Ident Type -> [(Ident, Type)]
@@ -376,6 +315,8 @@ findType typ (typGlob, typHeader) =
             Maybe.fromMaybe
                 (Maybe.fromMaybe (error $ "Type undefined " ++ tname) (Map.lookup tname typHeader))
                 (Map.lookup tname typGlob)
+        POINTER tname -> POINTER (findType tname (typGlob, typHeader))
+        ARRAY tname -> ARRAY (findType tname (typGlob,typHeader))
         _ -> typ
 
 --extract the parameter of the function
@@ -522,53 +463,56 @@ eElse eopt context allDef =
         ElseNop -> ENop
         Else stmt -> eStmt stmt context allDef
 
---compute the factorial of a number example.
-exAST :: AST
-exAST =
-   Program
-       [ Typedef INTEGER "hh"
-       , Fdecl VOID "o98k" [(INTEGER, "n"), (DEF "hh", "j")]
-       , Fdefn
-             (DEF "hh")
-             "fact_spec"
-             [(INTEGER, "n")]
-             [ ControlStmt
-                   (Condition
-                        (Binop Eql (Ident "n") (Int 0))
-                        (ControlStmt $ Retn (Int 1))
-                        (Else $
-                         ControlStmt $
-                         Retn (Binop Mul (Ident "n") (Function "fact_spec" [(Binop Sub (Ident "n") (Int 1))]))))
-             ]
-       , Fdefn
-             (DEF "hh")
-             "factorial"
-             [(INTEGER, "n")]
-             [ Simp $ Decl $ DeclAsgn "total" (DEF "hh") (Int 1)
-             , Simp $ Decl $ DeclAsgn "count" INTEGER (Int 0)
-             , ControlStmt $
-               While
-                   (Binop Lt (Ident "count") (Ident "n"))
-                   (Stmts [Simp (AsgnP (Ident "count") Incr), Simp (Asgn (Ident "total") (AsnOp Mul) (Ident "count"))])
-             , ControlStmt $ Retn (Ident "total")
-             ]
-       , Fdefn
-             INTEGER
-             "main"
-             []
-             [ ControlStmt $
-               For
-                   (Opt $ Decl (DeclAsgn "i" (DEF "hh") (Int 0)))
-                   (Binop Lt (Ident "i") (Int 10))
-                   (Opt (AsgnP (Ident "i") Incr))
-                   (Stmts [Simp $ Exp $ Function "factorial" [Ident "i"]])
-             , ControlStmt $ Retn (Int 0)
-             ]
-       ]
-testEAST :: IO ()
-testEAST =
-   let 
-    east = eGen exAST (Header (Map.empty) (Map.empty) (Map.empty))
-    in do 
-        print east;
-        print "____________________________________"
+-- --compute the factorial of a number example.
+-- exAST :: AST
+-- exAST =
+--    Program
+--        [ Typedef INTEGER "hh"
+--        , Sdecl "a"
+--        , Sdef "a" [(INTEGER, "b"), (POINTER INTEGER, "c"), (ARRAY BOOLEAN, "d")]
+--        , Sdef "random" [(INTEGER, "fdf"), (POINTER(STRUCT "a"), "fffdf")]
+--        , Fdecl VOID "o98k" [(INTEGER, "n"), (DEF "hh", "j")]
+--        , Fdefn
+--              (DEF "hh")
+--              "fact_spec"
+--              [(INTEGER, "n")]
+--              [ ControlStmt
+--                    (Condition
+--                         (Binop Eql (Ident "n") (Int 0))
+--                         (ControlStmt $ Retn (Int 1))
+--                         (Else $
+--                          ControlStmt $
+--                          Retn (Binop Mul (Ident "n") (Function "fact_spec" [(Binop Sub (Ident "n") (Int 1))]))))
+--              ]
+--        , Fdefn
+--              (DEF "hh")
+--              "factorial"
+--              [(INTEGER, "n")]
+--              [ Simp $ Decl $ DeclAsgn "total" (DEF "hh") (Int 1)
+--              , Simp $ Decl $ DeclAsgn "count" INTEGER (Int 0)
+--              , ControlStmt $
+--                While
+--                    (Binop Lt (Ident "count") (Ident "n"))
+--                    (Stmts [Simp (AsgnP (Ident "count") Incr), Simp (Asgn (Ident "total") (AsnOp Mul) (Ident "count"))])
+--              , ControlStmt $ Retn (Ident "total")
+--              ]
+--        , Fdefn
+--              INTEGER
+--              "main"
+--              []
+--              [ ControlStmt $
+--                For
+--                    (Opt $ Decl (DeclAsgn "i" (DEF "hh") (Int 0)))
+--                    (Binop Lt (Ident "i") (Int 10))
+--                    (Opt (AsgnP (Ident "i") Incr))
+--                    (Stmts [Simp $ Exp $ Function "factorial" [Ident "i"]])
+--              , ControlStmt $ Retn (Int 0)
+--              ]
+--        ]
+-- testEAST :: IO ()
+-- testEAST =
+--    let 
+--     east = eGen exAST (Header (Map.empty) (Map.empty) (Map.empty))
+--     in do 
+--         print east;
+--         print "____________________________________"

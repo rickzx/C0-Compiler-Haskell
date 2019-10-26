@@ -11,5 +11,5 @@ data Header =
     Header
         { fnDecl :: Map.Map Ident Type
         , typDef :: Map.Map Ident Type
-        , structDef :: Map.Map Ident [(Type, Ident)]
+        , structDef :: Map.Map Ident [(Ident, Type)]
         } deriving Show

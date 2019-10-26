@@ -29,7 +29,7 @@ data Gdecl =
     Fdecl {rtype :: Type, name :: Ident, parameters :: [(Type, Ident)]}
   | Fdefn {rtype :: Type, name :: Ident, parameters :: [(Type, Ident)], block :: [Stmt]}
   | Sdecl {name :: Ident}
-  | Sdef {name :: Ident, parameters :: [(Type, Ident)]}
+  | Sdef {name :: Ident, param :: [(Ident, Type)]}
   | Typedef {rtype :: Type, name :: Ident}
   deriving (Eq, Show)
 
@@ -102,6 +102,7 @@ instance Show Type where
   show (DEF a) = "def " ++ a
   show (ARRAY a) = show a ++ "[]"
   show (POINTER a) = show a ++ "*"
+  show (STRUCT a) = "Struct:" ++ show a
 
 instance Show Exp where
   show (Int x) = show x
