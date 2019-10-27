@@ -99,25 +99,30 @@ instance Show Type where
   show VOID = "void"
   show (ARROW args res) = show args ++ " -> " ++ show res
   show (DEF a) = "def " ++ a
-  show ANY = "any*"
-  show (POINTER t) = show t ++ "*"
-  show (ARRAY t) = show t ++ "[]"
-  show (STRUCT s) = "struct " ++ s
+  show (ARRAY a) = show a ++ "[]"
+  show (POINTER a) = show a ++ "*"
+  show (STRUCT a) = "Struct:" ++ show a
 
 instance Show Exp where
   show (Int x) = show x
   show (Ident var) = var
   show T = "True"
   show F = "False"
+  show NULL = "NULL"
   show (Binop binop expr1 expr2) =
     show expr1 ++ " " ++ show binop ++ " " ++ show expr2
-  show (Ternop expr1 expr2 expr3) =
+  show (Ternop expr1 expr2 expr3) = 
     show expr1 ++ " ? " ++ show expr2 ++ " :" ++ show expr3
   show (Unop unop expr) = show unop ++ show expr
-  show (Function identi exprlist) =
+  show (Function identi exprlist) = 
       identi ++ "(" ++ (foldr redu_fn "" exprlist) ++ ")"
-      where
+      where 
         redu_fn :: Exp -> String -> String
         redu_fn e stri = show e ++ "," ++ stri
   show (Ptrderef e) = "*("++ show e ++ ")"
+  show (Alloc typ) = "alloc(" ++ show typ ++ ")"
+  show (ArrayAlloc typ len) = "alloc_array(" ++ show typ ++ "," ++ show len ++ ")"
+  show (ArrayAccess exp1 exp2) = show exp1 ++ "[" ++ show exp2 ++ "]"
+  show (Field exp1 nme) = show exp1 ++ "." ++ show nme
+  show (Access exp1 nme) = show exp1 ++ "->" ++ show nme
 

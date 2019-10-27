@@ -913,7 +913,7 @@ readToken = do
             readToken
         AlexToken inp' len act -> do
             put (inp', typedefs)
-            let tk = (trace $ show typedefs)act (take len str)
+            let tk = act (take len str)
             case tk of
                 TokIdent x -> if (Set.member x typedefs) then return (TokTypeDefIdent x) else return tk
                 _ -> return tk
@@ -959,7 +959,7 @@ alex_action_1 = \_ -> TokStruct
 alex_action_2 = \_ -> TokTypeDef
 alex_action_3 = \_ -> TokReserved
 alex_action_4 = \_ -> TokAssert
-alex_action_5 = \_ -> TokReserved
+alex_action_5 = \_ -> TokNULL
 alex_action_6 = \_ -> TokAlloc
 alex_action_7 = \_ -> TokArrayAlloc
 alex_action_8 = \_ -> TokVoid

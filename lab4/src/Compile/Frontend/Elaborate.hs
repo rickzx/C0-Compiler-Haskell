@@ -21,7 +21,7 @@ data GlobState =
         { funDeclared :: Map.Map Ident Type
         , funDefined :: Map.Map Ident Type
         , typeDefined :: Map.Map Ident Type
-        , structDefined :: Map.Map Ident [(Ident, Type)]
+        , structDefined :: Map.Map Ident (Map.Map Ident Type)
         }
 
 eGenHeader :: AST -> Header
@@ -29,15 +29,16 @@ eGenHeader (Program l) =
     let initialState = GlobState {funDeclared = Map.empty, funDefined = Map.empty, typeDefined = Map.empty,
         structDefined = Map.empty}
         elaborate = do
-            elabHeader l
+            east <- elabHeader l
             s0 <- get
-            return $ Header (funDeclared s0) (typeDefined s0) (structDefined s0)
+            return $ Header (funDeclared s0) (typeDefined s0) (structDefined s0) east
         h = evalState (runExceptT elaborate) initialState
      in case h of
             Left err -> error err
             Right header -> header
 
 eGen :: AST -> Header -> EAST
+--eGen pgm h | (trace $ show pgm) False = undefined
 eGen (Program l) header =
     let initialState = GlobState {funDeclared = Map.singleton "main" (ARROW [] INTEGER), funDefined = Map.empty, typeDefined = Map.empty,
         structDefined = Map.empty}
@@ -98,8 +99,8 @@ checkPointerTypedef (typemap, strucmap) tpe@(POINTER ptype) =
 checkPointerTypedef (typemap, strucmap) _ = False
 
 
-elabHeader :: [Gdecl] -> ExceptT String (State GlobState) ()
-elabHeader [] = return ()
+elabHeader :: [Gdecl] -> ExceptT String (State GlobState) EAST
+elabHeader [] = return ENop
 elabHeader (x:xs) =
     case x of
         Fdecl rtp fnname param -> do
@@ -126,8 +127,8 @@ elabHeader (x:xs) =
                             elabHeader xs
         Typedef typ nme -> do
             declared <- gets funDeclared
-            if typ == VOID
-                then throwE "Cannot typdef VOID"
+            if typ == VOID || not (isTypeValid typ)
+                then throwE "Typedef type not valid"
                 else if Map.member nme declared
                          then throwE $ "Typdef uses a function name " ++ nme
                          else do
@@ -137,27 +138,20 @@ elabHeader (x:xs) =
                                  Nothing -> do
                                      let typ' = findType' typ typDefed
                                      modify' $ \(GlobState fdec fdef tdef sdef) ->
-                                         GlobState (Map.insert nme typ fdec) fdef tdef sdef
+                                         GlobState fdec fdef (Map.insert nme typ' tdef) sdef
                                      elabHeader xs
-        Sdecl nme -> do
-            strucDefed <- gets structDefined
-            case Map.lookup nme strucDefed of
-                Just _ -> elabHeader xs
-                Nothing -> do
-                    modify' $ \(GlobState fdec fdef tdef sdef) -> GlobState fdec fdef tdef (Map.insert nme [] sdef)
-                    elabHeader xs
+        Sdecl nme -> elabHeader xs
         Sdef nme param -> do
             strucDefed <- gets structDefined
             typDefed <- gets typeDefined
             case Map.lookup nme strucDefed of
-                Just (y:ys) -> throwE $ "struct" ++ nme ++ "is defined more than once"
+                Just _ -> throwE $ "struct" ++ nme ++ "is defined more than once"
                 _ -> do
-                    let param' = map_fn param
-                          where
-                            map_fn :: [(Ident, Type)] -> [(Ident, Type)]
-                            map_fn = map (\(a, tp) -> (a, findType' tp typDefed))
-                    modify' $ \(GlobState fdec fdef tdef sdef) -> GlobState fdec fdef tdef (Map.insert nme param' sdef)
-                    elabHeader xs
+                    let param' = map (\(a, tp) -> (a, findType' tp typDefed)) param
+                        param'' = Map.fromList param'
+                    modify' $ \(GlobState fdec fdef tdef sdef) -> GlobState fdec fdef tdef (Map.insert nme param'' sdef)
+                    east <- elabHeader xs
+                    return $ ESDef nme param' east
         _ -> throwE "Header only supports function declaration and typedef!"
 
 --do it for gdecl in main file, need to consider header
@@ -261,7 +255,7 @@ elabGdecls (x:xs) header allDef =
                                              elab' <- elabGdecls xs header allDef
                                              return $ EDecl nme typ (ESeq (EDef nme typ blk') elab')
         Typedef typ nme ->
-            if typ == VOID
+            if typ == VOID || not (isTypeValid typ)
                 then throwE "Cannot typdef VOID"
                 else do
                     typDefed <- gets typeDefined
@@ -276,35 +270,21 @@ elabGdecls (x:xs) header allDef =
                                          Nothing -> do
                                              let typ' = findType typ (typDefed, typDef header)
                                              modify' $ \(GlobState fdec fdef tdef sdef) ->
-                                                 GlobState fdec fdef (Map.insert nme typ tdef) sdef
+                                                 GlobState fdec fdef (Map.insert nme typ' tdef) sdef
                                              elabGdecls xs header allDef
-        Sdecl nme -> do
-            strucDefed <- gets structDefined
-            case Map.lookup nme strucDefed of
-                Just _ -> do
-                    elab' <- elabGdecls xs header allDef
-                    return $ EDecl nme (STRUCT nme) elab'
-                Nothing ->
-                    case Map.lookup nme (structDef header) of
-                        Just _ -> do
-                            elab' <- elabGdecls xs header allDef
-                            return $ EDecl nme (STRUCT nme) elab'
-                        Nothing -> do
-                            modify' $ \(GlobState fdec fdef tdef sdef) ->
-                                GlobState fdec fdef tdef (Map.insert nme [] sdef)
-                            elab' <- elabGdecls xs header allDef
-                            return $ EDecl nme (STRUCT nme) elab'
+        Sdecl nme -> elabGdecls xs header allDef
         Sdef nme param -> do
             structDefed <- gets structDefined
             typDefed <- gets typeDefined
             case Map.lookup nme structDefed of
-                Just (y:ys) -> throwE $ "struct" ++ nme ++ "is defined more than once"
+                Just _ -> throwE $ "struct" ++ nme ++ "is defined more than once"
                 _ ->
                     case Map.lookup nme (structDef header) of
-                        Just (z:zs) -> throwE $ "struct" ++ nme ++ "is defined more than once"
+                        Just _ -> throwE $ "struct" ++ nme ++ "is defined more than once"
                         _ -> do
+                            let param' = Map.fromList param
                             modify' $ \(GlobState fdec fdef tdef sdef) ->
-                                GlobState fdec fdef tdef (Map.insert nme param sdef)
+                                GlobState fdec fdef tdef (Map.insert nme param' sdef)
                             elab' <- elabGdecls xs header allDef
                             return $ ESDef nme (map_fn param) elab'
                             where map_fn :: [(Ident, Type)] -> [(Ident, Type)]
@@ -398,8 +378,19 @@ pExp (Binop b expr1 expr2) context allDef = EBinop b (pExp expr1 context allDef)
 pExp (Ternop expr1 expr2 expr3) context allDef = ETernop (pExp expr1 context allDef) (pExp expr2 context allDef) (pExp expr3 context allDef)
 pExp (Unop u expr1) context allDef = EUnop u (pExp expr1 context allDef)
 pExp NULL context allDef = ENULL
-pExp (Alloc typ) context allDef = EAlloc typ
-pExp (ArrayAlloc typ expr1) context allDef = EArrAlloc typ (pExp expr1 context allDef)
+pExp (Alloc typ) context allDef = 
+    let
+        GlobState _ _ td _ = fst context
+        header = snd context
+    in
+        EAlloc (findType typ (td, typDef header))
+pExp (ArrayAlloc typ expr1) context allDef =
+    let
+        GlobState _ _ td _ = fst context
+        header = snd context
+        typ' = findType typ (td, typDef header)
+    in  
+        EArrAlloc typ' (pExp expr1 context allDef)
 pExp (ArrayAccess expr1 expr2) context allDef = EArrAccess (pExp expr1 context allDef) (pExp expr2 context allDef)
 pExp (Field expr1 nme) context allDef = EField (pExp expr1 context allDef) nme
 pExp (Access expr1 nme) context allDef = EField (EDeref(pExp expr1 context allDef)) nme
@@ -488,3 +479,10 @@ eElse eopt context allDef =
     case eopt of
         ElseNop -> ENop
         Else stmt -> eStmt stmt context allDef
+        
+isTypeValid :: Type -> Bool
+isTypeValid (ARRAY VOID) = False
+isTypeValid (ARRAY t) = isTypeValid t
+isTypeValid (POINTER VOID) = False
+isTypeValid (POINTER t) = isTypeValid t
+isTypeValid _ = True

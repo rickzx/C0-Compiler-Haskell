@@ -26,7 +26,7 @@ checkEAST east header = evalState (runExceptT typeCheck) initialState
     initialState = (Set.empty, Set.empty)
     typeCheck = do
         checkInit east
-        synthValid (Map.empty, Map.insert "main" (ARROW [] INTEGER) (fnDecl header), Map.empty) east
+        synthValid (Map.empty, Map.insert "main" (ARROW [] INTEGER) (fnDecl header), structDef header) east
 
 checkUse :: EExp -> ExceptT String (State TypeCheckState) Bool
 checkUse (EInt _) = return True
@@ -67,9 +67,16 @@ extractLValue (EVField l _) s = extractLValue l s
 extractLValue (EVDeref l) s = extractLValue l s
 extractLValue (EVArrAccess l _) s = extractLValue l s
 
+assertLValueDefined :: ELValue -> Set.Set Ident -> Bool
+assertLValueDefined (EVIdent x) s = Set.member x s
+assertLValueDefined (EVField l _) s = assertLValueDefined l s
+assertLValueDefined (EVDeref l) s = assertLValueDefined l s
+assertLValueDefined (EVArrAccess l _) s = assertLValueDefined l s
+
 -- This function raises an exception if a variable is used before initialized.
 -- Evaluates to true when each branch has a proper return statement, false otherwise.
 checkInit :: EAST -> ExceptT String (State TypeCheckState) Bool
+--checkInit et | (trace $ show et) False = undefined
 checkInit (ESeq et1 et2) = do
     t1 <- checkInit et1
     t2 <- checkInit et2
@@ -79,34 +86,42 @@ checkInit (EAssign (EVIdent x) e True) = do
         let newdecl = Set.delete x declared
         put (newdecl, defined)
         t <- checkUse e
-        assertMsg ("Variable used before initialization" ++ show e) t
+        assertMsg ("Variable used before initialization " ++ show e) t
+        put (declared, Set.insert x defined)
+        return False
+checkInit (EAssign (EVIdent x) e False) = do
+        (declared, defined) <- get
+        t <- checkUse e
+        assertMsg ("Variable used before initialization " ++ show e) t
         put (declared, Set.insert x defined)
         return False
 checkInit (EAssign lval@(EVArrAccess _ idx) e _) = do
         (declared, defined) <- get
         t1 <- checkUse e
         t2 <- checkUse idx
-        assertMsg ("Variable used before initialization" ++ show e) (t1 && t2)
+        assertMsg ("Variable used before initialization " ++ show e) (t1 && t2)
         let x' = extractLValue lval declared
+        assertMsg ("Assignment use uninitialized variables " ++ show lval) (assertLValueDefined lval defined)
         case x' of
-            Nothing -> throwE $ "Assignment uses undeclared variables" ++ show lval
+            Nothing -> throwE $ "Assignment uses undeclared variables " ++ show lval
             Just x -> do
                 put (declared, Set.insert x defined)
                 return False
 checkInit (EAssign lval e _) = do
         (declared, defined) <- get
         t <- checkUse e
-        assertMsg ("Variable used before initialization" ++ show e) t
+        assertMsg ("Variable used before initialization " ++ show e) t
         let x' = extractLValue lval declared
+        assertMsg ("Assignment use uninitialized variables " ++ show lval) (assertLValueDefined lval defined)
         case x' of
-            Nothing -> throwE $ "Assignment uses undeclared variables" ++ show lval
+            Nothing -> throwE $ "Assignment uses undeclared variables " ++ show lval
             Just x -> do
                 put (declared, Set.insert x defined)
                 return False
 checkInit (EIf e et1 et2) = do
     (declared, defined) <- get
     t <- checkUse e
-    assertMsg ("Variable used before initialization" ++ show e) t
+    assertMsg ("Variable used before initialization " ++ show e) t
     t1 <- checkInit et1
     (_, defined1) <- get
     put (declared, defined)
@@ -117,14 +132,14 @@ checkInit (EIf e et1 et2) = do
 checkInit (EWhile e et) = do
     s0 <- get
     t <- checkUse e
-    assertMsg ("Variable used before initialization" ++ show e) t
+    assertMsg ("Variable used before initialization " ++ show e) t
     _ <- checkInit et
     put s0
     return False
 checkInit (ERet e) = case e of
     Just expr -> do
         t <- checkUse expr
-        assertMsg ("Variable used before initialization" ++ show e) t
+        assertMsg ("Variable used before initialization " ++ show e) t
         (declared, _) <- get
         put (declared, declared)
         return True
@@ -151,14 +166,14 @@ checkInit (EDef fn (ARROW args ret) et) = do
         _ -> do
             assertMsg ("Function " ++ fn ++ "does not have return") t
             return t
-checkInit ESDef {} = return False
+checkInit (ESDef _ _ et) = checkInit et
 checkInit (EAssert e) = do
     t <- checkUse e
-    assertMsg ("Variable used before initialization" ++ show e) t
+    assertMsg ("Variable used before initialization " ++ show e) t
     return False
 checkInit (ELeaf e) = do
     t <- checkUse e
-    assertMsg ("Variable used before initialization" ++ show e) t
+    assertMsg ("Variable used before initialization " ++ show e) t
     return False
     
 synthLValType :: (Context, Context, StructCtx) -> ELValue -> ExceptT String (State TypeCheckState) (Maybe Type)
@@ -227,6 +242,9 @@ synthValid (ctx, fctx, sctx) east =
                         te <- synthType (ctx, fctx, sctx) expr
                         case te of
                             Just VOID -> throwE $ "Returning void must invoke return, not " ++ show e
+                            Just ANY -> case ret of
+                                POINTER _ -> return ()
+                                _ -> throwE $ "Function return does not match with declared type" ++ show e
                             Just typ -> assertMsg "Function return does not match with declared type" (typ == ret)
                             Nothing -> throwE $ "tycon mismatch " ++ show expr
                     Nothing -> assertMsg "Function return does not match with declared type" (ret == VOID)
@@ -271,6 +289,7 @@ synthValid (ctx, fctx, sctx) east =
             assertMsg ("Duplicated field name in struct " ++ s) (length fields == length fieldMap)
             let allDefned = all (\(_fld, typ) -> case typ of
                     STRUCT st -> Map.member st sctx && st /= s
+                    VOID -> False
                     _ -> isTypeValid typ) fields
             assertMsg ("Undefined struct " ++ s) allDefned
             synthValid (ctx, fctx, Map.insert s fieldMap sctx) et
@@ -350,6 +369,8 @@ synthType (ctx, fctx, sctx) expr =
                     throwE "Conditional expression has large type"
                 (Just BOOLEAN, Just t, Just t')
                     | t == VOID || t' == VOID -> throwE "Conditional expression has large type"
+                    | t == ANY && isPointer t' -> return $ Just t'
+                    | isPointer t && t' == ANY -> return $ Just t
                     | t == t' -> return $ Just t
                     | otherwise -> throwE $ "tycon mismatch " ++ show expr
                 _ -> throwE $ "tycon mismatch " ++ show expr
@@ -393,7 +414,8 @@ synthType (ctx, fctx, sctx) expr =
             case t of
                 Just ANY -> throwE $ "Segmentation fault: attempting to dereference null pointer " ++ show expr
                 Just (POINTER typ) -> return $ Just typ
-                _ -> throwE $ "Cannot dereference a non-pointer " ++ show expr
+                Just typ -> throwE $ "Cannot dereference a non-pointer " ++ show expr ++ ": " ++ show typ
+                Nothing -> throwE $ "Tycon mismatch " ++ show expr
                 
             
 checkArgTyp :: [Maybe Type] -> Type -> Type
@@ -404,6 +426,9 @@ checkArgTyp argTyp (ARROW args ret)
                case x of
                    Nothing -> error "Tycon mismatch"
                    Just VOID -> error "Argument type cannot be VOID"
+                   Just ANY -> case snd y of
+                        POINTER _ -> True
+                        _ -> error "Tycon mismatch"
                    Just typ -> (typ == snd y) || error "Tycon mismatch") $
           zip argTyp args = ret
     | otherwise = error "Function type mismatch"
@@ -415,7 +440,9 @@ isSmallType _ = True
 
 isTypeValid :: Type -> Bool
 isTypeValid (ARRAY VOID) = False
+isTypeValid (ARRAY t) = isTypeValid t
 isTypeValid (POINTER VOID) = False
+isTypeValid (POINTER t) = isTypeValid t
 isTypeValid _ = True
 
 isPointer :: Type -> Bool

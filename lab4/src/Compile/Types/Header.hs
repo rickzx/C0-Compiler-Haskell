@@ -11,5 +11,9 @@ data Header =
     Header
         { fnDecl :: Map.Map Ident Type
         , typDef :: Map.Map Ident Type
-        , structDef :: Map.Map Ident [(Ident, Type)]
+        , structDef :: Map.Map Ident (Map.Map Ident Type)
+        , hEast :: EAST
         } deriving Show
+
+mockHeader :: Header
+mockHeader = Header Map.empty Map.empty Map.empty ENop
