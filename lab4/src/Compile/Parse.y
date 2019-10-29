@@ -114,9 +114,12 @@ Paramlist : '(' ')' {[]}
       | '(' Param ParamlistFollow ')' {$2 : $3}
 
 Sdecl : struct ident ';' {Sdecl $2}
+      | struct typeIdent ';' {Sdecl $2}
 
 Sdef : struct ident '{' Fieldlist '}' ';' {Sdef $2 $4}
+      | struct typeIdent '{' Fieldlist '}' ';' {Sdef $2 $4}
 Field : Type ident ';' {($2, $1)}
+      | Type typeIdent ';' {($2, $1)}
 Fieldlist : {- Empty -} {[]}
       | Field Fieldlist {$1 : $2}
 
@@ -131,9 +134,12 @@ Type  : int {INTEGER}
       | Type '[' ']'{ARRAY $1}
       | Type '*'{POINTER $1}
       | struct ident {STRUCT $2}
+      | struct typeIdent {STRUCT $2}
 
 Decl  : Type ident asgnop Exp {checkDeclAsgn $2 $3 $1 $4}
+      | Type typeIdent asgnop Exp {checkDeclAsgn $2 $3 $1 $4}
       | Type ident {JustDecl $2 $1}
+      | Type typeIdent {JustDecl $2 $1}
 
 Stmts : {- Empty -} {[]}
       | Stmt Stmts  {$1 : $2}
@@ -143,6 +149,8 @@ Stmt  : Control {ControlStmt $1}
       | '{' Stmts '}' {Stmts $2}
 
 Simp  : Exp asgnop Exp {checkSimpAsgn $1 $2 $3}
+      | '(' Exp ')' '++' {checkSimpAsgnPBracket $2 Incr}
+      | '(' Exp ')' '--' {checkSimpAsgnPBracket $2 Decr}
       | Exp '++' {checkSimpAsgnP $1 Incr}
       | Exp '--' {checkSimpAsgnP $1 Decr}
       | Decl {Decl $1}
@@ -174,7 +182,9 @@ Exp : '(' Exp ')' {$2}
     | alloc_array '(' Type ',' Exp ')' {ArrayAlloc $3 $5}
     | Exp '[' Exp ']' {ArrayAccess $1 $3}
     | Exp '.' ident {Field $1 $3}
+    | Exp '.' typeIdent {Field $1 $3}
     | Exp '->' ident {Access $1 $3}
+    | Exp '->' typeIdent {Access $1 $3}
     | '*' Exp %prec PTR {Ptrderef $2}
 
 ArglistFollow : {- Empty -} {[]}
@@ -216,12 +226,30 @@ checkSimpAsgn :: Exp -> Asnop -> Exp -> Simp
 checkSimpAsgn id op e =
     case id of
         Ident a -> Asgn id op e
+        Field _ _ -> Asgn id op e
+        Access _ _ -> Asgn id op e
+        Ptrderef _ -> Asgn id op e
+        ArrayAccess _ _ -> Asgn id op e
         _ -> error "Invalid assignment to non variables"
 
 checkSimpAsgnP :: Exp -> Postop -> Simp
 checkSimpAsgnP id op =
     case id of
         Ident a -> AsgnP id op
+        Field _ _ -> AsgnP id op
+        Access _ _ -> AsgnP id op
+        Ptrderef _ -> error "Cannot perform ++/-- on pointer dereference"
+        ArrayAccess _ _ -> AsgnP id op
+        _ -> error "Invalid postop assignment to non variables"
+
+checkSimpAsgnPBracket :: Exp -> Postop -> Simp
+checkSimpAsgnPBracket id op =
+    case id of
+        Ident a -> AsgnP id op
+        Field _ _ -> AsgnP id op
+        Access _ _ -> AsgnP id op
+        Ptrderef _ -> AsgnP id op
+        ArrayAccess _ _ -> AsgnP id op
         _ -> error "Invalid postop assignment to non variables"
 
 checkDeclAsgn :: Ident -> Asnop -> Type -> Exp -> Decl

@@ -2,20 +2,20 @@
 
 struct node{
     int ojbk;
-    struct node *o98k;
+    struct node* ozbk;
 };
 
-typedef struct node *node;
+typedef struct node* node;
 
 struct slice{
     node isCool;
     bool notcool;
 };
 
-typedef struct slice *sll;
+typedef struct slice* sll;
 int main(){
-    struct slice *slc = alloc(struct slice);
+    struct slice* slc = alloc(struct slice);
     node t = slc->isCool;
-    assert(t->o98k == NULL);
+    assert(t->ozbk == NULL);
     return 1;
 }

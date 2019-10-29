@@ -1,0 +1,45 @@
+//test return 2700
+//test weird behaviors
+
+typedef struct S* S;
+typedef int* intPtr;
+typedef intPtr** intPtrs;
+typedef intPtrs[][] lotsOfPtrs;
+
+struct S {
+	intPtr x;
+	intPtrs y;
+	lotsOfPtrs z;
+	S S;
+	S T;
+	int* padding;
+	lotsOfPtrs morePadding;
+	bool haha;
+};
+
+int abort(S s) {
+	return ***(s -> y) + ***(s -> morePadding[0][1]) + *(*((*s).S)).padding;
+}
+
+int main() {
+	S s = alloc(struct S);
+	s -> x = alloc(int);
+	*(s -> x) = 1024;
+
+	s -> y = alloc(intPtr*);
+	*(s -> y) = alloc(intPtr);
+	**(s -> y) = s -> x;
+
+	*(s -> x) -= 24;
+
+	s -> morePadding = alloc_array(intPtrs[], 1);
+	s -> morePadding[0] = alloc_array(intPtrs, 2);
+	s -> morePadding[0][1] = s -> y;
+
+	*(s -> x) -= 100;
+
+	s -> S = alloc(struct S);
+	s -> S -> padding = s -> x;
+
+	return abort(s);		// 3 * 900 = 2700
+}

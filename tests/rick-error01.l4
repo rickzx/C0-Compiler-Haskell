@@ -1,0 +1,14 @@
+//test error
+//uninitialized struct
+
+typedef struct S S;
+
+struct S {
+	int x;
+	bool y;
+	S S;
+};
+
+int main() {
+	return 0;
+}

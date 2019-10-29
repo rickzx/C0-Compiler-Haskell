@@ -1,0 +1,14 @@
+//test memerror
+//test array out of bound
+
+typedef int abc;
+
+struct S {
+	abc[] A;
+};
+
+int main() {
+	struct S* s = alloc(struct S);
+	s -> A = alloc_array(int, 0);
+	return s -> A[0];
+}

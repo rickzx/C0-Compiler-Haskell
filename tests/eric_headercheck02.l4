@@ -3,5 +3,5 @@ int main(){
     struct something *okko = init_sth();
     struct ohhlala *hawaii = loool();
     int[] a = alloc_array(int, 10);
-    return (okko->hi) + cool_fn(a, a) + hawaii->goldstein;
+    return (okko->hi) + cool_fn(a, a) + hawaii->goldstein[1];
 }

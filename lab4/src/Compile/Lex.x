@@ -24,7 +24,7 @@ tokens :-
   typedef {\_ -> TokTypeDef}
   break {\_ -> TokReserved}
   assert {\_ -> TokAssert}
-  NULL {\_ -> TokReserved}
+  NULL {\_ -> TokNULL}
   alloc {\_ -> TokAlloc}
   alloc_array {\_ -> TokArrayAlloc}
   void {\_ -> TokVoid}
@@ -183,7 +183,7 @@ readToken = do
             readToken
         AlexToken inp' len act -> do
             put (inp', typedefs)
-            let tk = (trace $ show typedefs)act (take len str)
+            let tk = act (take len str)
             case tk of
                 TokIdent x -> if (Set.member x typedefs) then return (TokTypeDefIdent x) else return tk
                 _ -> return tk

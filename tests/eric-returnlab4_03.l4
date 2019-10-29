@@ -1,0 +1,15 @@
+//test return 15
+
+//check the pointer*  and mult* 
+typedef int yay;
+
+int main(){
+    yay* res = alloc(yay);
+    int hi = 1;
+    for(yay i = 1; i < 100; i *= 5){
+        (*res) += 5;
+    }
+    yay*  lol;
+    hi = hi*  (*res);
+    return hi;
+}

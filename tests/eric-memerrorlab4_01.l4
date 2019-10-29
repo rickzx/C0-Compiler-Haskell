@@ -2,7 +2,7 @@
 //hashtables are hard....
 struct node{
     int val;
-    struct node *next;
+    struct node* next;
 };
 
 typedef struct node* node;
@@ -13,14 +13,14 @@ struct hashtable{
 };
 typedef struct hashtable* hash;
 
-hash create_hash(int thesize){
+hash createhash(int thesize){
     hash ok = alloc(struct hashtable);
     ok->size = thesize;
     ok->lists = alloc_array(node, thesize);
     return ok;
 }
 
-hash insert_hash(int key, hash ok, int value){
+hash inserthash(int key, hash ok, int value){
     node start = ok->lists[key];
     if(start == NULL){
         ok->lists[key] = alloc(struct node);
@@ -39,14 +39,14 @@ hash insert_hash(int key, hash ok, int value){
     start = start->next;
     return ok;
 }
-int hash_fn(int a, hash h){
-    return (a * 0xDEADBEEF) % (h -> size);
+int hashfn(int a, hash h){
+    return (a*  0xDEADBEEF) % (h -> size);
 }
 
 int main(){
-    hash ok = create_hash(14);
+    hash ok = createhash(14);
     for(int i = 0; i < 100; i++){
-        insert_hash(hash_fn(i, ok),ok, i);
+        inserthash(hashfn(i, ok),ok, i);
     }
     node l = ok->lists[3];
     while(l!= NULL && l->next != NULL){

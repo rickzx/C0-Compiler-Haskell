@@ -1,0 +1,19 @@
+
+struct pixelt
+{
+    int[] red;
+    int* alphfffa;
+    bool greeen;
+    bool bluee;
+};       // Library (concrete) view of a pixel
+typedef struct pixelt* pixel;
+
+int get_red(pixel p);
+
+int get_green(pixel p);
+
+int get_blue(pixel p);
+
+int get_alpha(pixel p);
+
+pixel make_pixel(int alpha, int red, int green, int blue);

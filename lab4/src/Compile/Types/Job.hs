@@ -27,7 +27,7 @@ defaultJob :: Job
 defaultJob = Job
   { jobOut          = ""
   , jobSource       = ""
-  , jobHeader       = "../runtime/15411-l3.h0"
+  , jobHeader       = "../runtime/15411-l4.h0"
   , jobOptimization = 0
   , jobOutUnsafe    = False
   , jobOutFormat    = Abs

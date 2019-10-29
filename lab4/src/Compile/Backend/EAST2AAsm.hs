@@ -71,7 +71,7 @@ genEast (ESeq e1 e2) = do
     gen1 <- genEast e1
     gen2 <- genEast e2
     return $ gen1 ++ gen2
-genEast (EAssign x expr _b) = do
+genEast (EAssign (EVIdent x) expr _b) = do
     allocMap <- State.gets variables
     let tmpNum = ATemp $ allocMap Map.! x
     genExp expr tmpNum

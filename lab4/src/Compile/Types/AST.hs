@@ -16,12 +16,12 @@ data Type =
     INTEGER 
   | BOOLEAN 
   | VOID
-  | NONE --for debug
   | DEF Ident
   | POINTER Type
   | ARRAY Type
   | STRUCT Ident
-  | ARROW [(Ident, Type)] Type deriving Eq
+  | ARROW [(Ident, Type)] Type
+  | ANY deriving Eq
 
 data AST = Program [Gdecl] deriving (Eq, Show)
 
@@ -39,7 +39,7 @@ data Stmt
   | ControlStmt Control
   deriving (Eq, Show)
 
-data Simpopt 
+data Simpopt
   = SimpNop
   | Opt Simp
   deriving (Eq, Show)
@@ -98,7 +98,6 @@ instance Show Type where
   show BOOLEAN = "bool"
   show VOID = "void"
   show (ARROW args res) = show args ++ " -> " ++ show res
-  show NONE = "error"
   show (DEF a) = "def " ++ a
   show (ARRAY a) = show a ++ "[]"
   show (POINTER a) = show a ++ "*"
@@ -125,4 +124,9 @@ instance Show Exp where
   show (ArrayAlloc typ len) = "alloc_array(" ++ show typ ++ "," ++ show len ++ ")"
   show (ArrayAccess exp1 exp2) = show exp1 ++ "[" ++ show exp2 ++ "]"
   show (Field exp1 nme) = show exp1 ++ "." ++ show nme
+<<<<<<< HEAD
   show (Access exp1 nme) = show exp1 ++ "->" ++ show nme 
+=======
+  show (Access exp1 nme) = show exp1 ++ "->" ++ show nme
+
+>>>>>>> master
