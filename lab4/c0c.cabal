@@ -74,11 +74,12 @@ Executable c0c
     , Compile.Backend.RegisterAlloc
     , Compile.Backend.AAsm2Asm
     , Compile.Backend.LiveVariable
-    , Compile.Backend.EAST2AAsm
+    , Compile.Backend.TAST2AAsm
     , Compile.Types.Assembly
     , Compile.Types.Job
     , Compile.Types.Ops
     , Compile.Types.EAST
     , Compile.Types.Header
+    , Compile.Types.TypedIR
     , LiftIOE
     , Util

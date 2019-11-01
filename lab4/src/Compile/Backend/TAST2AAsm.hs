@@ -1,4 +1,4 @@
-module Compile.Backend.EAST2AAsm where
+module Compile.Backend.TAST2AAsm where
 
 import Compile.Types
 import Control.Monad
@@ -41,7 +41,7 @@ getNewUniqueLabel = do
     return lab
 
 --for each term, (function name, AASM generated, # of var)
-aasmGen :: EAST -> [(Ident, ([AAsm], Int))]
+aasmGen :: TAST -> [(Ident, ([AAsm], Int))]
 aasmGen east = State.evalState assemM initialState
   where
     initialState =
@@ -59,23 +59,23 @@ aasmGen east = State.evalState assemM initialState
         return (reverse genf)
 
 -- Get the decls from a sequence of stmts.
-getDecls :: EAST -> [Ident]
-getDecls (ESeq e1 e2) = getDecls e1 ++ getDecls e2
-getDecls (EIf _ e1 e2) = getDecls e1 ++ getDecls e2
-getDecls (EWhile _ e) = getDecls e
-getDecls (EDecl x _ e) = x : getDecls e
+getDecls :: TAST -> [Ident]
+getDecls (TSeq e1 e2) = getDecls e1 ++ getDecls e2
+getDecls (TIf _ e1 e2) = getDecls e1 ++ getDecls e2
+getDecls (TWhile _ e) = getDecls e
+getDecls (TDecl x _ e) = x : getDecls e
 getDecls _ = []
 
-genEast :: EAST -> CodeGenStateM [AAsm]
-genEast (ESeq e1 e2) = do
+genEast :: TAST -> CodeGenStateM [AAsm]
+genEast (TSeq e1 e2) = do
     gen1 <- genEast e1
     gen2 <- genEast e2
     return $ gen1 ++ gen2
-genEast (EAssign (EVIdent x) expr _b) = do
+genEast (TAssign (TVIdent x _) expr _b) = do
     allocMap <- State.gets variables
     let tmpNum = ATemp $ allocMap Map.! x
     genExp expr tmpNum
-genEast (EDef fn t e) = do
+genEast (TDef fn t e) = do
     let ARROW ts _r = t
         args = map fst ts
         decls = args ++ getDecls e
@@ -87,12 +87,12 @@ genEast (EDef fn t e) = do
     let funGen = [AFun fn inStk] ++ movArg ++ gen
     State.modify' $ \(CodeGenState vs counter lab genf cf) -> CodeGenState vs counter lab ((fn, (funGen, counter)) : genf) cf
     return funGen
-genEast (EAssert expr) = do
-    let trans = EIf expr ENop (ELeaf $ EFunc "abort" [])
+genEast (TAssert expr) = do
+    let trans = TIf expr TNop (TLeaf $ TFunc "abort" [] VOID)
     genEast trans
-genEast (EIf ET e1 _e2) = genEast e1
-genEast (EIf EF _e1 e2) = genEast e2
-genEast (EIf expr e1 e2) = do
+genEast (TIf TT e1 _e2) = genEast e1
+genEast (TIf TF _e1 e2) = genEast e2
+genEast (TIf expr e1 e2) = do
     l1 <- getNewUniqueLabel
     l2 <- getNewUniqueLabel
     l3 <- getNewUniqueLabel
@@ -103,14 +103,14 @@ genEast (EIf expr e1 e2) = do
         cmp ++
         [AControl $ ALab l1] ++
         gen1 ++ [AControl $ AJump l3, AControl $ ALab l2] ++ gen2 ++ [AControl $ AJump l3, AControl $ ALab l3]
-genEast (EWhile expr e) = do
+genEast (TWhile expr e) = do
     l1 <- getNewUniqueLabel -- label before while guard
     l2 <- getNewUniqueLabel -- label of the while block
     l3 <- getNewUniqueLabel -- label after while block
     cmp <- genCmp expr l2 l3
     gen <- genEast e
     return $ [AControl $ ALab l1] ++ cmp ++ [AControl $ ALab l2] ++ gen ++ [AControl $ AJump l1, AControl $ ALab l3]
-genEast (ERet expr) = do
+genEast (TRet expr) = do
     fn <- State.gets currentFunction
     let fname = if fn == "a bort" then "_c0_abort_local411" else "_c0_" ++ fn
     case expr of
@@ -118,12 +118,12 @@ genEast (ERet expr) = do
             gen <- genExp e (AReg 0)
             return $ gen ++ [AControl $ AJump $ fname ++ "_ret"]
         Nothing -> return [AControl $ AJump $ fname ++ "_ret"]
-genEast ENop = return []
-genEast (EDecl _ _ e) = genEast e
-genEast (ELeaf e) = genSideEffect e
+genEast TNop = return []
+genEast (TDecl _ _ e) = genEast e
+genEast (TLeaf e) = genSideEffect e
 
-genSideEffect :: EExp -> CodeGenStateM [AAsm]
-genSideEffect (EFunc fn args) = do
+genSideEffect :: TExp -> CodeGenStateM [AAsm]
+genSideEffect (TFunc fn args _) = do
     let argLen = length args
     ids <- replicateM argLen getNewUniqueID
     let tmpVars = map ATemp ids
@@ -136,15 +136,15 @@ genSideEffect expr = do
     n <- getNewUniqueID
     genExp expr (ATemp n)
 
-genExp :: EExp -> ALoc -> CodeGenStateM [AAsm]
+genExp :: TExp -> ALoc -> CodeGenStateM [AAsm]
 -- genExp e _ | trace ("genExp " ++ show e ++ "\n") False = undefined
-genExp (EInt n) dest = return [AAsm [dest] ANop [AImm $ fromIntegral (fromIntegral n :: Int32)]]
-genExp (EIdent var) dest = do
+genExp (TInt n) dest = return [AAsm [dest] ANop [AImm $ fromIntegral (fromIntegral n :: Int32)]]
+genExp (TIdent var _) dest = do
     allocmap <- State.gets variables
     return [AAsm [dest] ANop [ALoc $ ATemp $ allocmap Map.! var]]
-genExp ET dest = return [AAsm [dest] ANop [AImm $ fromIntegral (1 :: Int32)]]
-genExp EF dest = return [AAsm [dest] ANop [AImm $ fromIntegral (0 :: Int32)]]
-genExp expr@(EBinop binop exp1 exp2) dest
+genExp TT dest = return [AAsm [dest] ANop [AImm $ fromIntegral (1 :: Int32)]]
+genExp TF dest = return [AAsm [dest] ANop [AImm $ fromIntegral (0 :: Int32)]]
+genExp expr@(TBinop binop exp1 exp2) dest
     | isRelOp binop = do
         n <- getNewUniqueID
         codegen1 <- genExp exp1 (ATemp n)
@@ -167,23 +167,23 @@ genExp expr@(EBinop binop exp1 exp2) dest
         gen1 <- genExp exp1 (ATemp n)
         n' <- getNewUniqueID
         gen2 <- genExp exp2 (ATemp n')
-        let checker = EBinop LAnd (EBinop Le (EInt 0) exp2) (EBinop Lt exp2 (EInt 32))
+        let checker = TBinop LAnd (TBinop Le (TInt 0) exp2) (TBinop Lt exp2 (TInt 32))
             combine = [AAsm [dest] (genBinOp binop) [ALoc $ ATemp n, ALoc $ ATemp n']]
         l1 <- getNewUniqueLabel
         l2 <- getNewUniqueLabel
         l3 <- getNewUniqueLabel
         cmp <- genCmp checker l1 l2
-        genl2 <- genExp (EBinop Div (EInt 1) (EInt 0)) dest
+        genl2 <- genExp (TBinop Div (TInt 1) (TInt 0)) dest
         return $ gen1 ++ gen2 ++ cmp ++ [AControl $ ALab l1] ++ combine ++ [AControl $ AJump l3, AControl $ ALab l2]
                 ++ genl2 ++ [AControl $ AJump l3, AControl $ ALab l3]
     | binop == Add || binop == Sub || binop == Mul =
         case (exp1, exp2) of
-            (EInt x1, _) -> do
+            (TInt x1, _) -> do
                 n <- getNewUniqueID
                 codegen <- genExp exp2 (ATemp n)
                 let combine = [AAsm [dest] (genBinOp binop) [AImm x1, ALoc $ ATemp n]]
                 return $ codegen ++ combine
-            (_, EInt x2) -> do
+            (_, TInt x2) -> do
                  n <- getNewUniqueID
                  codegen <- genExp exp1 (ATemp n)
                  let combine = [AAsm [dest] (genBinOp binop) [ALoc $ ATemp n, AImm x2]]
@@ -202,7 +202,7 @@ genExp expr@(EBinop binop exp1 exp2) dest
         codegen2 <- genExp exp2 (ATemp n')
         let combine = [AAsm [dest] (genBinOp binop) [ALoc $ ATemp n, ALoc $ ATemp n']]
         return $ codegen1 ++ codegen2 ++ combine
-genExp (EUnop unop expr) dest =
+genExp (TUnop unop expr) dest =
     case unop of
         LNot -> do
             l1 <- getNewUniqueLabel
@@ -220,16 +220,16 @@ genExp (EUnop unop expr) dest =
             return $ gen ++ [AAsm [dest] ABNot [ALoc $ ATemp n]]
         Neg ->
             case expr of
-                (EInt n) -> return [AAsm [dest] ANop [AImm $ fromIntegral ((fromIntegral $ -n) :: Int32)]]
+                (TInt n) -> return [AAsm [dest] ANop [AImm $ fromIntegral ((fromIntegral $ -n) :: Int32)]]
                 _ -> do
                     n <- getNewUniqueID
                     cogen <- genExp expr (ATemp n)
                     let assign = [AAsm [dest] ASub [AImm 0, ALoc $ ATemp n]]
                     return $ cogen ++ assign
-genExp (ETernop e1 e2 e3) dest =
+genExp (TTernop e1 e2 e3 _) dest =
     case e1 of
-        ET -> genExp e2 dest
-        EF -> genExp e3 dest
+        TT -> genExp e2 dest
+        TF -> genExp e3 dest
         _ -> do
             l1 <- getNewUniqueLabel
             l2 <- getNewUniqueLabel
@@ -241,7 +241,7 @@ genExp (ETernop e1 e2 e3) dest =
                 cmp ++
                 [AControl $ ALab l1] ++
                 gen1 ++ [AControl $ AJump l3, AControl $ ALab l2] ++ gen2 ++ [AControl $ AJump l3, AControl $ ALab l3]
-genExp (EFunc fn args) dest = do
+genExp (TFunc fn args _) dest = do
     let argLen = length args
     ids <- replicateM argLen getNewUniqueID
     let tmpVars = map ATemp ids
@@ -251,9 +251,9 @@ genExp (EFunc fn args) dest = do
         movArg = map (\(i, tmp) -> AAsm [argRegs !! i] ANop [ALoc tmp]) $ zip [0 ..] inReg
     return $ gen ++ movArg ++ [ACall fn inStk (length inReg), AAsm [dest] ANop [ALoc $ AReg 0]]
 
-genCmp :: EExp -> ALabel -> ALabel -> CodeGenStateM [AAsm]
+genCmp :: TExp -> ALabel -> ALabel -> CodeGenStateM [AAsm]
 -- genCmp e _ _ | trace ("genCmp " ++ show e ++ "\n") False = undefined
-genCmp (EBinop op e1 e2) l l'
+genCmp (TBinop op e1 e2) l l'
     | isRelOp op = do
         n <- getNewUniqueID
         gen1 <- genExp e1 (ATemp n)
@@ -270,9 +270,9 @@ genCmp (EBinop op e1 e2) l l'
         gen1 <- genCmp e1 l l2
         gen2 <- genCmp e2 l l'
         return $ gen1 ++ [AControl $ ALab l2] ++ gen2
-genCmp (EUnop LNot e) l l' = genCmp e l' l
-genCmp EF _l l' = return [AControl $ AJump l']
-genCmp ET l _l' = return [AControl $ AJump l]
+genCmp (TUnop LNot e) l l' = genCmp e l' l
+genCmp TF _l l' = return [AControl $ AJump l']
+genCmp TT l _l' = return [AControl $ AJump l]
 genCmp e l l' = do
     n <- getNewUniqueID
     gen <- genExp e (ATemp n)
@@ -302,35 +302,3 @@ genRelOp o = error $ "Operator is not a RelOp: " ++ show o
 
 argRegs :: [ALoc]
 argRegs = [AReg 3, AReg 4, AReg 1, AReg 2, AReg 5, AReg 6]
-
-testGenEast :: IO ()
-testGenEast = do
-    let east =
-            ESeq
-                (EDecl
-                     "f"
-                     (ARROW [("x", INTEGER)] INTEGER)
-                     (EDef "f" (ARROW [("x", INTEGER)] INTEGER) (ERet (Just $ EInt 1))))
-                (EDecl
-                     "g"
-                     (ARROW [("x", INTEGER)] INTEGER)
-                     (EDef "g" (ARROW [("x", INTEGER)] INTEGER) (ERet (Just $ EFunc "f" [EIdent "x"]))))
-        funs = aasmGen east
-    putStr $ show funs
-
-testGenRecursion :: IO ()
-testGenRecursion = do
-    let east =
-            EDecl
-                "fact"
-                (ARROW [("x", INTEGER)] INTEGER)
-                (EDef
-                     "fact"
-                     (ARROW [("x", INTEGER)] INTEGER)
-                     (EIf (EBinop Eql (EIdent "x") (EInt 0))
-                          (ERet (Just $ EInt 1))
-                          (ERet $ Just $ EBinop Mul (EFunc "fact" [EBinop Sub (EIdent "x") (EInt 1)]) (EIdent "x"))))
-        funs = aasmGen east
-    putStr $ show east
-    putStr "\n"
-    putStr $ show funs
