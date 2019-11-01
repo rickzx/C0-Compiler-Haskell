@@ -67,38 +67,6 @@ findDefFunc =
                  _ -> s)
         Set.empty
 
---check if a typedef for an array is valid
-checkArrayTypedef :: (Fnmap, Structmap) -> Type -> Bool
-checkArrayTypedef (typemap, strucmap) tpe@(ARRAY atype) = 
-    case atype of
-        DEF idd ->
-            case Map.lookup idd typemap of
-                Just primTyp -> True
-                Nothing -> False
-        STRUCT ident -> True
-        ARRAY arrtype -> checkArrayTypedef (typemap, strucmap) atype
-        POINTER ptype -> checkPointerTypedef (typemap, strucmap) ptype
-        VOID -> error "Can't have an array of void type"
-        _ -> True
-checkArrayTypedef (typemap, strucmap) _ = False
-
---check if a typedef for a pointer is valid
---TODO: return the type after conversion, not bool
-checkPointerTypedef :: (Fnmap, Structmap) -> Type -> Bool
-checkPointerTypedef (typemap, strucmap) tpe@(POINTER ptype) = 
-    case ptype of
-        DEF idd ->
-            case Map.lookup idd typemap of
-                Just primTyp -> True
-                Nothing -> False
-        STRUCT ident -> True
-        ARRAY arrtype -> checkArrayTypedef (typemap, strucmap) ptype
-        POINTER potype -> checkPointerTypedef (typemap, strucmap) potype
-        VOID -> error "Can't have an array of void type"
-        _ -> True
-checkPointerTypedef (typemap, strucmap) _ = False
-
-
 elabHeader :: [Gdecl] -> ExceptT String (State GlobState) EAST
 elabHeader [] = return ENop
 elabHeader (x:xs) =
@@ -154,40 +122,6 @@ elabHeader (x:xs) =
                     return $ ESDef nme param' east
         _ -> throwE "Header only supports function declaration and typedef!"
 
---do it for gdecl in main file, need to consider header
---(typedef + structdef) for main file -> typedef header -> structdef header
-checkArrayTypedef' :: (Fnmap, Structmap) -> Fnmap -> Structmap -> Type -> Bool
-checkArrayTypedef' (typemap, strucmap) headertype headerstruct tpe@(ARRAY atype) = 
-    case atype of
-        DEF idd ->
-            case Map.lookup idd typemap of
-                Just primTyp -> True
-                Nothing -> case Map.lookup idd headertype of
-                    Just _ -> True
-                    Nothing -> False
-        STRUCT ident -> True
-        ARRAY arrtype -> checkArrayTypedef' (typemap, strucmap) headertype headerstruct atype
-        POINTER ptype -> checkPointerTypedef' (typemap, strucmap) headertype headerstruct ptype
-        VOID -> error "Can't have an array of void type"
-        _ -> True
-checkArrayTypedef' (typemap, strucmap) _ _ _ = False
-
---do it for gdecl in main file, need to consider header
---(typedef + structdef) for main file -> typdef header -> structdef header
-checkPointerTypedef' :: (Fnmap, Structmap) -> Fnmap -> Structmap -> Type -> Bool
-checkPointerTypedef' (typemap, strucmap) headertype headerstruct tpe@(POINTER ptype) = 
-    case ptype of
-        DEF idd ->
-            case Map.lookup idd typemap of
-                Just primTyp -> True
-                Nothing -> case Map.lookup idd headertype of
-                    Just _ -> True
-                    Nothing -> False
-        STRUCT ident -> True
-        ARRAY arrtype -> checkArrayTypedef' (typemap, strucmap) headertype headerstruct ptype
-        POINTER potype -> checkPointerTypedef' (typemap, strucmap) headertype headerstruct potype
-        _ -> True
-checkPointerTypedef' (typemap, strucmap) _ _ _ = False
 
 elabGdecls :: [Gdecl] -> Header -> Set.Set Ident -> ExceptT String (State GlobState) EAST
 elabGdecls [] header allDef = return ENop
