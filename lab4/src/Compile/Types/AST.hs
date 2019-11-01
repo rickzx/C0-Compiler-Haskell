@@ -124,9 +124,5 @@ instance Show Exp where
   show (ArrayAlloc typ len) = "alloc_array(" ++ show typ ++ "," ++ show len ++ ")"
   show (ArrayAccess exp1 exp2) = show exp1 ++ "[" ++ show exp2 ++ "]"
   show (Field exp1 nme) = show exp1 ++ "." ++ show nme
-<<<<<<< HEAD
-  show (Access exp1 nme) = show exp1 ++ "->" ++ show nme 
-=======
   show (Access exp1 nme) = show exp1 ++ "->" ++ show nme
 
->>>>>>> master

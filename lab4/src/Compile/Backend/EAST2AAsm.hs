@@ -20,6 +20,8 @@ data CodeGenState =
     -- ^ generated AASM for each function (funcname, (AASM, #vars used))
         , currentFunction :: String
     -- ^ current function we are in
+        , arrays :: Map.Map String Type
+    -- ^ current array names and their length, type
         }
 
 -- Using the state monad with CodeGenState as the state allows us to implicitly
@@ -30,13 +32,13 @@ type CodeGenStateM = State.State CodeGenState
 getNewUniqueID :: CodeGenStateM Int
 getNewUniqueID = do
     currentCount <- State.gets uniqueIDCounter
-    State.modify' $ \(CodeGenState vs counter lab genf cf) -> CodeGenState vs (counter + 1) lab genf cf
+    State.modify' $ \(CodeGenState vs counter lab genf cf arr) -> CodeGenState vs (counter + 1) lab genf cf arr
     return currentCount
 
 getNewUniqueLabel :: CodeGenStateM String
 getNewUniqueLabel = do
     currentCount <- State.gets uniqueLabelCounter
-    State.modify' $ \(CodeGenState vs counter lab genf cf) -> CodeGenState vs counter (lab + 1) genf cf
+    State.modify' $ \(CodeGenState vs counter lab genf cf arr) -> CodeGenState vs counter (lab + 1) genf cf arr
     let lab = "L" ++ show currentCount
     return lab
 
@@ -51,11 +53,12 @@ aasmGen east = State.evalState assemM initialState
             , uniqueLabelCounter = 0
             , genFunctions = []
             , currentFunction = ""
+            , arrays = Map.empty
             }
     assemM :: CodeGenStateM [(Ident, ([AAsm], Int))]
     assemM = do
         _genAAsm <- genEast east
-        CodeGenState _ _ _ genf _ <- State.get
+        CodeGenState _ _ _ genf _ _<- State.get
         return (reverse genf)
 
 -- Get the decls from a sequence of stmts.
@@ -71,6 +74,36 @@ genEast (ESeq e1 e2) = do
     gen1 <- genEast e1
     gen2 <- genEast e2
     return $ gen1 ++ gen2
+--TODO: Added Stuff
+genEast (EAssign (EVIdent x) (ArrayAlloc tp exp)) = do 
+    n <- getNewUniqueID
+    n' <- getNewUniqueID
+    n'' <- getNewUniqueID
+    sizeinfo <- getNewUniqueID
+    genE <- genExp exp (ATemp n)
+    State.modify' $ \(CodeGenState vs counter lab genf cf arr) -> 
+        CodeGenState vs counter lab genf cf (Map.insert x tp)
+    allocMap <- State.gets variables
+    l1 <- getNewUniqueLabel
+    l2 <- getNewUniqueLabel
+    let tmpNum = APtr $ ATemp $ allocMap Map.! x
+        sizefact = case tp of
+            INTEGER -> 4
+            BOOLEAN -> 1
+            _ -> 8
+        sizechk = [AControl $ ACJump' (ALt) (ALoc $ ATemp n) (AImm 0) l1 l2]
+        fail = [AControl $ ALab l1, ACall "abort_mem" [] 0]
+        success = [
+            AControl $ ALab l2, 
+            AAsm [ATemp n'] AMul [AImm (sizefact), ALoc $ ATemp n],
+            AASM [ATemp n''] AAdd [ALoc $ ATemp n', AImm 8],
+            AASM [AReg 3] ANop [ALoc $ ATemp n''],
+            ACall "alloc_array" [] 1, 
+            AAsm [APtr $ ATemp sizeinfo] ANop [ALoc $ ATemp n'],
+            AAsm [tmpNum] AAdd [ALoc $ AReg 0, AImm 8]
+            ]
+    return $ sizechk ++ fail ++ success
+genEast (EAssign (EVIdent x) (E))
 genEast (EAssign (EVIdent x) expr _b) = do
     allocMap <- State.gets variables
     let tmpNum = ATemp $ allocMap Map.! x
@@ -80,12 +113,12 @@ genEast (EDef fn t e) = do
         args = map fst ts
         decls = args ++ getDecls e
         v' = Map.fromList $ zip decls [0 ..]
-    State.modify' $ \(CodeGenState _vs _counter lab genf _cf) -> CodeGenState v' (length decls) lab genf fn
+    State.modify' $ \(CodeGenState _vs _counter lab genf _cf arr) -> CodeGenState v' (length decls) lab genf fn arr
     let (inReg, inStk) = splitAt 6 (map (\a -> ATemp $ v' Map.! a) args)
         movArg = map (\(i, tmp) -> AAsm [tmp] ANop [ALoc $ argRegs !! i]) $ zip [0 ..] inReg
     gen <- genEast e
     let funGen = [AFun fn inStk] ++ movArg ++ gen
-    State.modify' $ \(CodeGenState vs counter lab genf cf) -> CodeGenState vs counter lab ((fn, (funGen, counter)) : genf) cf
+    State.modify' $ \(CodeGenState vs counter lab genf cf arr) -> CodeGenState vs counter lab ((fn, (funGen, counter)) : genf) cf arr
     return funGen
 genEast (EAssert expr) = do
     let trans = EIf expr ENop (ELeaf $ EFunc "abort" [])
@@ -122,8 +155,8 @@ genEast ENop = return []
 genEast (EDecl _ _ e) = genEast e
 genEast (ELeaf e) = genSideEffect e
 
-genSideEffect :: EExp -> CodeGenStateM [AAsm]
-genSideEffect (EFunc fn args) = do
+genSideEffect :: EExp -> ALoc -> CodeGenStateM [AAsm]
+genSideEffect (EFunc fn args) dest = do
     let argLen = length args
     ids <- replicateM argLen getNewUniqueID
     let tmpVars = map ATemp ids
@@ -132,9 +165,43 @@ genSideEffect (EFunc fn args) = do
     let (inReg, inStk) = splitAt 6 tmpVars
         movArg = map (\(i, tmp) -> AAsm [argRegs !! i] ANop [ALoc tmp]) $ zip [0 ..] inReg
     return $ gen ++ movArg ++ [ACall fn inStk (length inReg)]
-genSideEffect expr = do
+--TODO: Added Stuff
+genSideEffect (ESideEffect e1 e2 (AsnOp b) e3) dest = do
     n <- getNewUniqueID
-    genExp expr (ATemp n)
+    n' <- getNewUniqueID
+    n'' <- getNewUniqueID
+    item <- getNewUniqueID
+    l1 <- getNewUniqueLabel
+    l2 <- getNewUniqueLabel
+    l3 <- getNewUniqueLabel
+    arr <- genExp e1 (APtr $ ATemp n)
+    gen <- genSideEffect e2 (ATemp n'')
+    --Temp n' is the length of array
+    findsize <- genSize arr (ATemp n')
+    let
+        sizechk = [
+            AControl $ ACJump' (ALt) (ALoc $ ATemp n'') (AImm 0) l1 l2,
+            AControl $ ALab l2,
+            AControl $ ACJump' (AGt) (ALoc $ ATemp n'') (ALoc $ ATemp n') l1 l3
+            ]
+        fail = [
+            AControl $ ALab l1,
+            ACall "abort_mem" [] 0]
+        success = [
+            AControl $ ALab l3,
+            AAsm [item] AAdd [ALoc $ ATemp n, ]
+            AAsm [dest] (genBinOp b) [A]
+            ]
+genSideEffect expr dest = do
+    genExp expr (ATemp n dest)
+
+--given a temp representing array, find the size that is stored 8 byte before
+genSize :: ALoc -> ALoc -> CodeGenStateM [AAsm] 
+genSize t dest =
+    return [
+        AAsm [dest] ASub [ALoc t, AImm 8]
+    ]
+    
 
 genExp :: EExp -> ALoc -> CodeGenStateM [AAsm]
 -- genExp e _ | trace ("genExp " ++ show e ++ "\n") False = undefined
@@ -144,6 +211,7 @@ genExp (EIdent var) dest = do
     return [AAsm [dest] ANop [ALoc $ ATemp $ allocmap Map.! var]]
 genExp ET dest = return [AAsm [dest] ANop [AImm $ fromIntegral (1 :: Int32)]]
 genExp EF dest = return [AAsm [dest] ANop [AImm $ fromIntegral (0 :: Int32)]]
+genExp ENULL dest = return [AAsm [dest] ANop [AImm $ fromIntegral (0 :: Int32)]]
 genExp expr@(EBinop binop exp1 exp2) dest
     | isRelOp binop = do
         n <- getNewUniqueID
@@ -250,6 +318,12 @@ genExp (EFunc fn args) dest = do
     let (inReg, inStk) = splitAt 6 tmpVars
         movArg = map (\(i, tmp) -> AAsm [argRegs !! i] ANop [ALoc tmp]) $ zip [0 ..] inReg
     return $ gen ++ movArg ++ [ACall fn inStk (length inReg), AAsm [dest] ANop [ALoc $ AReg 0]]
+--TODO: Add some stuff
+genExp (EArrAlloc tp size) dest = do
+    let
+        arr' = Map.insert 
+
+
 
 genCmp :: EExp -> ALabel -> ALabel -> CodeGenStateM [AAsm]
 -- genCmp e _ _ | trace ("genCmp " ++ show e ++ "\n") False = undefined

@@ -445,15 +445,17 @@ eSimp :: Simp -> (GlobState, Header) -> Set.Set Ident -> EAST
 eSimp simp context allDef =
     case simp of
         Asgn i asop expr ->
-            let expression =
-                    case asop of
-                        Equal -> pExp expr context allDef
-                        AsnOp b -> pExp (Binop b i expr) context allDef
-             in EAssign (pLvalue i context allDef) expression False
+            case (i, asop) of
+                (ArrayAccess e1 e2, AsnOp b) ->
+                     ELeaf (ESideEffect (pExp e1 context allDef) (pExp e2 context allDef) asop (pExp expr context allDef))
+                (_, Equal) -> EAssign (pLvalue i context allDef) (pExp expr context allDef) False
+                (_, AsnOp b) -> EAssign (pLvalue i context allDef) (pExp (Binop b i expr) context allDef) False
         AsgnP i pos ->
-            if pos == Incr
-                then EAssign (pLvalue i context allDef) (pExp (Binop Add i (Int 1)) context allDef) False
-                else EAssign (pLvalue i context allDef) (pExp (Binop Sub i (Int 1)) context allDef) False
+            case (i, pos) of
+                (ArrayAccess e1 e2, Incr) -> ELeaf (ESideEffect (pExp e1 context allDef) (pExp e2 context allDef) (AsnOp Add) (EInt 1))
+                (ArrayAccess e1 e2, _) -> ELeaf (ESideEffect (pExp e1 context allDef) (pExp e2 context allDef) (AsnOp Sub) (EInt 1))
+                (_, Incr) -> EAssign (pLvalue i context allDef) (pExp (Binop Add i (Int 1)) context allDef) False
+                _ -> EAssign (pLvalue i context allDef) (pExp (Binop Sub i (Int 1)) context allDef) False
         Decl d ->
             case d of
                 JustDecl var tp ->

@@ -42,6 +42,7 @@ data EExp
     | EArrAccess EExp EExp
     | EField EExp Ident
     | EDeref EExp
+    | ESideEffect EExp EExp Asnop EExp -- consider the case A[f(x)] += 1
     deriving Eq
 
 instance Show EAST where
@@ -82,3 +83,4 @@ instance Show EExp where
     show (EArrAccess expr1 expr2) = show expr1 ++ "[" ++ show expr2 ++ "]"
     show (EField expr nme) = show expr ++ "." ++ nme
     show (EDeref expr) = "*" ++ show expr
+    show (ESideEffect arr idx asop exp1) = "SIDEEFFECT:" ++ show arr ++ "[" ++ show idx ++ "]" ++ show asop ++ " " ++ show exp1
