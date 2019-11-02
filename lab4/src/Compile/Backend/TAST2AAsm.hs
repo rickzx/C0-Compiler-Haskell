@@ -261,7 +261,7 @@ checkbounds arr idx = do
 genLVal :: TLValue -> ALoc -> CodeGenStateM [AAsm]
 genLVal (TVIdent var tp) dest = do
     allocmap <- State.gets variables
-    return [AAsm [dest] ANop [ALoc $ ATemp $ allocmap Map.! var]]
+    assignType tp (ATemp $ allocmap Map.! var) dest
 genLVal (TVField lv var tp) dest = return []
 genLVal (TVDeref lv tp) dest = return []
 genLVal (TVArrAccess lv expr tp) dest = do
@@ -443,7 +443,7 @@ genExp (TArrAlloc tp size) dest = do
             AControl $ ALab l1,
             AAsm [ATemp n'] AMulq [AImm sizefact, ALoc $ ATemp n],
             AAsm [ATemp n''] AAddq [ALoc $ ATemp n', AImm 8],
-            AAsm [AReg 3] ANop [ALoc $ ATemp n''],
+            AAsm [AReg 3] ANopq [ALoc $ ATemp n''],
             ACall "alloc_array" [] 1,
             AAsm [APtr $ AReg 0] ANop [ALoc $ ATemp n], -- put the size in the block before beginning of array
             AAsm [dest] AAddq [ALoc $ AReg 0, AImm 8]
@@ -467,6 +467,12 @@ genExp (TArrAccess exp1 exp2 tp) dest= do
             ]
     res <- assignType tp (APtr $ ATemp addr) dest
     return $ arr ++ access ++ bounds ++ offset ++ res
+genExp (TDeref exp1 tp) dest = do
+    n <- getNewUniqueID
+    ptr <- genExp exp1 (ATemp n)
+    nullchk <- checkNull (ATemp n)
+    asgntp <- assignType tp (APtr $ ATemp n) dest
+    return $ ptr ++ nullchk ++ asgntp
 
 --Type, src temp, dest temp
 assignType :: Type -> ALoc -> ALoc -> CodeGenStateM [AAsm]
