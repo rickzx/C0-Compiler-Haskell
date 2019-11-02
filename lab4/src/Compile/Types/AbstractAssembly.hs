@@ -78,7 +78,7 @@ instance Show ALoc where
   show (AReg 8) = "%r11d"
   show (AReg _) = "%ill-formed"
   show (ATemp n) = "%t" ++ show n
-  show (APtr n) = "%(" ++ show n ++ ")"
+  show (APtr n) = "(" ++ show n ++ ")"
 
 instance Show ACtrl where
   show (ALab s) = "." ++ s ++ ":"
