@@ -9,7 +9,7 @@
 module Compile.CodeGen where
 
 import Compile.Backend.AAsm2Asm
-import Compile.Backend.EAST2AAsm
+import Compile.Backend.TAST2AAsm
 import Compile.Backend.LiveVariable
 import Compile.Backend.RegisterAlloc
 import Compile.Types
@@ -17,19 +17,24 @@ import qualified Data.List as List
 import qualified Data.Map as Map
 import Debug.Trace
 
-codeGen :: EAST -> [AAsm]
+codeGen :: TAST -> [AAsm]
 --codeGen t | (trace $ show t) False = undefined
-codeGen east =
-    let eastGen = aasmGen east
-     in concatMap (\(_fn, (aasm, _lv)) -> aasm) eastGen
+codeGen tast =
+    let tastGen = aasmGen tast
+        memerrlabel = [
+            AControl $ ALab "memerror",
+            AAsm [AReg 3] ANop [AImm 12],
+            ACall "raise" [] 1
+            ]
+     in memerrlabel ++ concatMap (\(_fn, (aasm, _lv)) -> aasm) tastGen
 
-asmGen :: EAST -> Header -> String
+asmGen :: TAST -> Header -> String
 --asmGen t h | (trace $ show t ++ "\n\n" ++ show h) False = undefined
-asmGen east header =
-    let eastGen = aasmGen east
-        globs = map (\(x, _) -> if x == "a bort" then Global "_c0_abort_local411" else Global $ "_c0_" ++ x) eastGen
+asmGen tast header =
+    let tastGen = aasmGen tast
+        globs = map (\(x, _) -> if x == "a bort" then Global "_c0_abort_local411" else Global $ "_c0_" ++ x) tastGen
         globString = concatMap (\line -> show line ++ "\n") globs
-     in globString ++ concatMap (\(fn, (aasms, lv)) -> generateFunc (fn, aasms, lv) header) eastGen
+     in globString ++ concatMap (\(fn, (aasms, lv)) -> generateFunc (fn, aasms, lv) header) tastGen
 
 generateFunc :: (String, [AAsm], Int) -> Header -> String
 generateFunc (fn, aasms, localVar) header =

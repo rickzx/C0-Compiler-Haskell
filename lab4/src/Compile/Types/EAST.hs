@@ -11,6 +11,7 @@ import qualified Data.Maybe as Maybe
 data EAST 
     = ESeq EAST EAST
     | EAssign ELValue EExp Bool -- single variable assign -- last parameter bool indicates if the assignment is in a declaration
+    | EPtrAssign ELValue Asnop EExp --for pointer += with sideeffect
     | EDef Ident Type EAST -- Arg type list -> return type
     | ESDef Ident [(Ident, Type)] EAST  -- define struct
     | EIf EExp EAST EAST
@@ -42,12 +43,12 @@ data EExp
     | EArrAccess EExp EExp
     | EField EExp Ident
     | EDeref EExp
-    | ESideEffect EExp EExp Asnop EExp -- consider the case A[f(x)] += 1
     deriving Eq
 
 instance Show EAST where
     show (ESeq e1 e2) = "ESeq" ++ "(" ++ show e1 ++ " , "  ++ show e2 ++ ")"
     show (EAssign lval leaf _b) = "EAssign" ++ "(" ++ show lval ++ " , " ++ show leaf ++ ")"
+    show (EPtrAssign lval asop expr1) = "EPtrAssign" ++ "(" ++ show lval ++ "," ++ show asop ++ "=" ++ "," ++ show expr1 ++ ")"
     show (EIf leaf e1 e2) = "Eif" ++ "(" ++ show leaf ++ " , " ++ show e1 ++ " , " ++ show e2 ++ ")"
     show (EWhile leaf e1) = "EWhile" ++ "(" ++ show leaf ++ " , " ++ show e1 ++ ")"
     show (ERet leaf) = "ERet" ++ "(" ++ show leaf ++ ")"
@@ -83,4 +84,4 @@ instance Show EExp where
     show (EArrAccess expr1 expr2) = show expr1 ++ "[" ++ show expr2 ++ "]"
     show (EField expr nme) = show expr ++ "." ++ nme
     show (EDeref expr) = "*" ++ show expr
-    show (ESideEffect arr idx asop exp1) = "SIDEEFFECT:" ++ show arr ++ "[" ++ show idx ++ "]" ++ show asop ++ " " ++ show exp1
+    

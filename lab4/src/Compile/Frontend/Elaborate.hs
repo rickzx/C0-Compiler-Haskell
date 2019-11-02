@@ -375,21 +375,34 @@ eStmt x context allDef =
                 Retn ret -> ERet (Maybe.Just (pExp ret context allDef))
                 Void -> ERet Maybe.Nothing
 
+isPtrType :: Exp -> Bool
+isPtrType e = case e of
+    ArrayAccess _ _ -> True
+    Ptrderef _ -> True 
+    Field _ _ -> True
+    _ -> False
+
+--TODO: separate the case, if its not ident, separate case because we need to check memerror
 eSimp :: Simp -> (GlobState, Header) -> Set.Set Ident -> EAST
 eSimp simp context allDef =
     case simp of
-        Asgn i asop expr ->
-            case (i, asop) of
-                (ArrayAccess e1 e2, AsnOp b) ->
-                     ELeaf (ESideEffect (pExp e1 context allDef) (pExp e2 context allDef) asop (pExp expr context allDef))
-                (_, Equal) -> EAssign (pLvalue i context allDef) (pExp expr context allDef) False
-                (_, AsnOp b) -> EAssign (pLvalue i context allDef) (pExp (Binop b i expr) context allDef) False
-        AsgnP i pos ->
-            case (i, pos) of
-                (ArrayAccess e1 e2, Incr) -> ELeaf (ESideEffect (pExp e1 context allDef) (pExp e2 context allDef) (AsnOp Add) (EInt 1))
-                (ArrayAccess e1 e2, _) -> ELeaf (ESideEffect (pExp e1 context allDef) (pExp e2 context allDef) (AsnOp Sub) (EInt 1))
-                (_, Incr) -> EAssign (pLvalue i context allDef) (pExp (Binop Add i (Int 1)) context allDef) False
-                _ -> EAssign (pLvalue i context allDef) (pExp (Binop Sub i (Int 1)) context allDef) False
+        Asgn i asop expr -> if not(isPtrType i)|| asop == Equal then
+                let expression =
+                        case asop of
+                            Equal -> pExp expr context allDef
+                            AsnOp b -> pExp (Binop b i expr) context allDef
+                in EAssign (pLvalue i context allDef) expression False
+            else
+                EPtrAssign (pLvalue i context allDef) asop (pExp expr context allDef)
+        AsgnP i pos
+            | not(isPtrType i) ->
+                if pos == Incr
+                    then EAssign (pLvalue i context allDef) (pExp (Binop Add i (Int 1)) context allDef) False
+                    else EAssign (pLvalue i context allDef) (pExp (Binop Sub i (Int 1)) context allDef) False
+            | otherwise ->
+                if pos == Incr
+                    then EPtrAssign (pLvalue i context allDef) (AsnOp Add) (EInt 1)
+                    else EPtrAssign (pLvalue i context allDef) (AsnOp Sub) (EInt 1)
         Decl d ->
             case d of
                 JustDecl var tp ->

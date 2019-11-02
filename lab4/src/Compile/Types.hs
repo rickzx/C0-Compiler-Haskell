@@ -10,5 +10,6 @@ import Compile.Types.AST as X
 import Compile.Types.EAST as X
 import Compile.Types.Assembly as X
 import Compile.Types.Header as X
+import Compile.Types.TypedIR as X
 
 
