@@ -20,6 +20,7 @@ data AOp
   | AMod
   | AModq
   | ANop
+  | ANopq
   | ABAnd -- Bitwise And
   | ALAnd -- Logical And
   | ABOr  -- Bitwise Or
@@ -65,6 +66,7 @@ instance Show AOp where
   show AMod  = "%"
   show AModq = "%"
   show ANop  = "[nop]"
+  show ANopq = "[nopq]"
   show ABAnd = "&"
   show ALAnd = "&&"
   show ABOr  = "|"

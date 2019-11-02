@@ -20,29 +20,31 @@ data CodeGenState =
     -- ^ generated AASM for each function (funcname, (AASM, #vars used))
         , currentFunction :: String
     -- ^ current function we are in
+        , structInfo :: StructInfo
         }
 
 -- Using the state monad with CodeGenState as the state allows us to implicitly
 -- thread the variable map and the next unique ID through the entire
 -- computation. (The M in CodeGenStateM stands for "Monad".)
 type CodeGenStateM = State.State CodeGenState
+type StructInfo = Map.Map Ident (Int, Int, Map.Map Ident (Int, Int))       -- (Struct size, Struct alignment constraint, Map : field -> (offset, size))
 
 getNewUniqueID :: CodeGenStateM Int
 getNewUniqueID = do
     currentCount <- State.gets uniqueIDCounter
-    State.modify' $ \(CodeGenState vs counter lab genf cf) -> CodeGenState vs (counter + 1) lab genf cf
+    State.modify' $ \(CodeGenState vs counter lab genf cf si) -> CodeGenState vs (counter + 1) lab genf cf si
     return currentCount
 
 getNewUniqueLabel :: CodeGenStateM String
 getNewUniqueLabel = do
     currentCount <- State.gets uniqueLabelCounter
-    State.modify' $ \(CodeGenState vs counter lab genf cf) -> CodeGenState vs counter (lab + 1) genf cf
+    State.modify' $ \(CodeGenState vs counter lab genf cf si) -> CodeGenState vs counter (lab + 1) genf cf si
     let lab = "L" ++ show currentCount
     return lab
 
 --for each term, (function name, AASM generated, # of var)
 aasmGen :: TAST -> [(Ident, ([AAsm], Int))]
-aasmGen east = State.evalState assemM initialState
+aasmGen tast = State.evalState assemM initialState
   where
     initialState =
         CodeGenState
@@ -54,9 +56,44 @@ aasmGen east = State.evalState assemM initialState
             }
     assemM :: CodeGenStateM [(Ident, ([AAsm], Int))]
     assemM = do
-        _genAAsm <- genEast east
-        CodeGenState _ _ _ genf _ <- State.get
+        _genAAsm <- genTast tast
+        CodeGenState _ _ _ genf _ _ <- State.get
         return (reverse genf)
+        
+buildStructInfo :: Map.Map Ident (Map.Map Ident Type) -> StructInfo
+buildStructInfo =
+    Map.foldrWithKey
+        (\snme fields sinfo ->
+             let (size, maxsize, offsets) = buildStruct fields sinfo
+                 size' =
+                     if maxsize == 0 || mod size maxsize == 0
+                         then size
+                         else size + maxsize - mod size maxsize
+              in Map.insert snme (size', maxsize, offsets) sinfo)
+        Map.empty
+  where
+    buildStruct :: Map.Map Ident Type -> StructInfo -> (Int, Int, Map.Map Ident (Int, Int))
+    buildStruct fields sinfo =
+        Map.foldrWithKey
+            (\fnme ftyp (size, maxsize, offsets) ->
+                 let (fsize, falign) =
+                         case ftyp of
+                             INTEGER -> (4, 4)
+                             BOOLEAN -> (4, 4)
+                             POINTER _ -> (8, 8)
+                             ARRAY _ -> (8, 8)
+                             STRUCT s ->
+                                 case Map.lookup s sinfo of
+                                     Just (ssize, salign, _) -> (ssize, salign)
+                                     Nothing -> error "Malformed struct. Check the implementation of type-checker."
+                             _ -> error "Malformed struct. Check the implementation of type-checker."
+                     offset =
+                         if falign == 0 || mod size falign == 0
+                             then size
+                             else size + falign - mod size falign
+                  in (offset + fsize, max maxsize falign, Map.insert fnme (offset, falign) offsets))
+            (0, 0, Map.empty)
+            fields
 
 -- Get the decls from a sequence of stmts.
 getDecls :: TAST -> [Ident]
@@ -66,51 +103,51 @@ getDecls (TWhile _ e) = getDecls e
 getDecls (TDecl x _ e) = x : getDecls e
 getDecls _ = []
 
-genEast :: TAST -> CodeGenStateM [AAsm]
-genEast (TSeq e1 e2) = do
-    gen1 <- genEast e1
-    gen2 <- genEast e2
+genTast :: TAST -> CodeGenStateM [AAsm]
+genTast (TSeq e1 e2) = do
+    gen1 <- genTast e1
+    gen2 <- genTast e2
     return $ gen1 ++ gen2
-genEast (TAssign (TVIdent x _) expr _b) = do
+genTast (TAssign (TVIdent x _) expr _b) = do
     allocMap <- State.gets variables
     let tmpNum = ATemp $ allocMap Map.! x
     genExp expr tmpNum
-genEast (TDef fn t e) = do
+genTast (TDef fn t e) = do
     let ARROW ts _r = t
         args = map fst ts
         decls = args ++ getDecls e
         v' = Map.fromList $ zip decls [0 ..]
-    State.modify' $ \(CodeGenState _vs _counter lab genf _cf) -> CodeGenState v' (length decls) lab genf fn
+    State.modify' $ \(CodeGenState _vs _counter lab genf _cf si) -> CodeGenState v' (length decls) lab genf fn si
     let (inReg, inStk) = splitAt 6 (map (\a -> ATemp $ v' Map.! a) args)
         movArg = map (\(i, tmp) -> AAsm [tmp] ANop [ALoc $ argRegs !! i]) $ zip [0 ..] inReg
-    gen <- genEast e
+    gen <- genTast e
     let funGen = [AFun fn inStk] ++ movArg ++ gen
-    State.modify' $ \(CodeGenState vs counter lab genf cf) -> CodeGenState vs counter lab ((fn, (funGen, counter)) : genf) cf
+    State.modify' $ \(CodeGenState vs counter lab genf cf si) -> CodeGenState vs counter lab ((fn, (funGen, counter)) : genf) cf si
     return funGen
-genEast (TAssert expr) = do
+genTast (TAssert expr) = do
     let trans = TIf expr TNop (TLeaf $ TFunc "abort" [] VOID)
-    genEast trans
-genEast (TIf TT e1 _e2) = genEast e1
-genEast (TIf TF _e1 e2) = genEast e2
-genEast (TIf expr e1 e2) = do
+    genTast trans
+genTast (TIf TT e1 _e2) = genTast e1
+genTast (TIf TF _e1 e2) = genTast e2
+genTast (TIf expr e1 e2) = do
     l1 <- getNewUniqueLabel
     l2 <- getNewUniqueLabel
     l3 <- getNewUniqueLabel
     cmp <- genCmp expr l1 l2
-    gen1 <- genEast e1
-    gen2 <- genEast e2
+    gen1 <- genTast e1
+    gen2 <- genTast e2
     return $
         cmp ++
         [AControl $ ALab l1] ++
         gen1 ++ [AControl $ AJump l3, AControl $ ALab l2] ++ gen2 ++ [AControl $ AJump l3, AControl $ ALab l3]
-genEast (TWhile expr e) = do
+genTast (TWhile expr e) = do
     l1 <- getNewUniqueLabel -- label before while guard
     l2 <- getNewUniqueLabel -- label of the while block
     l3 <- getNewUniqueLabel -- label after while block
     cmp <- genCmp expr l2 l3
-    gen <- genEast e
+    gen <- genTast e
     return $ [AControl $ ALab l1] ++ cmp ++ [AControl $ ALab l2] ++ gen ++ [AControl $ AJump l1, AControl $ ALab l3]
-genEast (TRet expr) = do
+genTast (TRet expr) = do
     fn <- State.gets currentFunction
     let fname = if fn == "a bort" then "_c0_abort_local411" else "_c0_" ++ fn
     case expr of
@@ -118,9 +155,10 @@ genEast (TRet expr) = do
             gen <- genExp e (AReg 0)
             return $ gen ++ [AControl $ AJump $ fname ++ "_ret"]
         Nothing -> return [AControl $ AJump $ fname ++ "_ret"]
-genEast TNop = return []
-genEast (TDecl _ _ e) = genEast e
-genEast (TLeaf e) = genSideEffect e
+genTast TNop = return []
+genTast (TDecl _ _ e) = genTast e
+genTast (TLeaf e) = genSideEffect e
+genTast (TSDef _ _ e) = genTast e
 
 genSideEffect :: TExp -> CodeGenStateM [AAsm]
 genSideEffect (TFunc fn args _) = do
@@ -135,6 +173,41 @@ genSideEffect (TFunc fn args _) = do
 genSideEffect expr = do
     n <- getNewUniqueID
     genExp expr (ATemp n)
+    
+typeOfLVal :: TLValue -> Type
+typeOfLVal (TVIdent _ t) = t
+typeOfLVal (TVField _ _ t) = t
+typeOfLVal (TVDeref _ t) = t
+typeOfLVal (TVArrAccess _ _ t) = t
+
+toLVal :: TExp -> TLValue
+toLVal (TIdent x t) = TVIdent x t
+toLVal (TField e field t) = TVField (toLVal e) field t
+toLVal (TDeref p t) = TVDeref (toLVal p) t
+toLVal (TArrAccess arr idx t) = TVArrAccess (toLVal arr) idx t
+toLVal _ = error "Invalid conversion"
+    
+genAddr :: TLValue -> ALoc -> StructInfo -> CodeGenStateM [AAsm]
+genAddr (TVDeref (TVIdent x _) _) dest _sinfo = do
+    allocmap <- State.gets variables
+    return [AAsm [dest] ANop [ALoc $ ATemp $ allocmap Map.! x]]
+genAddr (TVDeref e _) dest sinfo = do
+    n <- getNewUniqueID
+    gen <- genAddr e (ATemp n) sinfo
+    return $ gen ++ [AAsm [dest] ANop [ALoc $ ATemp n]]
+genAddr (TVField e field _) dest sinfo = do
+    n <- getNewUniqueID
+    n' <- getNewUniqueID
+    gen <- genAddr e (ATemp n) sinfo
+    let 
+        offset = case typeOfLVal e of
+            STRUCT s -> case Map.lookup s sinfo of
+                Just (_, _, offsets) -> case Map.lookup field offsets of
+                    Just (offset, _) -> offset
+                    _ -> error "Malformed. Check type-checker."
+                _ -> error "Malformed. Check type-checker."
+            _ -> error "Malformed. Check type-checker."
+    return $ gen ++ [AAsm [ATemp n'] AAdd [ALoc $ ATemp n, AImm offset], AAsm [dest] ANop [ALoc $ ATemp n']]
 
 genExp :: TExp -> ALoc -> CodeGenStateM [AAsm]
 -- genExp e _ | trace ("genExp " ++ show e ++ "\n") False = undefined
@@ -250,6 +323,11 @@ genExp (TFunc fn args _) dest = do
     let (inReg, inStk) = splitAt 6 tmpVars
         movArg = map (\(i, tmp) -> AAsm [argRegs !! i] ANop [ALoc tmp]) $ zip [0 ..] inReg
     return $ gen ++ movArg ++ [ACall fn inStk (length inReg), AAsm [dest] ANop [ALoc $ AReg 0]]
+genExp expr@TField {} dest = do
+    n <- getNewUniqueID
+    sinfo <- State.gets structInfo
+    addr <- genAddr (toLVal expr) (ATemp n) sinfo
+    return $ addr ++ [AAsm [dest] ANopq [ALoc $ APtr $ ATemp n]]
 
 genCmp :: TExp -> ALabel -> ALabel -> CodeGenStateM [AAsm]
 -- genCmp e _ _ | trace ("genCmp " ++ show e ++ "\n") False = undefined
