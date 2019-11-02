@@ -27,7 +27,8 @@ data CodeGenState =
 -- thread the variable map and the next unique ID through the entire
 -- computation. (The M in CodeGenStateM stands for "Monad".)
 type CodeGenStateM = State.State CodeGenState
-type StructInfo = Map.Map Ident (Int, Int, Map.Map Ident (Int, Int))       -- (Struct size, Struct alignment constraint, Map : field -> (offset, size))
+
+type StructInfo = Map.Map Ident (Int, Int, Map.Map Ident (Int, Int)) -- (Struct size, Struct alignment constraint, Map : field -> (offset, size))
 
 getNewUniqueID :: CodeGenStateM Int
 getNewUniqueID = do
@@ -59,7 +60,7 @@ aasmGen tast = State.evalState assemM initialState
         _genAAsm <- genTast tast
         CodeGenState _ _ _ genf _ _ <- State.get
         return (reverse genf)
-        
+
 buildStructInfo :: Map.Map Ident (Map.Map Ident Type) -> StructInfo
 buildStructInfo =
     Map.foldrWithKey
@@ -119,7 +120,7 @@ genTast (TAssign lv expr _b) = do
     --the actual lvalue should be stored as address, not ptrderef
     lvgen <- genLVal lv (ATemp n)
     --the the return of expr should also be an address
-    gen <- genExp expr (ATemp n') 
+    gen <- genExp expr (ATemp n')
     return $ lvgen ++ gen ++ [AAsm [APtr $ ATemp n] ANopq [ALoc $ ATemp n']]
 genTast (TPtrAssign lv asop@(AsnOp b) e) = do
     n <- getNewUniqueID
@@ -128,8 +129,7 @@ genTast (TPtrAssign lv asop@(AsnOp b) e) = do
     lvgen <- genLVal lv (ATemp n)
     asgnmnt <- genExp e (ATemp n')
     nullchk <- checkNull (ATemp n)
-    let performOp =
-            [AAsm [APtr $ ATemp n] (genBinOp b) [ALoc $ APtr $ ATemp n, ALoc $ ATemp n']]
+    let performOp = [AAsm [APtr $ ATemp n] (genBinOp b) [ALoc $ APtr $ ATemp n, ALoc $ ATemp n']]
     return $ lvgen ++ asgnmnt ++ nullchk ++ performOp
 genTast (TDef fn t e) = do
     let ARROW ts _r = t
@@ -141,7 +141,8 @@ genTast (TDef fn t e) = do
         movArg = map (\(i, tmp) -> AAsm [tmp] ANop [ALoc $ argRegs !! i]) $ zip [0 ..] inReg
     gen <- genTast e
     let funGen = [AFun fn inStk] ++ movArg ++ gen
-    State.modify' $ \(CodeGenState vs counter lab genf cf si) -> CodeGenState vs counter lab ((fn, (funGen, counter)) : genf) cf si
+    State.modify' $ \(CodeGenState vs counter lab genf cf si) ->
+        CodeGenState vs counter lab ((fn, (funGen, counter)) : genf) cf si
     return funGen
 genTast (TAssert expr) = do
     let trans = TIf expr TNop (TLeaf $ TFunc "abort" [] VOID)
@@ -168,7 +169,10 @@ genTast (TWhile expr e) = do
     return $ [AControl $ ALab l1] ++ cmp ++ [AControl $ ALab l2] ++ gen ++ [AControl $ AJump l1, AControl $ ALab l3]
 genTast (TRet expr) = do
     fn <- State.gets currentFunction
-    let fname = if fn == "a bort" then "_c0_abort_local411" else "_c0_" ++ fn
+    let fname =
+            if fn == "a bort"
+                then "_c0_abort_local411"
+                else "_c0_" ++ fn
     case expr of
         Just e -> do
             gen <- genExp e (AReg 0)
@@ -192,7 +196,7 @@ genSideEffect (TFunc fn args _) = do
 genSideEffect expr = do
     n <- getNewUniqueID
     genExp expr (ATemp n)
-    
+
 typeOfLVal :: TLValue -> Type
 typeOfLVal (TVIdent _ t) = t
 typeOfLVal (TVField _ _ t) = t
@@ -205,54 +209,72 @@ toLVal (TField e field t) = TVField (toLVal e) field t
 toLVal (TDeref p t) = TVDeref (toLVal p) t
 toLVal (TArrAccess arr idx t) = TVArrAccess (toLVal arr) idx t
 toLVal _ = error "Invalid conversion"
-    
+
 genAddr :: TLValue -> ALoc -> StructInfo -> CodeGenStateM [AAsm]
 genAddr (TVDeref (TVIdent x _) _) dest _sinfo = do
     allocmap <- State.gets variables
-    return [AAsm [dest] ANop [ALoc $ ATemp $ allocmap Map.! x]]
+    return [AAsm [dest] ANopq [ALoc $ ATemp $ allocmap Map.! x]]
 genAddr (TVDeref e _) dest sinfo = do
     n <- getNewUniqueID
     gen <- genAddr e (ATemp n) sinfo
-    return $ gen ++ [AAsm [dest] ANop [ALoc $ ATemp n]]
+    return $ gen ++ [AAsm [dest] ANopq [ALoc $ ATemp n]]
 genAddr (TVField e field _) dest sinfo = do
     n <- getNewUniqueID
     n' <- getNewUniqueID
     gen <- genAddr e (ATemp n) sinfo
-    let 
-        offset = case typeOfLVal e of
-            STRUCT s -> case Map.lookup s sinfo of
-                Just (_, _, offsets) -> case Map.lookup field offsets of
-                    Just (o, _) -> o
-                    _ -> error "Malformed. Check type-checker."
+    let offset =
+            case typeOfLVal e of
+                STRUCT s ->
+                    case Map.lookup s sinfo of
+                        Just (_, _, offsets) ->
+                            case Map.lookup field offsets of
+                                Just (o, _) -> o
+                                _ -> error "Malformed. Check type-checker."
+                        _ -> error "Malformed. Check type-checker."
                 _ -> error "Malformed. Check type-checker."
-            _ -> error "Malformed. Check type-checker."
-    return $ gen ++ [AAsm [ATemp n'] AAdd [ALoc $ ATemp n, AImm offset], AAsm [dest] ANop [ALoc $ ATemp n']]
+    nullcheck <- checkNull (ATemp n)
+    return $
+        gen ++ nullcheck ++ [AAsm [ATemp n'] AAddq [ALoc $ ATemp n, AImm offset], AAsm [dest] ANopq [ALoc $ ATemp n']]
+genAddr (TVArrAccess arr idx typ) dest sinfo = do
+    n <- getNewUniqueID
+    n' <- getNewUniqueID
+    n'' <- getNewUniqueID
+    addr <- getNewUniqueID
+    genArr <- genLVal arr (ATemp n)
+    genIdx <- genExp idx (ATemp n')
+    boundcheck <- checkBounds typ (ATemp n) (ATemp n')
+    let sizefact = findsize typ
+    return $
+        genArr ++
+        genIdx ++
+        boundcheck ++
+        [ AAsm [ATemp n''] AMulq [AImm sizefact, ALoc $ ATemp n']
+        , AAsm [ATemp addr] AAddq [ALoc $ ATemp n, ALoc $ ATemp n'']
+        , AAsm [dest] ANopq [ALoc $ ATemp addr]
+        ]
 
 --check if a we are writing to or dereferencing NULL
 checkNull :: ALoc -> CodeGenStateM [AAsm]
 checkNull ptr = do
     l1 <- getNewUniqueLabel
-    return [
-            AControl $ ACJump' AEqq (ALoc ptr) (AImm 0) "memerror" l1,
-            AControl $ ALab l1
-        ]
+    return [AControl $ ACJump' AEqq (ALoc ptr) (AImm 0) "memerror" l1, AControl $ ALab l1]
+
 --TODO: New
 --creates the labels and temps needed to check the bounds of the array access
 --input is the ALoc representing the first element of the Array, and second ALoc representing index
-checkbounds :: Type -> ALoc -> ALoc -> CodeGenStateM [AAsm] 
-checkbounds tp arr idx = do
+checkBounds :: Type -> ALoc -> ALoc -> CodeGenStateM [AAsm]
+checkBounds _ arr idx = do
     n <- getNewUniqueID
     l2 <- getNewUniqueLabel
     l3 <- getNewUniqueLabel
     size <- getNewUniqueID
-    theassign <- assignType tp (APtr $ ATemp n) (ATemp size)
-    let
-        gensize = [AAsm [ATemp n] ASubq [ALoc arr, AImm 8]]
-        sizechk = [
-            AControl $ ACJump' ALt (ALoc idx) (AImm 0) "memerror" l2,
-            AControl $ ALab l2,
-            AControl $ ACJump' AGt (ALoc idx) (ALoc $ APtr $ ATemp size) "memerror" l3,
-            AControl $ ALab l3
+    theassign <- assignType INTEGER (APtr $ ATemp n) (ATemp size)
+    let gensize = [AAsm [ATemp n] ASubq [ALoc arr, AImm 8]]
+        sizechk =
+            [ AControl $ ACJump' ALt (ALoc idx) (AImm 0) "memerror" l2
+            , AControl $ ALab l2
+            , AControl $ ACJump' AGt (ALoc idx) (ALoc $ APtr $ ATemp size) "memerror" l3
+            , AControl $ ALab l3
             ]
     nullcheck <- checkNull arr
     return $ nullcheck ++ gensize ++ theassign ++ sizechk
@@ -272,21 +294,19 @@ genLVal (TVArrAccess lv expr tp) dest = do
     l1 <- getNewUniqueLabel
     l2 <- getNewUniqueLabel
     l3 <- getNewUniqueLabel
-    let
-        arr = ATemp n
+    let arr = ATemp n
     gen <- genLVal lv arr
     expgen <- genExp expr (ATemp n')
-    boundcheck <- checkbounds tp arr (ATemp n')
+    boundcheck <- checkBounds tp arr (ATemp n')
     assign <- assignType tp (APtr $ ATemp n'') dest
-    let
-        access = [
-            AAsm [ATemp offset] AMul [ALoc $ ATemp n', AImm (findsize tp)],
-            AAsm [ATemp n''] AAddq [ALoc arr, ALoc $ ATemp offset]
+    let access =
+            [ AAsm [ATemp offset] AMulq [ALoc $ ATemp n', AImm (findsize tp)]
+            , AAsm [ATemp n''] AAddq [ALoc arr, ALoc $ ATemp offset]
             ]
     return $ gen ++ expgen ++ boundcheck ++ access ++ assign
 
 findsize :: Type -> Int
-findsize tp = 
+findsize tp =
     case tp of
         INTEGER -> 4
         BOOLEAN -> 4
@@ -333,8 +353,12 @@ genExp expr@(TBinop binop exp1 exp2) dest
         l3 <- getNewUniqueLabel
         cmp <- genCmp checker l1 l2
         genl2 <- genExp (TBinop Div (TInt 1) (TInt 0)) dest
-        return $ gen1 ++ gen2 ++ cmp ++ [AControl $ ALab l1] ++ combine ++ [AControl $ AJump l3, AControl $ ALab l2]
-                ++ genl2 ++ [AControl $ AJump l3, AControl $ ALab l3]
+        return $
+            gen1 ++
+            gen2 ++
+            cmp ++
+            [AControl $ ALab l1] ++
+            combine ++ [AControl $ AJump l3, AControl $ ALab l2] ++ genl2 ++ [AControl $ AJump l3, AControl $ ALab l3]
     | binop == Add || binop == Sub || binop == Mul =
         case (exp1, exp2) of
             (TInt x1, _) -> do
@@ -343,17 +367,17 @@ genExp expr@(TBinop binop exp1 exp2) dest
                 let combine = [AAsm [dest] (genBinOp binop) [AImm x1, ALoc $ ATemp n]]
                 return $ codegen ++ combine
             (_, TInt x2) -> do
-                 n <- getNewUniqueID
-                 codegen <- genExp exp1 (ATemp n)
-                 let combine = [AAsm [dest] (genBinOp binop) [ALoc $ ATemp n, AImm x2]]
-                 return $ codegen ++ combine
+                n <- getNewUniqueID
+                codegen <- genExp exp1 (ATemp n)
+                let combine = [AAsm [dest] (genBinOp binop) [ALoc $ ATemp n, AImm x2]]
+                return $ codegen ++ combine
             _ -> do
-                 n <- getNewUniqueID
-                 codegen1 <- genExp exp1 (ATemp n)
-                 n' <- getNewUniqueID
-                 codegen2 <- genExp exp2 (ATemp n')
-                 let combine = [AAsm [dest] (genBinOp binop) [ALoc $ ATemp n, ALoc $ ATemp n']]
-                 return $ codegen1 ++ codegen2 ++ combine
+                n <- getNewUniqueID
+                codegen1 <- genExp exp1 (ATemp n)
+                n' <- getNewUniqueID
+                codegen2 <- genExp exp2 (ATemp n')
+                let combine = [AAsm [dest] (genBinOp binop) [ALoc $ ATemp n, ALoc $ ATemp n']]
+                return $ codegen1 ++ codegen2 ++ combine
     | otherwise = do
         n <- getNewUniqueID
         codegen1 <- genExp exp1 (ATemp n)
@@ -422,33 +446,30 @@ genExp (TArrAlloc tp size) dest = do
     sizeinfo <- getNewUniqueID
     l1 <- getNewUniqueLabel
     size <- genExp size (ATemp n)
-    let
-        sizefact = findsize tp
+    let sizefact = findsize tp
         sizechk = [AControl $ ACJump' ALt (ALoc $ ATemp n) (AImm 0) "memerror" l1]
-        success = [
-            AControl $ ALab l1,
-            AAsm [ATemp n'] AMul [AImm sizefact, ALoc $ ATemp n],
-            AAsm [ATemp n''] AAdd [ALoc $ ATemp n', AImm 8],
-            AAsm [AReg 3] ANop [ALoc $ ATemp n''],
-            ACall "alloc_array" [] 1,
-            AAsm [APtr $ AReg 0] ANop [ALoc $ ATemp n], -- put the size in the block before beginning of array
-            AAsm [dest] AAddq [ALoc $ AReg 0, AImm 8]
+        success =
+            [ AControl $ ALab l1
+            , AAsm [ATemp n'] AMulq [AImm sizefact, ALoc $ ATemp n]
+            , AAsm [ATemp n''] AAddq [ALoc $ ATemp n', AImm 8]
+            , AAsm [AReg 3] ANopq [ALoc $ ATemp n'']
+            , ACall "alloc_array" [] 1
+            , AAsm [APtr $ AReg 0] ANop [ALoc $ ATemp n] -- put the size in the block before beginning of array
+            , AAsm [dest] AAddq [ALoc $ AReg 0, AImm 8]
             ]
     return $ size ++ sizechk ++ success
-genExp (TArrAccess exp1 exp2 tp) dest= do
+genExp (TArrAccess exp1 exp2 tp) dest = do
     n <- getNewUniqueID
     n' <- getNewUniqueID
     n'' <- getNewUniqueID
     addr <- getNewUniqueID
     arr <- genExp exp1 (ATemp n)
     access <- genExp exp2 (ATemp n')
-    bounds <- checkbounds tp (ATemp n) (ATemp n')
-    let
-        sizefact = findsize tp
-        offset = 
-            [
-            AAsm [ATemp n''] AMul [AImm sizefact, ALoc $ ATemp n'],
-            AAsm [ATemp addr] AAddq [ALoc $ ATemp n, ALoc $ ATemp n'']
+    bounds <- checkBounds tp (ATemp n) (ATemp n')
+    let sizefact = findsize tp
+        offset =
+            [ AAsm [ATemp n''] AMulq [AImm sizefact, ALoc $ ATemp n']
+            , AAsm [ATemp addr] AAddq [ALoc $ ATemp n, ALoc $ ATemp n'']
             ]
     res <- assignType tp (APtr $ ATemp addr) dest
     return $ arr ++ access ++ offset ++ res
@@ -456,12 +477,12 @@ genExp (TArrAccess exp1 exp2 tp) dest= do
 --Type, src temp, dest temp
 assignType :: Type -> ALoc -> ALoc -> CodeGenStateM [AAsm]
 assignType tp src dest =
-    case tp of 
+    case tp of
         POINTER _ -> return [AAsm [dest] ANopq [ALoc src]]
         ARRAY _ -> return [AAsm [dest] ANopq [ALoc src]]
         STRUCT _ -> return [AAsm [dest] ANopq [ALoc src]]
         _ -> return [AAsm [dest] ANop [ALoc src]]
-        
+
 genCmp :: TExp -> ALabel -> ALabel -> CodeGenStateM [AAsm]
 -- genCmp e _ _ | trace ("genCmp " ++ show e ++ "\n") False = undefined
 genCmp (TBinop op e1 e2) l l'
@@ -521,15 +542,21 @@ testGenEast = do
                 (TDecl
                      "f"
                      (ARROW [] (ARRAY INTEGER))
-                     (TDef "f" (ARROW [] (ARRAY INTEGER)) 
-                        (TDecl "x" (ARRAY INTEGER) (
-                            TSeq (TAssign (TVIdent "x" (ARRAY INTEGER)) (TArrAlloc (ARRAY INTEGER) (TInt 10))True)
-                                (TRet (Just $ TIdent "x" (ARRAY INTEGER)))
-                        ))))
+                     (TDef
+                          "f"
+                          (ARROW [] (ARRAY INTEGER))
+                          (TDecl
+                               "x"
+                               (ARRAY INTEGER)
+                               (TSeq
+                                    (TAssign (TVIdent "x" (ARRAY INTEGER)) (TArrAlloc (ARRAY INTEGER) (TInt 10)) True)
+                                    (TRet (Just $ TIdent "x" (ARRAY INTEGER)))))))
                 (TDecl
                      "g"
                      (ARROW [("x", (ARRAY INTEGER))] INTEGER)
-                     (TDef "g" (ARROW [("x", (ARRAY INTEGER))] INTEGER) 
-                        (TRet (Just $ TArrAccess (TIdent "x" (ARRAY INTEGER)) (TInt 3) INTEGER))))
+                     (TDef
+                          "g"
+                          (ARROW [("x", (ARRAY INTEGER))] INTEGER)
+                          (TRet (Just $ TArrAccess (TIdent "x" (ARRAY INTEGER)) (TInt 3) INTEGER))))
         funs = aasmGen east
     putStr $ show funs
