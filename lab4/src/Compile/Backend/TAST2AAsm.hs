@@ -239,15 +239,15 @@ checkNull ptr = do
 --TODO: New
 --creates the labels and temps needed to check the bounds of the array access
 --input is the ALoc representing the first element of the Array, and second ALoc representing index
-checkbounds :: Type -> ALoc -> ALoc -> CodeGenStateM [AAsm] 
-checkbounds tp arr idx = do
+checkbounds :: ALoc -> ALoc -> CodeGenStateM [AAsm] 
+checkbounds arr idx = do
     n <- getNewUniqueID
     l2 <- getNewUniqueLabel
     l3 <- getNewUniqueLabel
     size <- getNewUniqueID
-    theassign <- assignType tp (APtr $ ATemp n) (ATemp size)
     let
-        gensize = [AAsm [ATemp n] ASubq [ALoc arr, AImm 8]]
+        gensize = [AAsm [ATemp n] ASubq [ALoc arr, AImm 8],
+            AAsm [ATemp size] ANop [ALoc $ APtr $ ATemp n]]
         sizechk = [
             AControl $ ACJump' ALt (ALoc idx) (AImm 0) "memerror" l2,
             AControl $ ALab l2,
@@ -255,7 +255,7 @@ checkbounds tp arr idx = do
             AControl $ ALab l3
             ]
     nullcheck <- checkNull arr
-    return $ nullcheck ++ gensize ++ theassign ++ sizechk
+    return $ nullcheck ++ gensize ++ sizechk
 
 --TODO: New
 genLVal :: TLValue -> ALoc -> CodeGenStateM [AAsm]
@@ -272,27 +272,31 @@ genLVal (TVArrAccess lv expr tp) dest = do
     l1 <- getNewUniqueLabel
     l2 <- getNewUniqueLabel
     l3 <- getNewUniqueLabel
+    info <- State.gets structInfo
     let
         arr = ATemp n
     gen <- genLVal lv arr
     expgen <- genExp expr (ATemp n')
-    boundcheck <- checkbounds tp arr (ATemp n')
+    boundcheck <- checkbounds arr (ATemp n')
     assign <- assignType tp (APtr $ ATemp n'') dest
     let
         access = [
-            AAsm [ATemp offset] AMul [ALoc $ ATemp n', AImm (findsize tp)],
+            AAsm [ATemp offset] AMulq [ALoc $ ATemp n', AImm (findsize tp info)],
             AAsm [ATemp n''] AAddq [ALoc arr, ALoc $ ATemp offset]
             ]
     return $ gen ++ expgen ++ boundcheck ++ access ++ assign
 
-findsize :: Type -> Int
-findsize tp = 
+findsize :: Type -> StructInfo -> Int
+findsize tp info = 
     case tp of
         INTEGER -> 4
         BOOLEAN -> 4
         POINTER _ -> 8
         ARRAY _ -> 8
-        STRUCT a -> 8 --TBD
+        STRUCT a -> 
+                case Map.lookup a info of
+                    Just (size, _, _) -> size
+                    Nothing -> error "accessing undeclared struct"
         _ -> error "Invalid type to findsize"
 
 genExp :: TExp -> ALoc -> CodeGenStateM [AAsm]
@@ -415,6 +419,15 @@ genExp expr@TField {} dest = do
     addr <- genAddr (toLVal expr) (ATemp n) sinfo
     return $ addr ++ [AAsm [dest] ANop [ALoc $ APtr $ ATemp n]]
 --TODO: Add some stuff
+genExp (TAlloc tp) dest = do
+    info <- State.gets structInfo
+    let
+        sizefact = findsize tp info
+    return [
+                AAsm [AReg 3] ANopq [AImm sizefact],
+                ACall "alloc" [] 1,
+                AAsm [dest] ANopq [ALoc $ AReg 0]
+            ]
 genExp (TArrAlloc tp size) dest = do
     n <- getNewUniqueID
     n' <- getNewUniqueID
@@ -422,13 +435,14 @@ genExp (TArrAlloc tp size) dest = do
     sizeinfo <- getNewUniqueID
     l1 <- getNewUniqueLabel
     size <- genExp size (ATemp n)
+    info <- State.gets structInfo
     let
-        sizefact = findsize tp
+        sizefact = findsize tp info
         sizechk = [AControl $ ACJump' ALt (ALoc $ ATemp n) (AImm 0) "memerror" l1]
         success = [
             AControl $ ALab l1,
-            AAsm [ATemp n'] AMul [AImm sizefact, ALoc $ ATemp n],
-            AAsm [ATemp n''] AAdd [ALoc $ ATemp n', AImm 8],
+            AAsm [ATemp n'] AMulq [AImm sizefact, ALoc $ ATemp n],
+            AAsm [ATemp n''] AAddq [ALoc $ ATemp n', AImm 8],
             AAsm [AReg 3] ANop [ALoc $ ATemp n''],
             ACall "alloc_array" [] 1,
             AAsm [APtr $ AReg 0] ANop [ALoc $ ATemp n], -- put the size in the block before beginning of array
@@ -442,16 +456,17 @@ genExp (TArrAccess exp1 exp2 tp) dest= do
     addr <- getNewUniqueID
     arr <- genExp exp1 (ATemp n)
     access <- genExp exp2 (ATemp n')
-    bounds <- checkbounds tp (ATemp n) (ATemp n')
+    bounds <- checkbounds (ATemp n) (ATemp n')
+    info <- State.gets structInfo
     let
-        sizefact = findsize tp
+        sizefact = findsize tp info
         offset = 
             [
-            AAsm [ATemp n''] AMul [AImm sizefact, ALoc $ ATemp n'],
+            AAsm [ATemp n''] AMulq [AImm sizefact, ALoc $ ATemp n'],
             AAsm [ATemp addr] AAddq [ALoc $ ATemp n, ALoc $ ATemp n'']
             ]
     res <- assignType tp (APtr $ ATemp addr) dest
-    return $ arr ++ access ++ offset ++ res
+    return $ arr ++ access ++ bounds ++ offset ++ res
 
 --Type, src temp, dest temp
 assignType :: Type -> ALoc -> ALoc -> CodeGenStateM [AAsm]
