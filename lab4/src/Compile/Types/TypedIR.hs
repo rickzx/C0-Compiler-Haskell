@@ -13,6 +13,7 @@ import qualified Data.Maybe as Maybe
 data TAST 
     = TSeq TAST TAST
     | TAssign TLValue TExp Bool -- single variable assign -- last parameter bool indicates if the assignment is in a declaration
+    | TPtrAssign TLValue Asnop TExp
     | TDef Ident Type TAST -- Arg type list -> return type
     | TSDef Ident [(Ident, Type)] TAST  -- define struct
     | TIf TExp TAST TAST
@@ -49,6 +50,7 @@ data TExp
 instance Show TAST where
     show (TSeq e1 e2) = "ESeq" ++ "(" ++ show e1 ++ " , "  ++ show e2 ++ ")"
     show (TAssign lval leaf _b) = "EAssign" ++ "(" ++ show lval ++ " , " ++ show leaf ++ ")"
+    show (TPtrAssign lval asop expr1) = "EPtrAssign" ++ "(" ++ show lval ++ "," ++ show asop ++ "=" ++ "," ++ show expr1 ++ ")"
     show (TIf leaf e1 e2) = "Eif" ++ "(" ++ show leaf ++ " , " ++ show e1 ++ " , " ++ show e2 ++ ")"
     show (TWhile leaf e1) = "EWhile" ++ "(" ++ show leaf ++ " , " ++ show e1 ++ ")"
     show (TRet leaf) = "ERet" ++ "(" ++ show leaf ++ ")"

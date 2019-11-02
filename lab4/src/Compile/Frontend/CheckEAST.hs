@@ -118,6 +118,17 @@ checkInit (EAssign lval e _) = do
             Just x -> do
                 put (declared, Set.insert x defined)
                 return False
+checkInit (EPtrAssign lval _ e) = do
+        (declared, defined) <- get
+        t <- checkUse e
+        assertMsg ("Variable used before initialization " ++ show e) t  
+        let x' = extractLValue lval declared
+        assertMsg ("Assignment use uninitialized variables " ++ show lval) (assertLValueDefined lval defined)
+        case x' of
+            Nothing -> throwE $ "Assignment uses undeclared variables " ++ show lval
+            Just x -> do
+                put (declared, Set.insert x defined)
+                return False
 checkInit (EIf e et1 et2) = do
     (declared, defined) <- get
     t <- checkUse e
@@ -226,6 +237,21 @@ synthValid (ctx, fctx, sctx) east =
                         Just (t', texp) -> do
                             assertMsg ("Tycon mismatch " ++ show lval ++ " = " ++ show e) (t == t')
                             return $ TAssign tlval texp b
+                        Nothing -> throwE $ "Variable used before declared " ++ show e
+                Nothing -> throwE $ "Cannot synthesize the type of lvalue: " ++ show lval
+        EPtrAssign lval asop e -> do
+            lTyp <- synthLValType (ctx, fctx, sctx) lval
+            case lTyp of
+                Just (t, tlval) -> do
+                    eTyp <- synthType (ctx, fctx, sctx) e
+                    case eTyp of
+                        Just (STRUCT _, _) -> throwE $ "Assignment must have small type " ++ show e
+                        Just (ANY, texp) -> do
+                            assertMsg ("Tycon mismatch " ++ show lval ++ " = " ++ show e) (isPointer t)
+                            return $ TPtrAssign tlval asop texp
+                        Just (t', texp) -> do
+                            assertMsg ("Tycon mismatch " ++ show lval ++ " = " ++ show e) (t == t')
+                            return $ TPtrAssign tlval asop texp
                         Nothing -> throwE $ "Variable used before declared " ++ show e
                 Nothing -> throwE $ "Cannot synthesize the type of lvalue: " ++ show lval
         EIf e et1 et2 -> do

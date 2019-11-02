@@ -21,7 +21,12 @@ codeGen :: TAST -> [AAsm]
 --codeGen t | (trace $ show t) False = undefined
 codeGen tast =
     let tastGen = aasmGen tast
-     in concatMap (\(_fn, (aasm, _lv)) -> aasm) tastGen
+        memerrlabel = [
+            AControl $ ALab "memerror",
+            AAsm [AReg 3] ANop [AImm 12],
+            ACall "raise" [] 1
+            ]
+     in memerrlabel ++ concatMap (\(_fn, (aasm, _lv)) -> aasm) tastGen
 
 asmGen :: TAST -> Header -> String
 --asmGen t h | (trace $ show t ++ "\n\n" ++ show h) False = undefined

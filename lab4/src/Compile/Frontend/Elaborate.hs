@@ -375,19 +375,34 @@ eStmt x context allDef =
                 Retn ret -> ERet (Maybe.Just (pExp ret context allDef))
                 Void -> ERet Maybe.Nothing
 
+isPtrType :: Exp -> Bool
+isPtrType e = case e of
+    ArrayAccess _ _ -> True
+    Ptrderef _ -> True 
+    Field _ _ -> True
+    _ -> False
+
+--TODO: separate the case, if its not ident, separate case because we need to check memerror
 eSimp :: Simp -> (GlobState, Header) -> Set.Set Ident -> EAST
 eSimp simp context allDef =
     case simp of
-        Asgn i asop expr ->
-            let expression =
-                    case asop of
-                        Equal -> pExp expr context allDef
-                        AsnOp b -> pExp (Binop b i expr) context allDef
-             in EAssign (pLvalue i context allDef) expression False
-        AsgnP i pos ->
-            if pos == Incr
-                then EAssign (pLvalue i context allDef) (pExp (Binop Add i (Int 1)) context allDef) False
-                else EAssign (pLvalue i context allDef) (pExp (Binop Sub i (Int 1)) context allDef) False
+        Asgn i asop expr -> if not(isPtrType i)|| asop == Equal then
+                let expression =
+                        case asop of
+                            Equal -> pExp expr context allDef
+                            AsnOp b -> pExp (Binop b i expr) context allDef
+                in EAssign (pLvalue i context allDef) expression False
+            else
+                EPtrAssign (pLvalue i context allDef) asop (pExp expr context allDef)
+        AsgnP i pos
+            | not(isPtrType i) ->
+                if pos == Incr
+                    then EAssign (pLvalue i context allDef) (pExp (Binop Add i (Int 1)) context allDef) False
+                    else EAssign (pLvalue i context allDef) (pExp (Binop Sub i (Int 1)) context allDef) False
+            | otherwise ->
+                if pos == Incr
+                    then EPtrAssign (pLvalue i context allDef) (AsnOp Add) (EInt 1)
+                    else EPtrAssign (pLvalue i context allDef) (AsnOp Sub) (EInt 1)
         Decl d ->
             case d of
                 JustDecl var tp ->

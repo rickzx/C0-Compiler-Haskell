@@ -3,116 +3,118 @@ module Compile.Frontend.EASTOptimize where
 import Compile.Types
 import Data.Bits
 
-optEAST :: EAST -> EAST
-optEAST east = case east of
-    ESeq et1 et2 -> ESeq (optEAST et1) (optEAST et2)
-    EAssign x e b -> EAssign x (constantFold e) b
-    EIf e et1 et2 -> EIf (constantFold e) (optEAST et1) (optEAST et2)
-    EWhile e et -> EWhile (constantFold e) (optEAST et)
-    ERet e -> ERet (fmap constantFold e)
-    ENop -> east
-    EDecl x t et -> EDecl x t (optEAST et)
-    ELeaf e -> ELeaf (constantFold e)
-    EAssert e -> EAssert (constantFold e)
-    EDef id tp et -> EDef id tp (optEAST et)
+optTAST :: TAST -> TAST
+optTAST east = case east of
+    TSeq et1 et2 -> TSeq (optTAST et1) (optTAST et2)
+    TAssign x e b -> TAssign x (constantFold e) b
+    TPtrAssign x a e -> TPtrAssign x a (constantFold e)
+    TIf e et1 et2 -> TIf (constantFold e) (optTAST et1) (optTAST et2)
+    TWhile e et -> TWhile (constantFold e) (optTAST et)
+    TRet e -> TRet (fmap constantFold e)
+    TNop -> east
+    TDecl x t et -> TDecl x t (optTAST et)
+    TLeaf e -> TLeaf (constantFold e)
+    TAssert e -> TAssert (constantFold e)
+    TDef idd tp et -> TDef idd tp (optTAST et)
+    TSDef idd l et -> TSDef idd l (optTAST et)
 
-constantFold :: EExp -> EExp
-constantFold (EBinop Add e1 e2) = let
+constantFold :: TExp -> TExp
+constantFold (TBinop Add e1 e2) = let
         fold1 = constantFold e1
         fold2 = constantFold e2
     in
         case (fold1, fold2) of
-            (EInt x, EInt y) -> EInt (x + y)
-            _ -> EBinop Add fold1 fold2
-constantFold (EBinop Sub e1 e2) = let
+            (TInt x, TInt y) -> TInt (x + y)
+            _ -> TBinop Add fold1 fold2
+constantFold (TBinop Sub e1 e2) = let
         fold1 = constantFold e1
         fold2 = constantFold e2
     in
         case (fold1, fold2) of
-            (EInt x, EInt y) -> EInt (x - y)
-            _ -> EBinop Sub fold1 fold2
-constantFold (EBinop Mul e1 e2) = let
+            (TInt x, TInt y) -> TInt (x - y)
+            _ -> TBinop Sub fold1 fold2
+constantFold (TBinop Mul e1 e2) = let
         fold1 = constantFold e1
         fold2 = constantFold e2
     in
         case (fold1, fold2) of
-            (EInt x, EInt y) -> EInt (x * y)
-            _ -> EBinop Mul fold1 fold2
-constantFold (EBinop BAnd e1 e2) = let
+            (TInt x, TInt y) -> TInt (x * y)
+            _ -> TBinop Mul fold1 fold2
+constantFold (TBinop BAnd e1 e2) = let
         fold1 = constantFold e1
         fold2 = constantFold e2
     in
         case (fold1, fold2) of
-            (EInt x, EInt y) -> EInt (x .&. y)
-            _ -> EBinop BAnd fold1 fold2
-constantFold (EBinop BOr e1 e2) = let
+            (TInt x, TInt y) -> TInt (x .&. y)
+            _ -> TBinop BAnd fold1 fold2
+constantFold (TBinop BOr e1 e2) = let
         fold1 = constantFold e1
         fold2 = constantFold e2
     in
         case (fold1, fold2) of
-            (EInt x, EInt y) -> EInt (x .|. y)
-            _ -> EBinop BOr fold1 fold2
-constantFold (EBinop Xor e1 e2) = let
+            (TInt x, TInt y) -> TInt (x .|. y)
+            _ -> TBinop BOr fold1 fold2
+constantFold (TBinop Xor e1 e2) = let
         fold1 = constantFold e1
         fold2 = constantFold e2
     in
         case (fold1, fold2) of
-            (EInt x, EInt y) -> EInt (xor x y)
-            _ -> EBinop Xor fold1 fold2
-constantFold (EBinop LAnd e1 e2) = let
+            (TInt x, TInt y) -> TInt (xor x y)
+            _ -> TBinop Xor fold1 fold2
+constantFold (TBinop LAnd e1 e2) = let
         fold1 = constantFold e1
         fold2 = constantFold e2
     in
         case (fold1, fold2) of
-            (EF, _) -> EF
-            _ -> EBinop LAnd fold1 fold2
-constantFold (EBinop LOr e1 e2) = let
+            (TF, _) -> TF
+            _ -> TBinop LAnd fold1 fold2
+constantFold (TBinop LOr e1 e2) = let
         fold1 = constantFold e1
         fold2 = constantFold e2
     in
         case (fold1, fold2) of
-            (ET, _) -> ET
-            _ -> EBinop LOr fold1 fold2
-constantFold (EBinop Lt e1 e2) = let
+            (TT, _) -> TT
+            _ -> TBinop LOr fold1 fold2
+constantFold (TBinop Lt e1 e2) = let
         fold1 = constantFold e1
         fold2 = constantFold e2
     in
         case (fold1, fold2) of
-            (EInt x, EInt y) -> if x < y then ET else EF
-            _ -> EBinop Lt fold1 fold2
-constantFold (EBinop Le e1 e2) = let
+            (TInt x, TInt y) -> if x < y then TT else TF
+            _ -> TBinop Lt fold1 fold2
+constantFold (TBinop Le e1 e2) = let
         fold1 = constantFold e1
         fold2 = constantFold e2
     in
         case (fold1, fold2) of
-            (EInt x, EInt y) -> if x <= y then ET else EF
-            _ -> EBinop Le fold1 fold2
-constantFold (EBinop Gt e1 e2) = let
+            (TInt x, TInt y) -> if x <= y then TT else TF
+            _ -> TBinop Le fold1 fold2
+constantFold (TBinop Gt e1 e2) = let
         fold1 = constantFold e1
         fold2 = constantFold e2
     in
         case (fold1, fold2) of
-            (EInt x, EInt y) -> if x > y then ET else EF
-            _ -> EBinop Gt fold1 fold2
-constantFold (EBinop Ge e1 e2) = let
+            (TInt x, TInt y) -> if x > y then TT else TF
+            _ -> TBinop Gt fold1 fold2
+constantFold (TBinop Ge e1 e2) = let
         fold1 = constantFold e1
         fold2 = constantFold e2
     in
         case (fold1, fold2) of
-            (EInt x, EInt y) -> if x >= y then ET else EF
-            _ -> EBinop Ge fold1 fold2
-constantFold (EBinop Eql e1 e2) = let
+            (TInt x, TInt y) -> if x >= y then TT else TF
+            _ -> TBinop Ge fold1 fold2
+constantFold (TBinop Eql e1 e2) = let
         fold1 = constantFold e1
         fold2 = constantFold e2
     in
         case (fold1, fold2) of
-            (EInt x, EInt y) -> if x == y then ET else EF
-            _ -> EBinop Eql fold1 fold2
-constantFold (EBinop Neq e1 e2) = let
+            (TInt x, TInt y) -> if x == y then TT else TF
+            _ -> TBinop Eql fold1 fold2
+constantFold (TBinop Neq e1 e2) = let
         fold1 = constantFold e1
         fold2 = constantFold e2
     in
         case (fold1, fold2) of
-            (EInt x, EInt y) -> if x /= y then ET else EF
-            _ -> EBinop Neq fold1 fold2
+            (TInt x, TInt y) -> if x /= y then TT else TF
+            _ -> TBinop Neq fold1 fold2
 constantFold expr = expr

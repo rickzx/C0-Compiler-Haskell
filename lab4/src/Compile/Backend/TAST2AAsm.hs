@@ -112,6 +112,25 @@ genTast (TAssign (TVIdent x _) expr _b) = do
     allocMap <- State.gets variables
     let tmpNum = ATemp $ allocMap Map.! x
     genExp expr tmpNum
+--TODO: NEw
+genTast (TAssign lv expr _b) = do
+    n <- getNewUniqueID
+    n' <- getNewUniqueID
+    --the actual lvalue should be stored as address, not ptrderef
+    lvgen <- genLVal lv (ATemp n)
+    --the the return of expr should also be an address
+    gen <- genExp expr (ATemp n') 
+    return $ lvgen ++ gen ++ [AAsm [APtr $ ATemp n] ANopq [ALoc $ ATemp n']]
+genTast (TPtrAssign lv asop@(AsnOp b) e) = do
+    n <- getNewUniqueID
+    n' <- getNewUniqueID
+    n'' <- getNewUniqueID
+    lvgen <- genLVal lv (ATemp n)
+    asgnmnt <- genExp e (ATemp n')
+    nullchk <- checkNull (ATemp n)
+    let performOp =
+            [AAsm [APtr $ ATemp n] (genBinOp b) [ALoc $ APtr $ ATemp n, ALoc $ ATemp n']]
+    return $ lvgen ++ asgnmnt ++ nullchk ++ performOp
 genTast (TDef fn t e) = do
     let ARROW ts _r = t
         args = map fst ts
@@ -208,6 +227,73 @@ genAddr (TVField e field _) dest sinfo = do
                 _ -> error "Malformed. Check type-checker."
             _ -> error "Malformed. Check type-checker."
     return $ gen ++ [AAsm [ATemp n'] AAdd [ALoc $ ATemp n, AImm offset], AAsm [dest] ANop [ALoc $ ATemp n']]
+
+--check if a we are writing to or dereferencing NULL
+checkNull :: ALoc -> CodeGenStateM [AAsm]
+checkNull ptr = do
+    l1 <- getNewUniqueLabel
+    return [
+            AControl $ ACJump' AEqq (ALoc ptr) (AImm 0) "memerror" l1,
+            AControl $ ALab l1
+        ]
+--TODO: New
+--creates the labels and temps needed to check the bounds of the array access
+--input is the ALoc representing the first element of the Array, and second ALoc representing index
+checkbounds :: Type -> ALoc -> ALoc -> CodeGenStateM [AAsm] 
+checkbounds tp arr idx = do
+    n <- getNewUniqueID
+    l2 <- getNewUniqueLabel
+    l3 <- getNewUniqueLabel
+    size <- getNewUniqueID
+    theassign <- assignType tp (APtr $ ATemp n) (ATemp size)
+    let
+        gensize = [AAsm [ATemp n] ASubq [ALoc arr, AImm 8]]
+        sizechk = [
+            AControl $ ACJump' ALt (ALoc idx) (AImm 0) "memerror" l2,
+            AControl $ ALab l2,
+            AControl $ ACJump' AGt (ALoc idx) (ALoc $ APtr $ ATemp size) "memerror" l3,
+            AControl $ ALab l3
+            ]
+    nullcheck <- checkNull arr
+    return $ nullcheck ++ gensize ++ theassign ++ sizechk
+
+--TODO: New
+genLVal :: TLValue -> ALoc -> CodeGenStateM [AAsm]
+genLVal (TVIdent var tp) dest = do
+    allocmap <- State.gets variables
+    return [AAsm [dest] ANop [ALoc $ ATemp $ allocmap Map.! var]]
+genLVal (TVField lv var tp) dest = return []
+genLVal (TVDeref lv tp) dest = return []
+genLVal (TVArrAccess lv expr tp) dest = do
+    n <- getNewUniqueID
+    n' <- getNewUniqueID
+    n'' <- getNewUniqueID
+    offset <- getNewUniqueID
+    l1 <- getNewUniqueLabel
+    l2 <- getNewUniqueLabel
+    l3 <- getNewUniqueLabel
+    let
+        arr = ATemp n
+    gen <- genLVal lv arr
+    expgen <- genExp expr (ATemp n')
+    boundcheck <- checkbounds tp arr (ATemp n')
+    assign <- assignType tp (APtr $ ATemp n'') dest
+    let
+        access = [
+            AAsm [ATemp offset] AMul [ALoc $ ATemp n', AImm (findsize tp)],
+            AAsm [ATemp n''] AAddq [ALoc arr, ALoc $ ATemp offset]
+            ]
+    return $ gen ++ expgen ++ boundcheck ++ access ++ assign
+
+findsize :: Type -> Int
+findsize tp = 
+    case tp of
+        INTEGER -> 4
+        BOOLEAN -> 4
+        POINTER _ -> 8
+        ARRAY _ -> 8
+        STRUCT a -> 8 --TBD
+        _ -> error "Invalid type to findsize"
 
 genExp :: TExp -> ALoc -> CodeGenStateM [AAsm]
 -- genExp e _ | trace ("genExp " ++ show e ++ "\n") False = undefined
@@ -328,7 +414,54 @@ genExp expr@TField {} dest = do
     sinfo <- State.gets structInfo
     addr <- genAddr (toLVal expr) (ATemp n) sinfo
     return $ addr ++ [AAsm [dest] ANop [ALoc $ APtr $ ATemp n]]
+--TODO: Add some stuff
+genExp (TArrAlloc tp size) dest = do
+    n <- getNewUniqueID
+    n' <- getNewUniqueID
+    n'' <- getNewUniqueID
+    sizeinfo <- getNewUniqueID
+    l1 <- getNewUniqueLabel
+    size <- genExp size (ATemp n)
+    let
+        sizefact = findsize tp
+        sizechk = [AControl $ ACJump' ALt (ALoc $ ATemp n) (AImm 0) "memerror" l1]
+        success = [
+            AControl $ ALab l1,
+            AAsm [ATemp n'] AMul [AImm sizefact, ALoc $ ATemp n],
+            AAsm [ATemp n''] AAdd [ALoc $ ATemp n', AImm 8],
+            AAsm [AReg 3] ANop [ALoc $ ATemp n''],
+            ACall "alloc_array" [] 1,
+            AAsm [APtr $ AReg 0] ANop [ALoc $ ATemp n], -- put the size in the block before beginning of array
+            AAsm [dest] AAddq [ALoc $ AReg 0, AImm 8]
+            ]
+    return $ size ++ sizechk ++ success
+genExp (TArrAccess exp1 exp2 tp) dest= do
+    n <- getNewUniqueID
+    n' <- getNewUniqueID
+    n'' <- getNewUniqueID
+    addr <- getNewUniqueID
+    arr <- genExp exp1 (ATemp n)
+    access <- genExp exp2 (ATemp n')
+    bounds <- checkbounds tp (ATemp n) (ATemp n')
+    let
+        sizefact = findsize tp
+        offset = 
+            [
+            AAsm [ATemp n''] AMul [AImm sizefact, ALoc $ ATemp n'],
+            AAsm [ATemp addr] AAddq [ALoc $ ATemp n, ALoc $ ATemp n'']
+            ]
+    res <- assignType tp (APtr $ ATemp addr) dest
+    return $ arr ++ access ++ offset ++ res
 
+--Type, src temp, dest temp
+assignType :: Type -> ALoc -> ALoc -> CodeGenStateM [AAsm]
+assignType tp src dest =
+    case tp of 
+        POINTER _ -> return [AAsm [dest] ANopq [ALoc src]]
+        ARRAY _ -> return [AAsm [dest] ANopq [ALoc src]]
+        STRUCT _ -> return [AAsm [dest] ANopq [ALoc src]]
+        _ -> return [AAsm [dest] ANop [ALoc src]]
+        
 genCmp :: TExp -> ALabel -> ALabel -> CodeGenStateM [AAsm]
 -- genCmp e _ _ | trace ("genCmp " ++ show e ++ "\n") False = undefined
 genCmp (TBinop op e1 e2) l l'
@@ -380,3 +513,23 @@ genRelOp o = error $ "Operator is not a RelOp: " ++ show o
 
 argRegs :: [ALoc]
 argRegs = [AReg 3, AReg 4, AReg 1, AReg 2, AReg 5, AReg 6]
+
+testGenEast :: IO ()
+testGenEast = do
+    let east =
+            TSeq
+                (TDecl
+                     "f"
+                     (ARROW [] (ARRAY INTEGER))
+                     (TDef "f" (ARROW [] (ARRAY INTEGER)) 
+                        (TDecl "x" (ARRAY INTEGER) (
+                            TSeq (TAssign (TVIdent "x" (ARRAY INTEGER)) (TArrAlloc (ARRAY INTEGER) (TInt 10))True)
+                                (TRet (Just $ TIdent "x" (ARRAY INTEGER)))
+                        ))))
+                (TDecl
+                     "g"
+                     (ARROW [("x", (ARRAY INTEGER))] INTEGER)
+                     (TDef "g" (ARROW [("x", (ARRAY INTEGER))] INTEGER) 
+                        (TRet (Just $ TArrAccess (TIdent "x" (ARRAY INTEGER)) (TInt 3) INTEGER))))
+        funs = aasmGen east
+    putStr $ show funs
