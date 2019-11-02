@@ -203,7 +203,7 @@ genAddr (TVField e field _) dest sinfo = do
         offset = case typeOfLVal e of
             STRUCT s -> case Map.lookup s sinfo of
                 Just (_, _, offsets) -> case Map.lookup field offsets of
-                    Just (offset, _) -> offset
+                    Just (o, _) -> o
                     _ -> error "Malformed. Check type-checker."
                 _ -> error "Malformed. Check type-checker."
             _ -> error "Malformed. Check type-checker."
@@ -327,7 +327,7 @@ genExp expr@TField {} dest = do
     n <- getNewUniqueID
     sinfo <- State.gets structInfo
     addr <- genAddr (toLVal expr) (ATemp n) sinfo
-    return $ addr ++ [AAsm [dest] ANopq [ALoc $ APtr $ ATemp n]]
+    return $ addr ++ [AAsm [dest] ANop [ALoc $ APtr $ ATemp n]]
 
 genCmp :: TExp -> ALabel -> ALabel -> CodeGenStateM [AAsm]
 -- genCmp e _ _ | trace ("genCmp " ++ show e ++ "\n") False = undefined

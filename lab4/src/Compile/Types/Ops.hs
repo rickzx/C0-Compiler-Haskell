@@ -34,7 +34,9 @@ data AOp
 
 data ARelOp
   = AEq
+  | AEqq
   | ANe
+  | ANeqq
   | ALt
   | AGt
   | ALe
@@ -112,7 +114,9 @@ instance Show Postop where
 
 instance Show ARelOp where
   show AEq = "="
+  show AEqq = "="
   show ANe = "!="
+  show ANeqq = "!="
   show ALt = "<"
   show AGt = ">"
   show ALe = "<="
