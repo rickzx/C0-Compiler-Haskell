@@ -122,7 +122,7 @@ genTast (TAssign lv expr _b) = do
     gen <- genExp expr (ATemp n')
     sinfo <- State.gets structInfo
     if findSize (typeOfLVal lv) sinfo == 4 then
-        return $ lvgen ++ gen ++ [AAsm [APtr $ ATemp n] ANopq [ALoc $ ATemp n']]
+        return $ lvgen ++ gen ++ [AAsm [APtr $ ATemp n] ANop [ALoc $ ATemp n']]
         else
             return $ lvgen ++ gen ++ [AAsm [APtrq $ ATemp n] ANopq [ALoc $ ATemp n']]
 genTast (TPtrAssign (TVIdent x typ) (AsnOp b) e) = do
@@ -314,7 +314,7 @@ genLVal (TVArrAccess lv expr tp) dest = do
     gen <- genLVal lv arr
     expgen <- genExp expr (ATemp n')
     boundcheck <- checkBounds arr (ATemp n')
-    let    
+    let
         access = [
             AAsm [ATemp offset] AMulq [ALoc $ ATemp n', AImm (findSize tp info)],
             AAsm [ATemp n''] AAddq [ALoc arr, ALoc $ ATemp offset]
