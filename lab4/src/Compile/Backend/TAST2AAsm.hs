@@ -21,7 +21,7 @@ data CodeGenState =
         , currentFunction :: String
     -- ^ current function we are in
         , structInfo :: StructInfo
-        }
+        } deriving Show
 
 -- Using the state monad with CodeGenState as the state allows us to implicitly
 -- thread the variable map and the next unique ID through the entire
@@ -44,8 +44,8 @@ getNewUniqueLabel = do
     return lab
 
 --for each term, (function name, AASM generated, # of var)
-aasmGen :: TAST -> [(Ident, ([AAsm], Int))]
-aasmGen tast = State.evalState assemM initialState
+aasmGen :: TAST -> Map.Map Ident (Map.Map Ident Type) -> [(Ident, ([AAsm], Int))]
+aasmGen tast structs = (trace $ show initialState) State.evalState assemM initialState
   where
     initialState =
         CodeGenState
@@ -54,6 +54,7 @@ aasmGen tast = State.evalState assemM initialState
             , uniqueLabelCounter = 0
             , genFunctions = []
             , currentFunction = ""
+            , structInfo = buildStructInfo structs
             }
     assemM :: CodeGenStateM [(Ident, ([AAsm], Int))]
     assemM = do
@@ -92,7 +93,7 @@ buildStructInfo =
                          if falign == 0 || mod size falign == 0
                              then size
                              else size + falign - mod size falign
-                  in (offset + fsize, max maxsize falign, Map.insert fnme (offset, falign) offsets))
+                  in (offset + fsize, max maxsize falign, Map.insert fnme (offset, fsize) offsets))
             (0, 0, Map.empty)
             fields
 
@@ -606,5 +607,5 @@ testGenEast = do
                           "g"
                           (ARROW [("x", (ARRAY INTEGER))] INTEGER)
                           (TRet (Just $ TArrAccess (TIdent "x" (ARRAY INTEGER)) (TInt 3) INTEGER))))
-        funs = aasmGen east
+        funs = aasmGen east Map.empty
     putStr $ show funs

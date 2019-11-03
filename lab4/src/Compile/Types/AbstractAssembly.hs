@@ -48,6 +48,7 @@ data ACtrl
 
 instance Show AAsm where
   show (AAsm [dest] ANop [src]) = "\t" ++ show dest ++ " <-- " ++ show src ++ "\n"
+  show (AAsm [dest] ANopq [src]) = "\t" ++ show dest ++ " <-- " ++ show src ++ "\n"
   show (AAsm [dest] asnop [src1, src2]) =
     "\t" ++ show dest ++ " <-- "
       ++ show src1 ++ " " ++ show asnop ++ " " ++ show src2 ++ "\n"
@@ -59,7 +60,7 @@ instance Show AAsm where
       ++ show src1 ++ " " ++ show relop ++ " " ++ show src2 ++ "\n"
   show (ARet _) = "\tret %eax\n"
   show (AControl ctrl) = show ctrl ++ "\n"
-  show (ACall f xs argNum) = "\tCall " ++ f ++ " with parameters on stack: " ++ show xs ++ ", use " ++ show argNum ++ " registers:\n"
+  show (ACall f xs argNum) = "\tCall " ++ f ++ " with parameters on stack: " ++ show xs ++ ", use " ++ show argNum ++ " registers\n"
   show (AFun f xs) = f ++ " with parameters on stack: " ++ show xs ++ ":\n"
   show _ = "ill-formed\n"
 
@@ -80,6 +81,7 @@ instance Show ALoc where
   show (AReg _) = "%ill-formed"
   show (ATemp n) = "%t" ++ show n
   show (APtr n) = "(" ++ show n ++ ")"
+  show (APtrq n) = "(" ++ show n ++ ")"
 
 instance Show ACtrl where
   show (ALab s) = "." ++ s ++ ":"

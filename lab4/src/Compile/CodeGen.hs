@@ -17,10 +17,10 @@ import qualified Data.List as List
 import qualified Data.Map as Map
 import Debug.Trace
 
-codeGen :: TAST -> [AAsm]
+codeGen :: TAST -> Map.Map Ident (Map.Map Ident Type) -> [AAsm]
 --codeGen t | (trace $ show t) False = undefined
-codeGen tast =
-    let tastGen = aasmGen tast
+codeGen tast structs =
+    let tastGen = aasmGen tast structs
         memerrlabel = [
             AControl $ ALab "memerror",
             AAsm [AReg 3] ANop [AImm 12],
@@ -28,10 +28,10 @@ codeGen tast =
             ]
      in memerrlabel ++ concatMap (\(_fn, (aasm, _lv)) -> aasm) tastGen
 
-asmGen :: TAST -> Header -> String
+asmGen :: TAST -> Header -> Map.Map Ident (Map.Map Ident Type) -> String
 --asmGen t h | (trace $ show t ++ "\n\n" ++ show h) False = undefined
-asmGen tast header =
-    let tastGen = aasmGen tast
+asmGen tast header structs =
+    let tastGen = aasmGen tast structs
         globs = map (\(x, _) -> if x == "a bort" then Global "_c0_abort_local411" else Global $ "_c0_" ++ x) tastGen
         globString = concatMap (\line -> show line ++ "\n") globs
      in globString ++ concatMap (\(fn, (aasms, lv)) -> generateFunc (fn, aasms, lv) header) tastGen

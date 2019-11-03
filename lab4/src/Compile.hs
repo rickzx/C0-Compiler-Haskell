@@ -53,15 +53,16 @@ compile job = do
     res <-
         runExceptT $ do
             let ast = evalP parseTokens (('\n', [], removeComments s), Set.fromList $ Map.keys (typDef header))
-                east = eGen ast header
+                (east, sdef) = eGen ast header
+                allStructs = Map.union sdef (structDef header)
             _ <- liftEIO $ checkEAST (hEast header) mockHeader
             tast <- liftEIO $ checkEAST east header
 --            let optEast = optEAST east
             let optEast = east
             case jobOutFormat job of
                 TC -> liftEIO (Right ()) -- By now, we should have thrown any typechecking errors
-                Asm -> writeString (jobOut job) $ asmGen tast header
-                Abs -> writeString (jobOut job) $ testPrintAAsm (codeGen tast) (jobOut job)
+                Asm -> writeString (jobOut job) $ asmGen tast header allStructs
+                Abs -> writeString (jobOut job) $ testPrintAAsm (codeGen tast allStructs) (jobOut job)
     case res of
         Left msg -> error msg
         Right () -> return ()

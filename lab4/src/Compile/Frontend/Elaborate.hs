@@ -37,13 +37,18 @@ eGenHeader (Program l) =
             Left err -> error err
             Right header -> header
 
-eGen :: AST -> Header -> EAST
+eGen :: AST -> Header -> (EAST, Map.Map Ident (Map.Map Ident Type))
 --eGen pgm h | (trace $ show pgm) False = undefined
 eGen (Program l) header =
     let initialState = GlobState {funDeclared = Map.singleton "main" (ARROW [] INTEGER), funDefined = Map.empty, typeDefined = Map.empty,
         structDefined = Map.empty}
         allDef = findDefFunc l
-        elaborate = if not (Set.member "main" allDef) then error "Cannot find main function" else elabGdecls l header allDef
+        elaborate = if not (Set.member "main" allDef) 
+                        then error "Cannot find main function" 
+                            else do
+                                east <- elabGdecls l header allDef
+                                sdef <- gets structDefined
+                                return (east, sdef)
         e = evalState (runExceptT elaborate) initialState
      in case e of
             Left err -> error err

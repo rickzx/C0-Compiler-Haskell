@@ -69,7 +69,7 @@ instance Show AOp where
   show AMod  = "%"
   show AModq = "%"
   show ANop  = "[nop]"
-  show ANopq = "[nopq]"
+  show ANopq = "[nop]"
   show ABAnd = "&"
   show ALAnd = "&&"
   show ABOr  = "|"
@@ -127,7 +127,7 @@ instance Show ARelOp where
 
 isRelOp :: Binop -> Bool
 isRelOp op
-  | op == Eql || op == Neq || op == Lt || op == Gt || op == Le || op == Ge
+  | op == Eql || op == Neq || op == Lt || op == Gt || op == Le || op == Ge || op == Eqlq || op == Neqq
   = True
   | otherwise
   = False
