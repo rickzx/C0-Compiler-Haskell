@@ -20,21 +20,23 @@ import Debug.Trace
 codeGen :: TAST -> Map.Map Ident (Map.Map Ident Type) -> [AAsm]
 --codeGen t | (trace $ show t) False = undefined
 codeGen tast structs =
-    let tastGen = aasmGen tast structs
-        memerrlabel = [
+    let 
+        tastGen = aasmGen tast structs
+        memerr = [
             AControl $ ALab "memerror",
             AAsm [AReg 3] ANop [AImm 12],
             ACall "raise" [] 1
             ]
-     in memerrlabel ++ concatMap (\(_fn, (aasm, _lv)) -> aasm) tastGen
+     in memerr ++ concatMap (\(_fn, (aasm, _lv)) -> aasm) tastGen
 
 asmGen :: TAST -> Header -> Map.Map Ident (Map.Map Ident Type) -> String
 --asmGen t h | (trace $ show t ++ "\n\n" ++ show h) False = undefined
 asmGen tast header structs =
-    let tastGen = aasmGen tast structs
+    let memerr = ".memerror:\n\tmovl $12, %edi\n\txorl %eax, %eax\n\tcall raise\n"
+        tastGen = aasmGen tast structs
         globs = map (\(x, _) -> if x == "a bort" then Global "_c0_abort_local411" else Global $ "_c0_" ++ x) tastGen
         globString = concatMap (\line -> show line ++ "\n") globs
-     in globString ++ concatMap (\(fn, (aasms, lv)) -> generateFunc (fn, aasms, lv) header) tastGen
+     in globString ++ concatMap (\(fn, (aasms, lv)) -> generateFunc (fn, aasms, lv) header) tastGen ++ memerr
 
 generateFunc :: (String, [AAsm], Int) -> Header -> String
 generateFunc (fn, aasms, localVar) header =

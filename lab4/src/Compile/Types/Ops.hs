@@ -41,6 +41,7 @@ data ARelOp
   | AGt
   | ALe
   | AGe
+  deriving Eq
 
 -- For AST
 data Binop = Add | Sub | Mul | Div | Mod |

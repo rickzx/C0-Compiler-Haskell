@@ -24,7 +24,10 @@ getLoc :: [AVal] -> Set.Set ALoc
 getLoc [] = Set.empty
 getLoc (x:rest) =
     case x of
-        ALoc a -> Set.insert a (getLoc rest)
+        ALoc a@(AReg _) -> Set.insert a (getLoc rest)
+        ALoc a@(ATemp _) -> Set.insert a (getLoc rest)
+        ALoc (APtr p) -> Set.insert p (getLoc rest)
+        ALoc (APtrq p) -> Set.insert p (getLoc rest)
         _ -> getLoc rest
 
 --reverse the abstract assembly, so that we can work backwards for live variables
@@ -59,24 +62,32 @@ computePredicate ((idx, x):xs) mapping pr =
     case x of
         AComment _ -> computePredicate xs mapping (Map.insert idx (Set.empty, [idx + 1], Set.empty) pr)
         ARet val ->
-            case val of
-                ALoc a ->
-                    let linemap = Map.insert idx (Set.empty, [], Set.singleton a) pr
-                     in computePredicate xs mapping linemap
-                AImm _ -> computePredicate xs mapping (Map.insert idx (Set.empty, [], Set.empty) pr)
-        AAsm assign _ args ->
-            let linemap = Map.insert idx (Set.fromList assign, [idx + 1], getLoc args) pr
+            let linemap = Map.insert idx (Set.empty, [], getLoc [val]) pr
              in computePredicate xs mapping linemap
-        ARel assign _ args ->
-            let linemap = Map.insert idx (Set.fromList assign, [idx + 1], getLoc args) pr
+        AAsm [assign] _ args ->
+            let linemap = case assign of
+                    AReg _ -> Map.insert idx (Set.singleton assign, [idx + 1], getLoc args) pr
+                    ATemp _ -> Map.insert idx (Set.singleton assign, [idx + 1], getLoc args) pr
+                    APtr p -> Map.insert idx (Set.singleton p, [idx + 1], Set.insert p $ getLoc args) pr
+                    APtrq p -> Map.insert idx (Set.singleton p, [idx + 1], Set.insert p $ getLoc args) pr
+             in computePredicate xs mapping linemap
+        ARel [assign] _ args ->
+            let linemap = case assign of
+                    AReg _ -> Map.insert idx (Set.singleton assign, [idx + 1], getLoc args) pr
+                    ATemp _ -> Map.insert idx (Set.singleton assign, [idx + 1], getLoc args) pr
+                    APtr p -> Map.insert idx (Set.singleton p, [idx + 1], Set.insert p $ getLoc args) pr
+                    APtrq p -> Map.insert idx (Set.singleton p, [idx + 1], Set.insert p $ getLoc args) pr
              in computePredicate xs mapping linemap
         AFun l extraargs -> computePredicate xs mapping (Map.insert idx (Set.empty, [idx + 1], Set.empty) pr)
-        ACall l extraargs number
-            --need to include rax
-         ->
+        ACall l extraargs number ->
             let definedregs = [AReg 3, AReg 4, AReg 1, AReg 2, AReg 5, AReg 6, AReg 0, AReg 7, AReg 8]
                 usedregs = take number definedregs
-                linemap = Map.insert idx (Set.fromList definedregs, [idx + 1], Set.fromList (usedregs ++ extraargs)) pr
+                extra = map (\arg -> case arg of
+                                AReg _ -> arg
+                                ATemp _ -> arg
+                                APtr p -> p
+                                APtrq p -> p) extraargs
+                linemap = Map.insert idx (Set.fromList definedregs, [idx + 1], Set.fromList (usedregs ++ extra)) pr
              in computePredicate xs mapping linemap
         AControl c ->
             case c of
@@ -327,109 +338,5 @@ computerInterfere aasm =
                 [] -> 0
                 (idx, _):_xs -> idx
         liveness = computeLive size 0 predec ancestors Map.empty
-        -- (trace $ "Predicate: " ++ show pred ++ "\n\n" ++ "Ancestors :" ++ show ancestors ++ "\n\n" ++ "Liveness: " ++ show liveness ++ "\n")
+        -- (trace $ "Predicate: " ++ show predec ++ "\n\n" ++ "Ancestors :" ++ show ancestors ++ "\n\n" ++ "Liveness: " ++ show liveness ++ "\n")
      in buildInterfere processed liveness predec Map.empty
---exAASM :: [(Ident, ([AAsm], Int))]
---exAASM = 
---    [
---        ("f", ([
---            AFun "f" [],
---            AAsm [ATemp 0] ANop [ALoc $ AReg 3],
---            AAsm [ATemp 1] ANop [ALoc $ AReg 4],
---            AAsm [AReg 0] ANop [AImm 1],
---            ARet (ALoc $ AReg 0)
---        ], 0)),
---        ("g", ([
---            AFun "g" [],
---            AAsm [ATemp 0] ANop [ALoc $ AReg 3],
---            AAsm [ATemp 0] ANop [ALoc $ ATemp 0],
---            AAsm [ATemp 0] ANop [ALoc $ AReg 3],
---            ACall "f" [],
---            AAsm [AReg 0] ANop [ALoc $ AReg 0],
---            ARet (ALoc $ AReg 0)
---        ], 1)),
---        ("h", ([
---            AFun "h" [ATemp 15, ATemp 16]
---            , AAsm [ATemp 0] ANop [AImm 0]
---            , AAsm [ATemp 1] ANop [AImm 2]
---            , AAsm [ATemp 2] ANop [AImm 3]
---            , AControl (ALab "L0")
---            , AControl (ACJump' ANe (ALoc $ ATemp 0) (AImm 0) "L1" "L2")
---            , ACall "f" [ATemp 0]
---            , AControl (ALab "L1")
---            , AControl (ACJump' ALe (ALoc $ ATemp 1) (ALoc $ ATemp 0) "L3" "L4")
---            , AControl (ALab "L3")
---            , AAsm [ATemp 5] AAdd [ALoc (ATemp 0), AImm 2]
---            , AAsm [ATemp 4] AAdd [ALoc (ATemp 1), AImm 2]
---            , AControl (AJump "L0")
---            , AControl (ALab "L4")
---            , AAsm [ATemp 6] AAdd [ALoc (ATemp 0), AImm 1]
---            , AAsm [ATemp 3] AAdd [ALoc (ATemp 2), AImm 1]
---            , AControl (AJump "L0")
---            , AControl (ALab "L2")
---            , AAsm [ATemp 7] AAdd [ALoc (ATemp 2), ALoc (ATemp 1)]
---            , ACall "g" [ATemp 2, ATemp 1]
---            , ARet (ALoc (AReg 0))
---            ], 2))
---    ]
---
---shortAAsm :: [(Ident, ([AAsm], Int))]
---shortAAsm = 
---    [
---        ("g", ([
---            AFun "g" [],
---            AAsm [ATemp 0] ANop [ALoc $ AReg 3],
---            AAsm [ATemp 0] ANop [ALoc $ ATemp 0],
---            AAsm [AReg 3] ANop [ALoc $ ATemp 0],
---            ACall "f" [],
---            AAsm [ATemp 2] ANop [ALoc $ AReg 0],
---            AAsm [ATemp 1] AAdd [ALoc $ ATemp 0, AImm 1],
---            AAsm [AReg 0] AAdd [ALoc $ ATemp 2, ALoc $ ATemp 1],
---            ARet (ALoc $ AReg 0)
---        ], 1))
---    ]
---
---testL :: [(Ident, ([AAsm], Int))] -> [Graph]
---testL [] = []
---testL ((name, (eaasm, numvar)):xs) = 
---    (computerInterfere eaasm) : (testL xs)
---
---testEx :: IO()
---testEx = print $ testL shortAAsm
-{-
-testLive :: IO ()
-testLive =
-    let processed = reverseAAsm [] (addLineNum whileAASM)
-        labels = findlabels processed Map.empty
-        predec = computePredicate processed labels Map.empty
-        ancestors = findAncestor predec
-        size =
-            case processed of
-                [] -> 0
-                (idx, _):_xs -> idx
-        liveness = computeLive size 0 predec ancestors Map.empty
-     in do print ancestors
-           print "__________________________"
-           print predec
-           print "__________________________"
-           print liveness
-
-testInterfereNew :: IO ()
-testInterfereNew =
-    let processed = reverseAAsm [] (addLineNum whileAASM)
-        labels = findlabels processed Map.empty
-        predec = computePredicate processed labels Map.empty
-        ancestors = findAncestor predec
-        size =
-            case processed of
-                [] -> 0
-                (idx, _):_xs -> idx
-        liveness = computeLive size 0 predec ancestors Map.empty
-     in do print whileAASM
-           print "______________________________"
-           print liveness
-           print "______________________________"
-           print predec
-           print "______________________________"
-           print (buildInterfere processed liveness predec Map.empty)
--}

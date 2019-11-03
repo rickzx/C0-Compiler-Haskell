@@ -281,7 +281,7 @@ checkBounds arr idx = do
         sizechk = [
             AControl $ ACJump' ALt (ALoc idx) (AImm 0) "memerror" l2,
             AControl $ ALab l2,
-            AControl $ ACJump' AGt (ALoc idx) (ALoc $ APtr $ ATemp size) "memerror" l3,
+            AControl $ ACJump' AGt (ALoc idx) (ALoc $ ATemp size) "memerror" l3,
             AControl $ ALab l3
             ]
     nullcheck <- checkNull arr
@@ -294,17 +294,15 @@ genLVal (TVIdent var tp) dest = do
 genLVal expr@(TVField _ _ tp) dest = do
     n <- getNewUniqueID
     sinfo <- State.gets structInfo
-    addr <- genAddr expr (ATemp n) sinfo
-    return $ addr ++ assignHeap tp (ATemp n) dest
+    genAddr expr dest sinfo
 genLVal (TVDeref lv tp) dest = do
     n <- getNewUniqueID
-    ptr <- genLVal lv (ATemp n)
-    nullchk <- checkNull (ATemp n)
-    return $ ptr ++ nullchk ++ assignHeap tp (ATemp n) dest
+    ptr <- genLVal lv dest
+    nullchk <- checkNull dest
+    return $ ptr ++ nullchk
 genLVal (TVArrAccess lv expr tp) dest = do
     n <- getNewUniqueID
     n' <- getNewUniqueID
-    n'' <- getNewUniqueID
     offset <- getNewUniqueID
     l1 <- getNewUniqueLabel
     l2 <- getNewUniqueLabel
@@ -318,9 +316,9 @@ genLVal (TVArrAccess lv expr tp) dest = do
     let
         access = [
             AAsm [ATemp offset] AMulq [ALoc $ ATemp n', AImm (findSize tp info)],
-            AAsm [ATemp n''] AAddq [ALoc arr, ALoc $ ATemp offset]
+            AAsm [dest] AAddq [ALoc arr, ALoc $ ATemp offset]
             ]
-    return $ gen ++ expgen ++ boundcheck ++ access ++ assignHeap tp (ATemp n'') dest
+    return $ gen ++ expgen ++ boundcheck ++ access
 
 findSize :: Type -> StructInfo -> Int
 findSize tp info = 
@@ -465,8 +463,9 @@ genExp (TAlloc tp) dest = do
     let
         sizefact = findSize tp info
     return [
-                AAsm [AReg 3] ANopq [AImm sizefact],
-                ACall "alloc" [] 1,
+                AAsm [AReg 3] ANopq [AImm 1],
+                AAsm [AReg 4] ANopq [AImm sizefact],
+                ACall "calloc" [] 2,
                 AAsm [dest] ANopq [ALoc $ AReg 0]
             ]
 genExp (TArrAlloc tp size) dest = do
@@ -484,8 +483,9 @@ genExp (TArrAlloc tp size) dest = do
             AControl $ ALab l1,
             AAsm [ATemp n'] AMulq [AImm sizefact, ALoc $ ATemp n],
             AAsm [ATemp n''] AAddq [ALoc $ ATemp n', AImm 8],
-            AAsm [AReg 3] ANopq [ALoc $ ATemp n''],
-            ACall "alloc_array" [] 1,
+            AAsm [AReg 3] ANopq [AImm 1],
+            AAsm [AReg 4] ANopq [ALoc $ ATemp n''],
+            ACall "calloc" [] 2,
             AAsm [APtr $ AReg 0] ANop [ALoc $ ATemp n], -- put the size in the block before beginning of array
             AAsm [dest] AAddq [ALoc $ AReg 0, AImm 8]
             ]

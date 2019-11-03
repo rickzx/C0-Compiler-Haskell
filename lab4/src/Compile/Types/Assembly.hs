@@ -30,6 +30,7 @@ data Inst
     | Call String
     | Label String
     | Cmp Operand Operand
+    | Cmpq Operand Operand
     | Test Operand Operand
     | Sete Operand
     | Setne Operand
@@ -51,12 +52,7 @@ data Inst
 data Operand
     = Imm Int
     | Reg Register
-    | Mem
-        { imm :: Int
-        , base :: Register
-        , index :: Register
-        , width :: Int
-        }
+    | Mem Operand
     | Mem'
         { imm :: Int
         , base :: Register
@@ -165,7 +161,7 @@ instance Show Register where
 instance Show Operand where
     show (Imm x) = "$" ++ show x
     show (Reg r) = show r
-    show (Mem x b i w) = show x ++ "(" ++ show b ++ ", " ++ show i ++ ", " ++ show w ++ ")"
+    show (Mem o) = "(" ++ show o ++ ")"
     show (Mem' x b) = show x ++ "(" ++ show b ++ ")"
 
 instance Show Inst where
@@ -196,7 +192,8 @@ instance Show Inst where
     show (Xorl x1 x2) = "\txorl " ++ show x1 ++ ", " ++ show x2 
     show (Notl x) = "\tnotl " ++ show x
     show (Label s) = "." ++ s ++ ":"
-    show (Cmp x1 x2) = "\tcmpl " ++ show x1 ++ ", " ++ show x2 
+    show (Cmp x1 x2) = "\tcmpl " ++ show x1 ++ ", " ++ show x2
+    show (Cmpq x1 x2) = "\tcmpq " ++ show x1 ++ ", " ++ show x2 
     show (Test x1 x2) = "\ttestl " ++ show x1 ++ ", " ++ show x2 
     show (Sete x) = "\tsete " ++ show x
     show (Setne x) = "\tsetne " ++ show x
