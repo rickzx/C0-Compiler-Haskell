@@ -37,7 +37,7 @@ data TExp
     | TNULL
     | TIdent Ident Type
     | TBinop Binop TExp TExp
-    | TTernop TExp TExp TExp Type
+    | TTernop TExp TExp TExp
     | TUnop Unop TExp
     | TFunc Ident [TExp] Type
     | TAlloc Type
@@ -74,7 +74,7 @@ instance Show TExp where
     show TF = "False"
     show TNULL = "NULL"
     show (TBinop b expr1 expr2) = show expr1 ++ " " ++ show b ++ " " ++ show expr2
-    show (TTernop expr1 expr2 expr3 _) = show expr1 ++ " ? " ++ show expr2 ++ " : " ++ show expr3
+    show (TTernop expr1 expr2 expr3) = show expr1 ++ " ? " ++ show expr2 ++ " : " ++ show expr3
     show (TUnop u expr1) = show u ++ show expr1
     show (TFunc iden exprlist _) =
         iden ++ "(" ++ foldr redu_fn "" exprlist ++ ")"

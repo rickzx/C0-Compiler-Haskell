@@ -36,7 +36,8 @@ data AVal
 data ALoc
   = AReg Int
   | ATemp Int 
-  | APtr ALoc deriving (Eq, Ord)
+  | APtr ALoc 
+  | APtrq ALoc deriving (Eq, Ord)
 
 --add assert?
 data ACtrl

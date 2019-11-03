@@ -364,16 +364,21 @@ synthType (ctx, fctx, sctx) expr =
             | op == Eql || op == Neq -> do
                 t1 <- synthType (ctx, fctx, sctx) e1
                 t2 <- synthType (ctx, fctx, sctx) e2
+                let lop = case op of
+                        Eql -> Eqlq
+                        Neq -> Neqq
                 case (t1, t2) of
                     (Just (VOID, _), _) -> throwE $ "tycon mismatch " ++ show expr
                     (_, Just (VOID, _)) -> throwE $ "tycon mismatch " ++ show expr
                     (Just (STRUCT _, _), _) -> throwE $ "Cannot compare structs " ++ show expr
                     (_, Just (STRUCT _, _)) -> throwE $ "Cannot compare structs " ++ show expr
-                    (Just (ANY, texp1), Just (POINTER _, texp2)) -> return $ Just (BOOLEAN, TBinop op texp1 texp2)
-                    (Just (POINTER _, texp1), Just (ANY, texp2)) -> return $ Just (BOOLEAN, TBinop op texp1 texp2)
+                    (Just (ANY, texp1), Just (POINTER _, texp2)) -> return $ Just (BOOLEAN, TBinop lop texp1 texp2)
+                    (Just (POINTER _, texp1), Just (ANY, texp2)) -> return $ Just (BOOLEAN, TBinop lop texp1 texp2)
+                    (Just (INTEGER, texp1), Just (INTEGER, texp2)) -> return $ Just (BOOLEAN, TBinop op texp1 texp2)
+                    (Just (BOOLEAN, texp1), Just (BOOLEAN, texp2)) -> return $ Just (BOOLEAN, TBinop op texp1 texp2)
                     (Just (typ1, texp1), Just (typ2, texp2)) ->
                         if typ1 == typ2
-                            then return $ Just (BOOLEAN, TBinop op texp1 texp2)
+                            then return $ Just (BOOLEAN, TBinop lop texp1 texp2)
                             else throwE $ "tycon mismatch " ++ show expr
                     _ -> throwE $ "tycon mismatch " ++ show expr
             | op == LAnd || op == LOr -> do
@@ -409,9 +414,9 @@ synthType (ctx, fctx, sctx) expr =
                     throwE "Conditional expression has large type"
                 (Just (BOOLEAN, texp1), Just (t, texp2), Just (t', texp3))
                     | t == VOID || t' == VOID -> throwE "Conditional expression has large type"
-                    | t == ANY && isPointer t' -> return $ Just (t', TTernop texp1 texp2 texp3 t')
-                    | isPointer t && t' == ANY -> return $ Just  (t, TTernop texp1 texp2 texp3 t)
-                    | t == t' -> return $ Just  (t, TTernop texp1 texp2 texp3 t)
+                    | t == ANY && isPointer t' -> return $ Just (t', TTernop texp1 texp2 texp3)
+                    | isPointer t && t' == ANY -> return $ Just  (t, TTernop texp1 texp2 texp3)
+                    | t == t' -> return $ Just  (t, TTernop texp1 texp2 texp3)
                     | otherwise -> throwE $ "tycon mismatch " ++ show expr
                 _ -> throwE $ "tycon mismatch " ++ show expr
         EFunc fn args -> do
@@ -490,22 +495,3 @@ isTypeValid _ = True
 isPointer :: Type -> Bool
 isPointer (POINTER _) = True
 isPointer _ = False
-
---testCheckEAST :: IO ()
---testCheckEAST = do
---    let east =
---            EDecl
---                "x"
---                INTEGER
---                (EDecl
---                     "y"
---                     INTEGER
---                     (ESeq
---                          (EAssign "y" (EInt 2))
---                          (ESeq
---                               (EIf (EBinop Lt (EIdent "y") (EInt 1)) (EAssign "x" (EInt 1)) (EAssign "x" (EInt 2)))
---                               (ERet (EBinop Add (EIdent "x") (EIdent "y"))))))
---    res <- runExceptT $ liftEIO $ checkEAST east
---    case res of
---        Left s -> putStrLn s
---        Right _ -> putStrLn "Type-check suceeded"

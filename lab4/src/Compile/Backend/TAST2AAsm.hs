@@ -113,7 +113,6 @@ genTast (TAssign (TVIdent x _) expr _b) = do
     allocMap <- State.gets variables
     let tmpNum = ATemp $ allocMap Map.! x
     genExp expr tmpNum
---TODO: NEw
 genTast (TAssign lv expr _b) = do
     n <- getNewUniqueID
     n' <- getNewUniqueID
@@ -121,8 +120,16 @@ genTast (TAssign lv expr _b) = do
     lvgen <- genLVal lv (ATemp n)
     --the the return of expr should also be an address
     gen <- genExp expr (ATemp n')
-    return $ lvgen ++ gen ++ [AAsm [APtr $ ATemp n] ANopq [ALoc $ ATemp n']]
-genTast (TPtrAssign lv asop@(AsnOp b) e) = do
+    sinfo <- State.gets structInfo
+    if findSize (typeOfLVal lv) sinfo == 4 then
+        return $ lvgen ++ gen ++ [AAsm [APtr $ ATemp n] ANopq [ALoc $ ATemp n']]
+        else
+            return $ lvgen ++ gen ++ [AAsm [APtrq $ ATemp n] ANopq [ALoc $ ATemp n']]
+genTast (TPtrAssign (TVIdent x typ) (AsnOp b) e) = do
+    allocMap <- State.gets variables
+    let tmpNum = ATemp $ allocMap Map.! x
+    genExp (TBinop b (TIdent x typ) e) tmpNum
+genTast (TPtrAssign lv (AsnOp b) e) = do
     n <- getNewUniqueID
     n' <- getNewUniqueID
     n'' <- getNewUniqueID
@@ -138,7 +145,7 @@ genTast (TDef fn t e) = do
         v' = Map.fromList $ zip decls [0 ..]
     State.modify' $ \(CodeGenState _vs _counter lab genf _cf si) -> CodeGenState v' (length decls) lab genf fn si
     let (inReg, inStk) = splitAt 6 (map (\a -> ATemp $ v' Map.! a) args)
-        movArg = map (\(i, tmp) -> AAsm [tmp] ANop [ALoc $ argRegs !! i]) $ zip [0 ..] inReg
+        movArg = map (\(i, tmp) -> AAsm [tmp] ANopq [ALoc $ argRegs !! i]) $ zip [0 ..] inReg
     gen <- genTast e
     let funGen = [AFun fn inStk] ++ movArg ++ gen
     State.modify' $ \(CodeGenState vs counter lab genf cf si) ->
@@ -191,7 +198,7 @@ genSideEffect (TFunc fn args _) = do
     gens <- mapM (\(i, e) -> genExp e (tmpVars !! i)) $ zip [0 ..] args
     let gen = join gens
     let (inReg, inStk) = splitAt 6 tmpVars
-        movArg = map (\(i, tmp) -> AAsm [argRegs !! i] ANop [ALoc tmp]) $ zip [0 ..] inReg
+        movArg = map (\(i, tmp) -> AAsm [argRegs !! i] ANopq [ALoc tmp]) $ zip [0 ..] inReg
     return $ gen ++ movArg ++ [ACall fn inStk (length inReg)]
 genSideEffect expr = do
     n <- getNewUniqueID
@@ -242,8 +249,8 @@ genAddr (TVArrAccess arr idx typ) dest sinfo = do
     addr <- getNewUniqueID
     genArr <- genLVal arr (ATemp n)
     genIdx <- genExp idx (ATemp n')
-    boundcheck <- checkbounds (ATemp n) (ATemp n')
-    let sizefact = findsize typ sinfo
+    boundcheck <- checkBounds (ATemp n) (ATemp n')
+    let sizefact = findSize typ sinfo
     return $
         genArr ++
         genIdx ++
@@ -259,12 +266,10 @@ checkNull ptr = do
     l1 <- getNewUniqueLabel
     return [AControl $ ACJump' AEqq (ALoc ptr) (AImm 0) "memerror" l1, AControl $ ALab l1]
 
---TODO: New
 --creates the labels and temps needed to check the bounds of the array access
 --input is the ALoc representing the first element of the Array, and second ALoc representing index
-
-checkbounds :: ALoc -> ALoc -> CodeGenStateM [AAsm] 
-checkbounds arr idx = do
+checkBounds :: ALoc -> ALoc -> CodeGenStateM [AAsm] 
+checkBounds arr idx = do
     n <- getNewUniqueID
     l2 <- getNewUniqueLabel
     l3 <- getNewUniqueLabel
@@ -281,13 +286,20 @@ checkbounds arr idx = do
     nullcheck <- checkNull arr
     return $ nullcheck ++ gensize ++ sizechk
 
---TODO: New
 genLVal :: TLValue -> ALoc -> CodeGenStateM [AAsm]
 genLVal (TVIdent var tp) dest = do
     allocmap <- State.gets variables
-    assignType tp (ATemp $ allocmap Map.! var) dest
-genLVal (TVField lv var tp) dest = return []
-genLVal (TVDeref lv tp) dest = return []
+    return $ assignType tp (ATemp $ allocmap Map.! var) dest
+genLVal expr@(TVField _ _ tp) dest = do
+    n <- getNewUniqueID
+    sinfo <- State.gets structInfo
+    addr <- genAddr expr (ATemp n) sinfo
+    return $ addr ++ assignHeap tp (ATemp n) dest
+genLVal (TVDeref lv tp) dest = do
+    n <- getNewUniqueID
+    ptr <- genLVal lv (ATemp n)
+    nullchk <- checkNull (ATemp n)
+    return $ ptr ++ nullchk ++ assignHeap tp (ATemp n) dest
 genLVal (TVArrAccess lv expr tp) dest = do
     n <- getNewUniqueID
     n' <- getNewUniqueID
@@ -301,17 +313,16 @@ genLVal (TVArrAccess lv expr tp) dest = do
         arr = ATemp n
     gen <- genLVal lv arr
     expgen <- genExp expr (ATemp n')
-    boundcheck <- checkbounds arr (ATemp n')
-    assign <- assignType tp (APtr $ ATemp n'') dest
-    let
+    boundcheck <- checkBounds arr (ATemp n')
+    let    
         access = [
-            AAsm [ATemp offset] AMulq [ALoc $ ATemp n', AImm (findsize tp info)],
+            AAsm [ATemp offset] AMulq [ALoc $ ATemp n', AImm (findSize tp info)],
             AAsm [ATemp n''] AAddq [ALoc arr, ALoc $ ATemp offset]
             ]
-    return $ gen ++ expgen ++ boundcheck ++ access ++ assign
+    return $ gen ++ expgen ++ boundcheck ++ access ++ assignHeap tp (ATemp n'') dest
 
-findsize :: Type -> StructInfo -> Int
-findsize tp info = 
+findSize :: Type -> StructInfo -> Int
+findSize tp info = 
     case tp of
         INTEGER -> 4
         BOOLEAN -> 4
@@ -321,16 +332,17 @@ findsize tp info =
                 case Map.lookup a info of
                     Just (size, _, _) -> size
                     Nothing -> error "accessing undeclared struct"
-        _ -> error "Invalid type to findsize"
+        _ -> error "Invalid type to findSize"
 
 genExp :: TExp -> ALoc -> CodeGenStateM [AAsm]
 -- genExp e _ | trace ("genExp " ++ show e ++ "\n") False = undefined
 genExp (TInt n) dest = return [AAsm [dest] ANop [AImm $ fromIntegral (fromIntegral n :: Int32)]]
-genExp (TIdent var _) dest = do
+genExp (TIdent var typ) dest = do
     allocmap <- State.gets variables
-    return [AAsm [dest] ANop [ALoc $ ATemp $ allocmap Map.! var]]
+    return $ assignType typ (ATemp $ allocmap Map.! var) dest
 genExp TT dest = return [AAsm [dest] ANop [AImm $ fromIntegral (1 :: Int32)]]
 genExp TF dest = return [AAsm [dest] ANop [AImm $ fromIntegral (0 :: Int32)]]
+genExp TNULL dest = return [AAsm [dest] ANopq [AImm $ fromIntegral (0 :: Int64)]]
 genExp expr@(TBinop binop exp1 exp2) dest
     | isRelOp binop = do
         n <- getNewUniqueID
@@ -417,7 +429,7 @@ genExp (TUnop unop expr) dest =
                     cogen <- genExp expr (ATemp n)
                     let assign = [AAsm [dest] ASub [AImm 0, ALoc $ ATemp n]]
                     return $ cogen ++ assign
-genExp (TTernop e1 e2 e3 _) dest =
+genExp (TTernop e1 e2 e3) dest =
     case e1 of
         TT -> genExp e2 dest
         TF -> genExp e3 dest
@@ -432,7 +444,7 @@ genExp (TTernop e1 e2 e3 _) dest =
                 cmp ++
                 [AControl $ ALab l1] ++
                 gen1 ++ [AControl $ AJump l3, AControl $ ALab l2] ++ gen2 ++ [AControl $ AJump l3, AControl $ ALab l3]
-genExp (TFunc fn args _) dest = do
+genExp (TFunc fn args typ) dest = do
     let argLen = length args
     ids <- replicateM argLen getNewUniqueID
     let tmpVars = map ATemp ids
@@ -440,17 +452,17 @@ genExp (TFunc fn args _) dest = do
     let gen = join gens
     let (inReg, inStk) = splitAt 6 tmpVars
         movArg = map (\(i, tmp) -> AAsm [argRegs !! i] ANop [ALoc tmp]) $ zip [0 ..] inReg
-    return $ gen ++ movArg ++ [ACall fn inStk (length inReg), AAsm [dest] ANop [ALoc $ AReg 0]]
-genExp expr@TField {} dest = do
+        assign = assignType typ (AReg 0) dest
+    return $ gen ++ movArg ++ [ACall fn inStk (length inReg)] ++ assign
+genExp expr@(TField _ _ typ) dest = do
     n <- getNewUniqueID
     sinfo <- State.gets structInfo
     addr <- genAddr (toLVal expr) (ATemp n) sinfo
-    return $ addr ++ [AAsm [dest] ANop [ALoc $ APtr $ ATemp n]]
---TODO: Add some stuff
+    return $ addr ++ assignHeap typ (ATemp n) dest
 genExp (TAlloc tp) dest = do
     info <- State.gets structInfo
     let
-        sizefact = findsize tp info
+        sizefact = findSize tp info
     return [
                 AAsm [AReg 3] ANopq [AImm sizefact],
                 ACall "alloc" [] 1,
@@ -465,7 +477,7 @@ genExp (TArrAlloc tp size) dest = do
     size <- genExp size (ATemp n)
     info <- State.gets structInfo
     let
-        sizefact = findsize tp info
+        sizefact = findSize tp info
         sizechk = [AControl $ ACJump' ALt (ALoc $ ATemp n) (AImm 0) "memerror" l1]
         success = [
             AControl $ ALab l1,
@@ -484,32 +496,38 @@ genExp (TArrAccess exp1 exp2 tp) dest = do
     addr <- getNewUniqueID
     arr <- genExp exp1 (ATemp n)
     access <- genExp exp2 (ATemp n')
-    bounds <- checkbounds (ATemp n) (ATemp n')
+    bounds <- checkBounds (ATemp n) (ATemp n')
     info <- State.gets structInfo
     let
-        sizefact = findsize tp info
+        sizefact = findSize tp info
         offset = 
             [
             AAsm [ATemp n''] AMulq [AImm sizefact, ALoc $ ATemp n'],
             AAsm [ATemp addr] AAddq [ALoc $ ATemp n, ALoc $ ATemp n'']
             ]
-    res <- assignType tp (APtr $ ATemp addr) dest
-    return $ arr ++ access ++ bounds ++ offset ++ res
+    return $ arr ++ access ++ bounds ++ offset ++ assignHeap tp (ATemp addr) dest
 genExp (TDeref exp1 tp) dest = do
     n <- getNewUniqueID
     ptr <- genExp exp1 (ATemp n)
     nullchk <- checkNull (ATemp n)
-    asgntp <- assignType tp (APtr $ ATemp n) dest
-    return $ ptr ++ nullchk ++ asgntp
+    return $ ptr ++ nullchk ++ assignHeap tp (ATemp n) dest
 
 --Type, src temp, dest temp
-assignType :: Type -> ALoc -> ALoc -> CodeGenStateM [AAsm]
+assignType :: Type -> ALoc -> ALoc -> [AAsm]
 assignType tp src dest =
     case tp of
-        POINTER _ -> return [AAsm [dest] ANopq [ALoc src]]
-        ARRAY _ -> return [AAsm [dest] ANopq [ALoc src]]
-        STRUCT _ -> return [AAsm [dest] ANopq [ALoc src]]
-        _ -> return [AAsm [dest] ANop [ALoc src]]
+        POINTER _ -> [AAsm [dest] ANopq [ALoc src]]
+        ARRAY _ -> [AAsm [dest] ANopq [ALoc src]]
+        STRUCT _ -> error "Invalid assignment of large type (struct)"
+        _ -> [AAsm [dest] ANop [ALoc src]]
+
+assignHeap :: Type -> ALoc -> ALoc -> [AAsm]
+assignHeap tp src dest =
+    case tp of
+        POINTER _ -> [AAsm [dest] ANopq [ALoc $ APtrq src]]
+        ARRAY _ -> [AAsm [dest] ANopq [ALoc $ APtrq src]]
+        STRUCT _ -> error "Invalid assignment of large type (struct)"
+        _ -> [AAsm [dest] ANop [ALoc $ APtr src]]
 
 genCmp :: TExp -> ALabel -> ALabel -> CodeGenStateM [AAsm]
 -- genCmp e _ _ | trace ("genCmp " ++ show e ++ "\n") False = undefined
@@ -558,6 +576,8 @@ genRelOp Lt = ALt
 genRelOp Gt = AGt
 genRelOp Le = ALe
 genRelOp Ge = AGe
+genRelOp Eqlq = AEqq
+genRelOp Neqq = ANeq
 genRelOp o = error $ "Operator is not a RelOp: " ++ show o
 
 argRegs :: [ALoc]
