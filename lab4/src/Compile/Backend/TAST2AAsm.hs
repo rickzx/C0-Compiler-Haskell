@@ -45,7 +45,7 @@ getNewUniqueLabel = do
 
 --for each term, (function name, AASM generated, # of var)
 aasmGen :: TAST -> Map.Map Ident (Map.Map Ident Type) -> [(Ident, ([AAsm], Int))]
-aasmGen tast structs = (trace $ show initialState) State.evalState assemM initialState
+aasmGen tast structs = State.evalState assemM initialState
   where
     initialState =
         CodeGenState
@@ -117,11 +117,9 @@ genTast (TAssign (TVIdent x _) expr _b) = do
 genTast (TAssign lv expr _b) = do
     n <- getNewUniqueID
     n' <- getNewUniqueID
-    --the actual lvalue should be stored as address, not ptrderef
-    lvgen <- genLVal lv (ATemp n)
-    --the the return of expr should also be an address
-    gen <- genExp expr (ATemp n')
     sinfo <- State.gets structInfo
+    lvgen <- genAddr lv (ATemp n) sinfo
+    gen <- genExp expr (ATemp n')
     if findSize (typeOfLVal lv) sinfo == 4 then
         return $ lvgen ++ gen ++ [AAsm [APtr $ ATemp n] ANop [ALoc $ ATemp n']]
         else
@@ -134,7 +132,8 @@ genTast (TPtrAssign lv (AsnOp b) e) = do
     n <- getNewUniqueID
     n' <- getNewUniqueID
     n'' <- getNewUniqueID
-    lvgen <- genLVal lv (ATemp n)
+    sinfo <- State.gets structInfo
+    lvgen <- genAddr lv (ATemp n) sinfo
     asgnmnt <- genExp e (ATemp n')
     nullchk <- checkNull (ATemp n)
     let performOp = [AAsm [APtr $ ATemp n] (genBinOp b) [ALoc $ APtr $ ATemp n, ALoc $ ATemp n']]
@@ -218,6 +217,12 @@ toLVal (TDeref p t) = TVDeref (toLVal p) t
 toLVal (TArrAccess arr idx t) = TVArrAccess (toLVal arr) idx t
 toLVal _ = error "Invalid conversion"
 
+toTExp :: TLValue -> TExp
+toTExp (TVIdent x t) = TIdent x t
+toTExp (TVField e field t) = TField (toTExp e) field t
+toTExp (TVDeref p t) = TDeref (toTExp p) t
+toTExp (TVArrAccess arr idx t) = TArrAccess (toTExp arr) idx t
+
 genAddr :: TLValue -> ALoc -> StructInfo -> CodeGenStateM [AAsm]
 genAddr (TVDeref (TVIdent x _) _) dest _sinfo = do
     allocmap <- State.gets variables
@@ -248,7 +253,7 @@ genAddr (TVArrAccess arr idx typ) dest sinfo = do
     n' <- getNewUniqueID
     n'' <- getNewUniqueID
     addr <- getNewUniqueID
-    genArr <- genLVal arr (ATemp n)
+    genArr <- genExp (toTExp arr) (ATemp n)
     genIdx <- genExp idx (ATemp n')
     boundcheck <- checkBounds (ATemp n) (ATemp n')
     let sizefact = findSize typ sinfo
@@ -281,44 +286,11 @@ checkBounds arr idx = do
         sizechk = [
             AControl $ ACJump' ALt (ALoc idx) (AImm 0) "memerror" l2,
             AControl $ ALab l2,
-            AControl $ ACJump' AGt (ALoc idx) (ALoc $ ATemp size) "memerror" l3,
+            AControl $ ACJump' AGe (ALoc idx) (ALoc $ ATemp size) "memerror" l3,
             AControl $ ALab l3
             ]
     nullcheck <- checkNull arr
     return $ nullcheck ++ gensize ++ sizechk
-
-genLVal :: TLValue -> ALoc -> CodeGenStateM [AAsm]
-genLVal (TVIdent var tp) dest = do
-    allocmap <- State.gets variables
-    return $ assignType tp (ATemp $ allocmap Map.! var) dest
-genLVal expr@(TVField _ _ tp) dest = do
-    n <- getNewUniqueID
-    sinfo <- State.gets structInfo
-    genAddr expr dest sinfo
-genLVal (TVDeref lv tp) dest = do
-    n <- getNewUniqueID
-    ptr <- genLVal lv dest
-    nullchk <- checkNull dest
-    return $ ptr ++ nullchk
-genLVal (TVArrAccess lv expr tp) dest = do
-    n <- getNewUniqueID
-    n' <- getNewUniqueID
-    offset <- getNewUniqueID
-    l1 <- getNewUniqueLabel
-    l2 <- getNewUniqueLabel
-    l3 <- getNewUniqueLabel
-    info <- State.gets structInfo
-    let
-        arr = ATemp n
-    gen <- genLVal lv arr
-    expgen <- genExp expr (ATemp n')
-    boundcheck <- checkBounds arr (ATemp n')
-    let
-        access = [
-            AAsm [ATemp offset] AMulq [ALoc $ ATemp n', AImm (findSize tp info)],
-            AAsm [dest] AAddq [ALoc arr, ALoc $ ATemp offset]
-            ]
-    return $ gen ++ expgen ++ boundcheck ++ access
 
 findSize :: Type -> StructInfo -> Int
 findSize tp info = 

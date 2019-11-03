@@ -339,4 +339,4 @@ computerInterfere aasm =
                 (idx, _):_xs -> idx
         liveness = computeLive size 0 predec ancestors Map.empty
         -- (trace $ "Predicate: " ++ show predec ++ "\n\n" ++ "Ancestors :" ++ show ancestors ++ "\n\n" ++ "Liveness: " ++ show liveness ++ "\n")
-     in buildInterfere processed liveness predec Map.empty
+     in (trace $ "Predicate: " ++ show predec ++ "\n\n" ++ "Ancestors :" ++ show ancestors ++ "\n\n" ++ "Liveness: " ++ show liveness ++ "\n") buildInterfere processed liveness predec Map.empty
