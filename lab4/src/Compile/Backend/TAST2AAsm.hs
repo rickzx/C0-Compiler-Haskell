@@ -88,7 +88,7 @@ buildStructInfo =
                                  case Map.lookup s sinfo of
                                      Just (ssize, salign, _) -> (ssize, salign)
                                      Nothing -> error "Malformed struct. Check the implementation of type-checker."
-                             _ -> error "Malformed struct. Check the implementation of type-checker."
+                             _ -> error $ "Malformed struct. Check the implementation of type-checker " ++ show ftyp
                      offset =
                          if falign == 0 || mod size falign == 0
                              then size
@@ -229,7 +229,7 @@ genAddr (TVDeref (TVIdent x _) _) dest _sinfo = do
     return [AAsm [dest] ANopq [ALoc $ ATemp $ allocmap Map.! x]]
 genAddr (TVDeref e _) dest sinfo = do
     n <- getNewUniqueID
-    gen <- genAddr e (ATemp n) sinfo
+    gen <- genExp (toTExp e) (ATemp n)
     return $ gen ++ [AAsm [dest] ANopq [ALoc $ ATemp n]]
 genAddr (TVField e field _) dest sinfo = do
     n <- getNewUniqueID

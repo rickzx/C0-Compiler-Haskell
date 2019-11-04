@@ -221,11 +221,11 @@ elabGdecls (x:xs) header allDef =
                     case Map.lookup nme (structDef header) of
                         Just _ -> throwE $ "struct" ++ nme ++ "is defined more than once"
                         _ -> do
-                            let param' = Map.fromList param
+                            let param' = map_fn param
                             modify' $ \(GlobState fdec fdef tdef sdef) ->
-                                GlobState fdec fdef tdef (Map.insert nme param' sdef)
+                                GlobState fdec fdef tdef (Map.insert nme (Map.fromList param') sdef)
                             elab' <- elabGdecls xs header allDef
-                            return $ ESDef nme (map_fn param) elab'
+                            return $ ESDef nme param' elab'
                             where map_fn :: [(Ident, Type)] -> [(Ident, Type)]
                                   map_fn = map (\(a, tp) -> (a, findType tp (typDefed, typDef header)))
 
