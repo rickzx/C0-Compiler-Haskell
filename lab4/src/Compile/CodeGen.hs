@@ -17,7 +17,7 @@ import qualified Data.List as List
 import qualified Data.Map as Map
 import Debug.Trace
 
-codeGen :: TAST -> Map.Map Ident (Map.Map Ident Type) -> [AAsm]
+codeGen :: TAST -> [(Ident,Map.Map Ident Type)] -> [AAsm]
 --codeGen t | (trace $ show t) False = undefined
 codeGen tast structs =
     let 
@@ -29,7 +29,7 @@ codeGen tast structs =
             ]
      in memerr ++ concatMap (\(_fn, (aasm, _lv)) -> aasm) tastGen
 
-asmGen :: TAST -> Header -> Map.Map Ident (Map.Map Ident Type) -> String
+asmGen :: TAST -> Header -> [(Ident,Map.Map Ident Type)] -> String
 --asmGen t h | (trace $ show t ++ "\n\n" ++ show h) False = undefined
 asmGen tast header structs =
     let memerr = ".memerror:\n\tmovl $12, %edi\n\txorl %eax, %eax\n\tcall raise\n"

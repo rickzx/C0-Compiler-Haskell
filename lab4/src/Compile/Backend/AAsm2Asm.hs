@@ -387,27 +387,44 @@ toAsm (AFun _fn stks) coloring _ =
      in concatMap (\(i, s) -> genMovl (Mem' (i * 8) RBP) s) $ zip [2 ..] stks'
 toAsm _ _ _ = error "ill-formed abstract assembly"
 
+genMovMemlSrc :: Operand -> [Inst]
+genMovMemlSrc (Mem loc@Mem' {}) = [Movq loc (Reg R11), Movl (Mem (Reg R11)) (Reg R11D)]
+genMovMemlSrc src@(Mem _) = [Movl src (Reg R11D)]
+
+genMovMemqSrc :: Operand -> [Inst]
+genMovMemqSrc (Mem loc@Mem' {}) = [Movq loc (Reg R11), Movq (Mem (Reg R11)) (Reg R11)]
+genMovMemqSrc src@(Mem _) = [Movq src (Reg R11)]
+
+genMovMemlDest :: Operand -> [Inst]
+genMovMemlDest (Mem loc@Mem' {}) = [Movq loc (Reg R10), Movl (Reg R11D) (Mem (Reg R10))]
+genMovMemlDest dest@(Mem _) = [Movl (Reg R11D) dest]
+
+genMovMemqDest :: Operand -> [Inst]
+genMovMemqDest (Mem loc@Mem' {}) = [Movq loc (Reg R10), Movq (Reg R11) (Mem (Reg R10))]
+genMovMemqDest dest@(Mem _) = [Movq (Reg R11) dest]
+
 genMovl :: Operand -> Operand -> [Inst]
 genMovl src dest =
     case (src, dest) of
-        (Mem {}, Mem {}) -> [Movl src (Reg R11D), Movl (Reg R11D) dest]
-        (Mem' {}, Mem {}) -> [Movl src (Reg R11D), Movl (Reg R11D) dest]
-        (Mem {}, Mem' {}) -> [Movl src (Reg R11D), Movl (Reg R11D) dest]
+        (Mem {}, Mem {}) -> genMovMemlSrc src ++ genMovMemlDest dest
+        (_, Mem {}) -> Movl src (Reg R11D) : genMovMemlDest dest
+        (Mem {}, _) -> genMovMemlSrc src ++ [Movl (Reg R11D) dest]
         (Mem' {}, Mem' {}) -> [Movl src (Reg R11D), Movl (Reg R11D) dest]
         _ -> [Movl src dest]
 
 genMovq :: Operand -> Operand -> [Inst]
 genMovq src dest =
     case (src, dest) of
-        (Mem {}, Mem {}) -> [Movq src (Reg R11), Movq (Reg R11) dest]
-        (Mem' {}, Mem {}) -> [Movq src (Reg R11), Movq (Reg R11) dest]
-        (Mem {}, Mem' {}) -> [Movq src (Reg R11), Movq (Reg R11) dest]
+        (Mem {}, Mem {}) -> genMovMemqSrc src ++ genMovMemqDest dest
+        (_, Mem {}) -> Movq src (Reg R11) : genMovMemqDest dest
+        (Mem {}, _) -> genMovMemqSrc src ++ [Movq (Reg R11) dest]
         (Mem' {}, Mem' {}) -> [Movq src (Reg R11), Movq (Reg R11) dest]
         _ -> [Movq src dest]
 
 genMovzbl :: Operand -> Operand -> [Inst]
 genMovzbl src dest =
     case dest of
+        Mem loc@Mem' {} -> [Movq loc (Reg R11), Movzbl (Mem (Reg R11)) (Reg R11D), Movl (Reg R11D) dest]
         Mem {} -> [Movzbl src (Reg R11D), Movl (Reg R11D) dest]
         Mem' {} -> [Movzbl src (Reg R11D), Movl (Reg R11D) dest]
         _ -> [Movzbl src dest]

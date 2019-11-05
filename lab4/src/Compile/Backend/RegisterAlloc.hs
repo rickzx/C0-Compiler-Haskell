@@ -53,7 +53,7 @@ color graph seo preColor = (coloring, maximum [maxColor - length regOrder + 3, 0
         )
         (preColor, 0)
         seo
-    calleeSaved = if maxColor <= 7 then [] else drop 8 (take (maxColor + 1) regOrder)
+    calleeSaved = if maxColor <= 6 then [] else drop 7 (take (maxColor + 1) regOrder)
 
 allStackColor :: Int -> (Coloring, Int, [Register])
 allStackColor localVar = 
@@ -67,7 +67,6 @@ allStackColor localVar =
              , (AReg 4, 2)
              , (AReg 5, 5)
              , (AReg 6, 6)
-             , (AReg 7, 7)
              ]
         vars = map ATemp [0..localVar]
         l = zip vars [0..]
@@ -76,11 +75,11 @@ allStackColor localVar =
 
 regOrder :: [Register]
 regOrder =
-    [EAX, EDI, ESI, EDX, ECX, R8D, R9D, R10D, R12D, R13D, R14D, R15D, EBX]   -- Reserve R11 for moves to and from the stack when necessary
+    [EAX, EDI, ESI, EDX, ECX, R8D, R9D, R12D, R13D, R14D, R15D, EBX]   -- Reserve R11 for moves to and from the stack when necessary
 
 -- Map a variable in abstract assembly to a register / memory location
 mapToReg :: ALoc -> Coloring -> Operand
-mapToReg (APtr aloc) coloring = Mem (mapToReg aloc coloring)
+mapToReg (APtr aloc) coloring = Mem (mapToReg64 aloc coloring)
 mapToReg reg coloring = if coloringIdx < length regOrder
     then Reg $ regOrder !! coloringIdx
     else Mem' ((coloringIdx - length regOrder + 1) * 8) RSP

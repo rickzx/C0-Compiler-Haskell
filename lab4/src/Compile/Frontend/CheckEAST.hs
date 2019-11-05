@@ -347,7 +347,7 @@ synthType :: (Context, Context, StructCtx) -> EExp -> ExceptT String (State Type
 synthType (ctx, fctx, sctx) expr =
     case expr of
         ET -> return $ Just (BOOLEAN, TT)
-        EF -> return $ Just (BOOLEAN, TT)
+        EF -> return $ Just (BOOLEAN, TF)
         ENULL -> return $ Just (ANY, TNULL)
         EInt x -> return $ Just (INTEGER, TInt x)
         EIdent x ->

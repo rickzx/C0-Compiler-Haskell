@@ -22,33 +22,34 @@ data GlobState =
         , funDefined :: Map.Map Ident Type
         , typeDefined :: Map.Map Ident Type
         , structDefined :: Map.Map Ident (Map.Map Ident Type)
+        , structOrder :: [(Ident, (Map.Map Ident Type))]
         }
 
 eGenHeader :: AST -> Header
 eGenHeader (Program l) =
     let initialState = GlobState {funDeclared = Map.empty, funDefined = Map.empty, typeDefined = Map.empty,
-        structDefined = Map.empty}
+        structDefined = Map.empty, structOrder = []}
         elaborate = do
             east <- elabHeader l
             s0 <- get
-            return $ Header (funDeclared s0) (typeDefined s0) (structDefined s0) east
+            return $ Header (funDeclared s0) (typeDefined s0) (structDefined s0) (structOrder s0) east
         h = evalState (runExceptT elaborate) initialState
      in case h of
             Left err -> error err
             Right header -> header
 
-eGen :: AST -> Header -> (EAST, Map.Map Ident (Map.Map Ident Type))
---eGen pgm h | (trace $ show pgm) False = undefined
+eGen :: AST -> Header -> (EAST, [(Ident, Map.Map Ident Type)])
+--eGen pgm h | (trace $ show pgm) False = undefinedm
 eGen (Program l) header =
     let initialState = GlobState {funDeclared = Map.singleton "main" (ARROW [] INTEGER), funDefined = Map.empty, typeDefined = Map.empty,
-        structDefined = Map.empty}
+        structDefined = Map.empty, structOrder = []}
         allDef = findDefFunc l
         elaborate = if not (Set.member "main" allDef) 
                         then error "Cannot find main function" 
                             else do
                                 east <- elabGdecls l header allDef
-                                sdef <- gets structDefined
-                                return (east, sdef)
+                                sord <- gets structOrder
+                                return (east, sord)
         e = evalState (runExceptT elaborate) initialState
      in case e of
             Left err -> error err
@@ -95,8 +96,8 @@ elabHeader (x:xs) =
                                 (arrowEq (typ, typ1))
                             elabHeader xs
                         Nothing -> do
-                            modify' $ \(GlobState fdec fdef tdef sdef) ->
-                                GlobState (Map.insert nme typ fdec) fdef tdef sdef
+                            modify' $ \(GlobState fdec fdef tdef sdef sord) ->
+                                GlobState (Map.insert nme typ fdec) fdef tdef sdef sord
                             elabHeader xs
         Typedef typ nme -> do
             declared <- gets funDeclared
@@ -110,8 +111,8 @@ elabHeader (x:xs) =
                                  Just _ -> throwE $ "Type defined more than once: " ++ nme
                                  Nothing -> do
                                      let typ' = findType' typ typDefed
-                                     modify' $ \(GlobState fdec fdef tdef sdef) ->
-                                         GlobState fdec fdef (Map.insert nme typ' tdef) sdef
+                                     modify' $ \(GlobState fdec fdef tdef sdef sord) ->
+                                         GlobState fdec fdef (Map.insert nme typ' tdef) sdef sord
                                      elabHeader xs
         Sdecl nme -> elabHeader xs
         Sdef nme param -> do
@@ -122,7 +123,7 @@ elabHeader (x:xs) =
                 _ -> do
                     let param' = map (\(a, tp) -> (a, findType' tp typDefed)) param
                         param'' = Map.fromList param'
-                    modify' $ \(GlobState fdec fdef tdef sdef) -> GlobState fdec fdef tdef (Map.insert nme param'' sdef)
+                    modify' $ \(GlobState fdec fdef tdef sdef sord) -> GlobState fdec fdef tdef (Map.insert nme param'' sdef) ((nme, param'') : sord)
                     east <- elabHeader xs
                     return $ ESDef nme param' east
         _ -> throwE "Header only supports function declaration and typedef!"
@@ -161,8 +162,8 @@ elabGdecls (x:xs) header allDef =
                                     elab' <- elabGdecls xs header allDef
                                     return $ EDecl nme typ elab'
                                 Nothing -> do
-                                    modify' $ \(GlobState fdec fdef tdef sdef) ->
-                                        GlobState (Map.insert nme typ fdec) fdef tdef sdef
+                                    modify' $ \(GlobState fdec fdef tdef sdef sord) ->
+                                        GlobState (Map.insert nme typ fdec) fdef tdef sdef sord
                                     elab' <- elabGdecls xs header allDef
                                     return $ EDecl nme typ elab'
         Fdefn rtp fnname param blk -> do
@@ -187,8 +188,8 @@ elabGdecls (x:xs) header allDef =
                                      case Map.lookup nme (fnDecl header) of
                                          Just _ -> throwE $ "External functions must not be defined " ++ nme
                                          Nothing -> do
-                                             modify' $ \(GlobState fdec fdef tdef sdef) ->
-                                                 GlobState (Map.insert nme typ fdec) (Map.insert nme typ fdef) tdef sdef
+                                             modify' $ \(GlobState fdec fdef tdef sdef sord) ->
+                                                 GlobState (Map.insert nme typ fdec) (Map.insert nme typ fdef) tdef sdef sord
                                              gState <- get
                                              let blk' = eBlock blk (gState, header) allDef
                                              elab' <- elabGdecls xs header allDef
@@ -208,8 +209,8 @@ elabGdecls (x:xs) header allDef =
                                          Just _ -> throwE $ "Type defined more than once: " ++ nme
                                          Nothing -> do
                                              let typ' = findType typ (typDefed, typDef header)
-                                             modify' $ \(GlobState fdec fdef tdef sdef) ->
-                                                 GlobState fdec fdef (Map.insert nme typ' tdef) sdef
+                                             modify' $ \(GlobState fdec fdef tdef sdef sord) ->
+                                                 GlobState fdec fdef (Map.insert nme typ' tdef) sdef sord
                                              elabGdecls xs header allDef
         Sdecl nme -> elabGdecls xs header allDef
         Sdef nme param -> do
@@ -222,8 +223,9 @@ elabGdecls (x:xs) header allDef =
                         Just _ -> throwE $ "struct" ++ nme ++ "is defined more than once"
                         _ -> do
                             let param' = map_fn param
-                            modify' $ \(GlobState fdec fdef tdef sdef) ->
-                                GlobState fdec fdef tdef (Map.insert nme (Map.fromList param') sdef)
+                                param'' = Map.fromList param'
+                            modify' $ \(GlobState fdec fdef tdef sdef sord) ->
+                                GlobState fdec fdef tdef (Map.insert nme param'' sdef) ((nme, param'') : sord)
                             elab' <- elabGdecls xs header allDef
                             return $ ESDef nme param' elab'
                             where map_fn :: [(Ident, Type)] -> [(Ident, Type)]
@@ -319,13 +321,13 @@ pExp (Unop u expr1) context allDef = EUnop u (pExp expr1 context allDef)
 pExp NULL context allDef = ENULL
 pExp (Alloc typ) context allDef = 
     let
-        GlobState _ _ td _ = fst context
+        GlobState _ _ td _ _ = fst context
         header = snd context
     in
         EAlloc (findType typ (td, typDef header))
 pExp (ArrayAlloc typ expr1) context allDef =
     let
-        GlobState _ _ td _ = fst context
+        GlobState _ _ td _ _ = fst context
         header = snd context
         typ' = findType typ (td, typDef header)
     in  

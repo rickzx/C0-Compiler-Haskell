@@ -53,8 +53,8 @@ compile job = do
     res <-
         runExceptT $ do
             let ast = evalP parseTokens (('\n', [], removeComments s), Set.fromList $ Map.keys (typDef header))
-                (east, sdef) = eGen ast header
-                allStructs = Map.union sdef (structDef header)
+                (east, sord) = eGen ast header
+                allStructs = sord ++ structOrd header
             _ <- liftEIO $ checkEAST (hEast header) mockHeader
             tast <- liftEIO $ checkEAST east header
 --            let optEast = optEAST east

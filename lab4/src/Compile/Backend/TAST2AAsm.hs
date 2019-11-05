@@ -44,7 +44,7 @@ getNewUniqueLabel = do
     return lab
 
 --for each term, (function name, AASM generated, # of var)
-aasmGen :: TAST -> Map.Map Ident (Map.Map Ident Type) -> [(Ident, ([AAsm], Int))]
+aasmGen :: TAST -> [(Ident, Map.Map Ident Type)] -> [(Ident, ([AAsm], Int))]
 aasmGen tast structs = State.evalState assemM initialState
   where
     initialState =
@@ -62,10 +62,10 @@ aasmGen tast structs = State.evalState assemM initialState
         CodeGenState _ _ _ genf _ _ <- State.get
         return (reverse genf)
 
-buildStructInfo :: Map.Map Ident (Map.Map Ident Type) -> StructInfo
+buildStructInfo :: [(Ident, Map.Map Ident Type)] -> StructInfo
 buildStructInfo =
-    Map.foldrWithKey
-        (\snme fields sinfo ->
+    foldr
+        (\(snme, fields) sinfo ->
              let (size, maxsize, offsets) = buildStruct fields sinfo
                  size' =
                      if maxsize == 0 || mod size maxsize == 0
@@ -118,12 +118,13 @@ genTast (TAssign lv expr _b) = do
     n <- getNewUniqueID
     n' <- getNewUniqueID
     sinfo <- State.gets structInfo
-    lvgen <- genAddr lv (ATemp n) sinfo
+    lvgen <- genAddr (toTExp lv) (ATemp n) sinfo
     gen <- genExp expr (ATemp n')
+    nullcheck <- checkNull (ATemp n)
     if findSize (typeOfLVal lv) sinfo == 4 then
-        return $ lvgen ++ gen ++ [AAsm [APtr $ ATemp n] ANop [ALoc $ ATemp n']]
+        return $ lvgen ++ gen ++ nullcheck ++ [AAsm [APtr $ ATemp n] ANop [ALoc $ ATemp n']]
         else
-            return $ lvgen ++ gen ++ [AAsm [APtrq $ ATemp n] ANopq [ALoc $ ATemp n']]
+            return $ lvgen ++ gen ++ nullcheck ++ [AAsm [APtrq $ ATemp n] ANopq [ALoc $ ATemp n']]
 genTast (TPtrAssign (TVIdent x typ) (AsnOp b) e) = do
     allocMap <- State.gets variables
     let tmpNum = ATemp $ allocMap Map.! x
@@ -133,7 +134,7 @@ genTast (TPtrAssign lv (AsnOp b) e) = do
     n' <- getNewUniqueID
     n'' <- getNewUniqueID
     sinfo <- State.gets structInfo
-    lvgen <- genAddr lv (ATemp n) sinfo
+    lvgen <- genAddr (toTExp lv) (ATemp n) sinfo
     asgnmnt <- genExp e (ATemp n')
     nullchk <- checkNull (ATemp n)
     let performOp = [AAsm [APtr $ ATemp n] (genBinOp b) [ALoc $ APtr $ ATemp n, ALoc $ ATemp n']]
@@ -210,6 +211,12 @@ typeOfLVal (TVField _ _ t) = t
 typeOfLVal (TVDeref _ t) = t
 typeOfLVal (TVArrAccess _ _ t) = t
 
+typeOfTExp :: TExp -> Type
+typeOfTExp (TIdent _ t) = t
+typeOfTExp (TField _ _ t) = t
+typeOfTExp (TDeref _ t) = t
+typeOfTExp (TArrAccess _ _ t) = t
+
 toLVal :: TExp -> TLValue
 toLVal (TIdent x t) = TVIdent x t
 toLVal (TField e field t) = TVField (toLVal e) field t
@@ -223,20 +230,20 @@ toTExp (TVField e field t) = TField (toTExp e) field t
 toTExp (TVDeref p t) = TDeref (toTExp p) t
 toTExp (TVArrAccess arr idx t) = TArrAccess (toTExp arr) idx t
 
-genAddr :: TLValue -> ALoc -> StructInfo -> CodeGenStateM [AAsm]
-genAddr (TVDeref (TVIdent x _) _) dest _sinfo = do
+genAddr :: TExp -> ALoc -> StructInfo -> CodeGenStateM [AAsm]
+genAddr (TDeref (TIdent x _) _) dest _sinfo = do
     allocmap <- State.gets variables
     return [AAsm [dest] ANopq [ALoc $ ATemp $ allocmap Map.! x]]
-genAddr (TVDeref e _) dest sinfo = do
+genAddr (TDeref e _) dest sinfo = do
     n <- getNewUniqueID
-    gen <- genExp (toTExp e) (ATemp n)
+    gen <- genExp e (ATemp n)
     return $ gen ++ [AAsm [dest] ANopq [ALoc $ ATemp n]]
-genAddr (TVField e field _) dest sinfo = do
+genAddr (TField e field _) dest sinfo = do
     n <- getNewUniqueID
     n' <- getNewUniqueID
     gen <- genAddr e (ATemp n) sinfo
     let offset =
-            case typeOfLVal e of
+            case typeOfTExp e of
                 STRUCT s ->
                     case Map.lookup s sinfo of
                         Just (_, _, offsets) ->
@@ -248,12 +255,12 @@ genAddr (TVField e field _) dest sinfo = do
     nullcheck <- checkNull (ATemp n)
     return $
         gen ++ nullcheck ++ [AAsm [ATemp n'] AAddq [ALoc $ ATemp n, AImm offset], AAsm [dest] ANopq [ALoc $ ATemp n']]
-genAddr (TVArrAccess arr idx typ) dest sinfo = do
+genAddr (TArrAccess arr idx typ) dest sinfo = do
     n <- getNewUniqueID
     n' <- getNewUniqueID
     n'' <- getNewUniqueID
     addr <- getNewUniqueID
-    genArr <- genExp (toTExp arr) (ATemp n)
+    genArr <- genExp arr (ATemp n)
     genIdx <- genExp idx (ATemp n')
     boundcheck <- checkBounds (ATemp n) (ATemp n')
     let sizefact = findSize typ sinfo
@@ -422,13 +429,13 @@ genExp (TFunc fn args typ) dest = do
     gens <- mapM (\(i, e) -> genExp e (tmpVars !! i)) $ zip [0 ..] args
     let gen = join gens
     let (inReg, inStk) = splitAt 6 tmpVars
-        movArg = map (\(i, tmp) -> AAsm [argRegs !! i] ANop [ALoc tmp]) $ zip [0 ..] inReg
+        movArg = map (\(i, tmp) -> AAsm [argRegs !! i] ANopq [ALoc tmp]) $ zip [0 ..] inReg
         assign = assignType typ (AReg 0) dest
     return $ gen ++ movArg ++ [ACall fn inStk (length inReg)] ++ assign
 genExp expr@(TField _ _ typ) dest = do
     n <- getNewUniqueID
     sinfo <- State.gets structInfo
-    addr <- genAddr (toLVal expr) (ATemp n) sinfo
+    addr <- genAddr expr (ATemp n) sinfo
     return $ addr ++ assignHeap typ (ATemp n) dest
 genExp (TAlloc tp) dest = do
     info <- State.gets structInfo
@@ -579,5 +586,5 @@ testGenEast = do
                           "g"
                           (ARROW [("x", (ARRAY INTEGER))] INTEGER)
                           (TRet (Just $ TArrAccess (TIdent "x" (ARRAY INTEGER)) (TInt 3) INTEGER))))
-        funs = aasmGen east Map.empty
+        funs = aasmGen east []
     putStr $ show funs
