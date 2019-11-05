@@ -54,6 +54,8 @@ toAsm (AAsm [assign] AAddq [src1, src2]) coloring _ =
             (Mem' {}, _) -> [Movq src1' (Reg R11), Addq src2' (Reg R11), Movq (Reg R11) assign']
             (_, Mem {}) -> [Movq src2' (Reg R11), Addq src1' (Reg R11), Movq (Reg R11) assign']
             (_, Mem' {}) -> [Movq src2' (Reg R11), Addq src1' (Reg R11), Movq (Reg R11) assign']
+            (Imm x, _) | x >= 2147483648 -> [Movq src1' (Reg R11), Addq src2' (Reg R11), Movq (Reg R11) assign']
+            (_, Imm x) | x >= 2147483648 -> [Movq src2' (Reg R11), Addq src1' (Reg R11), Movq (Reg R11) assign']
             _ ->
                 if src2' == assign'
                     then [Addq src1' assign']
@@ -383,8 +385,8 @@ toAsm (ACall fun stks _) coloring header =
             else [Subq (Imm 8) (Reg RSP)] ++
                  pushStks' ++ [Xorl (Reg EAX) (Reg EAX), Call fn] ++ popStks' ++ [Addq (Imm 8) (Reg RSP)]
 toAsm (AFun _fn stks) coloring _ =
-    let stks' = getRegAlloc' stks coloring False
-     in concatMap (\(i, s) -> genMovl (Mem' (i * 8) RBP) s) $ zip [2 ..] stks'
+    let stks' = getRegAlloc' stks coloring True
+     in concatMap (\(i, s) -> genMovq (Mem' (i * 8) RBP) s) $ zip [2 ..] stks'
 toAsm _ _ _ = error "ill-formed abstract assembly"
 
 genMovMemlSrc :: Operand -> [Inst]
