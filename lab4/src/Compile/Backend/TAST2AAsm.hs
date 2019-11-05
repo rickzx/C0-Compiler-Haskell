@@ -132,7 +132,6 @@ genTast (TPtrAssign (TVIdent x typ) (AsnOp b) e) = do
 genTast (TPtrAssign lv (AsnOp b) e) = do
     n <- getNewUniqueID
     n' <- getNewUniqueID
-    n'' <- getNewUniqueID
     sinfo <- State.gets structInfo
     lvgen <- genAddr (toTExp lv) (ATemp n) sinfo
     asgnmnt <- genExp e (ATemp n')
@@ -234,7 +233,7 @@ genAddr :: TExp -> ALoc -> StructInfo -> CodeGenStateM [AAsm]
 genAddr (TDeref (TIdent x _) _) dest _sinfo = do
     allocmap <- State.gets variables
     return [AAsm [dest] ANopq [ALoc $ ATemp $ allocmap Map.! x]]
-genAddr (TDeref e _) dest sinfo = do
+genAddr (TDeref e _) dest _ = do
     n <- getNewUniqueID
     gen <- genExp e (ATemp n)
     return $ gen ++ [AAsm [dest] ANopq [ALoc $ ATemp n]]
@@ -255,22 +254,53 @@ genAddr (TField e field _) dest sinfo = do
     nullcheck <- checkNull (ATemp n)
     return $
         gen ++ nullcheck ++ [AAsm [ATemp n'] AAddq [ALoc $ ATemp n, AImm offset], AAsm [dest] ANopq [ALoc $ ATemp n']]
+genAddr (TArrAccess (TIdent a _) (TInt x) typ) dest sinfo = do
+    let siz = findSize typ sinfo
+    if x > 1073741816 `div` siz then return [AControl $ AJump "memerror"] else do
+        allocmap <- State.gets variables
+        let arr = ATemp $ allocmap Map.! a
+        boundcheck <- checkBounds arr (AImm x)
+        let off = siz * x
+        return $
+            boundcheck ++
+            [ AAsm [dest] AAddq [ALoc arr, AImm off] ]
+genAddr (TArrAccess arr (TInt x) typ) dest sinfo = do
+    let siz = findSize typ sinfo
+    if x > 1073741816 `div` siz then return [AControl $ AJump "memerror"] else do
+        n <- getNewUniqueID
+        genArr <- genExp arr (ATemp n)
+        boundcheck <- checkBounds (ATemp n) (AImm x)
+        let off = siz * x
+        return $
+            genArr ++
+            boundcheck ++
+            [ AAsm [dest] AAddq [ALoc $ ATemp n, AImm off] ]
+genAddr (TArrAccess (TIdent a _) idx typ) dest sinfo = do
+    n' <- getNewUniqueID
+    allocmap <- State.gets variables
+    genIdx <- genExp idx (ATemp n')
+    let arr = ATemp $ allocmap Map.! a
+    boundcheck <- checkBounds arr (ALoc $ ATemp n')
+    let sizefact = findSize typ sinfo
+    return $
+        genIdx ++
+        boundcheck ++
+        [ AAsm [dest] AMulq [AImm sizefact, ALoc $ ATemp n']
+        , AAsm [dest] AAddq [ALoc dest, ALoc arr]
+        ]
 genAddr (TArrAccess arr idx typ) dest sinfo = do
     n <- getNewUniqueID
     n' <- getNewUniqueID
-    n'' <- getNewUniqueID
-    addr <- getNewUniqueID
     genArr <- genExp arr (ATemp n)
     genIdx <- genExp idx (ATemp n')
-    boundcheck <- checkBounds (ATemp n) (ATemp n')
+    boundcheck <- checkBounds (ATemp n) (ALoc $ ATemp n')
     let sizefact = findSize typ sinfo
     return $
         genArr ++
         genIdx ++
         boundcheck ++
-        [ AAsm [ATemp n''] AMulq [AImm sizefact, ALoc $ ATemp n']
-        , AAsm [ATemp addr] AAddq [ALoc $ ATemp n, ALoc $ ATemp n'']
-        , AAsm [dest] ANopq [ALoc $ ATemp addr]
+        [ AAsm [dest] AMulq [AImm sizefact, ALoc $ ATemp n']
+        , AAsm [dest] AAddq [ALoc dest, ALoc $ ATemp n]
         ]
 
 --check if a we are writing to or dereferencing NULL
@@ -281,21 +311,28 @@ checkNull ptr = do
 
 --creates the labels and temps needed to check the bounds of the array access
 --input is the ALoc representing the first element of the Array, and second ALoc representing index
-checkBounds :: ALoc -> ALoc -> CodeGenStateM [AAsm] 
+checkBounds :: ALoc -> AVal -> CodeGenStateM [AAsm]
 checkBounds arr idx = do
-    n <- getNewUniqueID
     l2 <- getNewUniqueLabel
     l3 <- getNewUniqueLabel
     size <- getNewUniqueID
     let
-        gensize = [AAsm [ATemp n] ASubq [ALoc arr, AImm 8],
-            AAsm [ATemp size] ANop [ALoc $ APtr $ ATemp n]]
-        sizechk = [
-            AControl $ ACJump' ALt (ALoc idx) (AImm 0) "memerror" l2,
-            AControl $ ALab l2,
-            AControl $ ACJump' AGe (ALoc idx) (ALoc $ ATemp size) "memerror" l3,
-            AControl $ ALab l3
-            ]
+        gensize = [AAsm [ATemp size] ASubq [ALoc arr, AImm 8],
+            AAsm [ATemp size] ANop [ALoc $ APtr $ ATemp size]]
+        sizechk =
+            case idx of
+                AImm x | x < 0 -> [AControl $ AJump "memerror"]
+                       | otherwise ->
+                            [
+                            AControl $ ACJump' ALe (ALoc $ ATemp size) idx "memerror" l3,
+                            AControl $ ALab l3
+                            ]
+                _ -> [
+                         AControl $ ACJump' ALt idx (AImm 0) "memerror" l2,
+                         AControl $ ALab l2,
+                         AControl $ ACJump' ALe (ALoc $ ATemp size) idx "memerror" l3,
+                         AControl $ ALab l3
+                     ]
     nullcheck <- checkNull arr
     return $ nullcheck ++ gensize ++ sizechk
 
@@ -340,23 +377,36 @@ genExp expr@(TBinop binop exp1 exp2) dest
             [AControl $ ALab l2, AAsm [dest] ANop [AImm $ fromIntegral (0 :: Int32)], AControl $ AJump l3] ++
             [AControl $ ALab l3]
     | binop == Sal || binop == Sar = do
-        n <- getNewUniqueID
-        gen1 <- genExp exp1 (ATemp n)
-        n' <- getNewUniqueID
-        gen2 <- genExp exp2 (ATemp n')
-        let checker = TBinop LAnd (TBinop Le (TInt 0) exp2) (TBinop Lt exp2 (TInt 32))
-            combine = [AAsm [dest] (genBinOp binop) [ALoc $ ATemp n, ALoc $ ATemp n']]
-        l1 <- getNewUniqueLabel
-        l2 <- getNewUniqueLabel
-        l3 <- getNewUniqueLabel
-        cmp <- genCmp checker l1 l2
-        genl2 <- genExp (TBinop Div (TInt 1) (TInt 0)) dest
-        return $
-            gen1 ++
-            gen2 ++
-            cmp ++
-            [AControl $ ALab l1] ++
-            combine ++ [AControl $ AJump l3, AControl $ ALab l2] ++ genl2 ++ [AControl $ AJump l3, AControl $ ALab l3]
+                n <- getNewUniqueID
+                gen1 <- genExp exp1 (ATemp n)
+                n' <- getNewUniqueID
+                gen2 <- genExp exp2 (ATemp n')
+                n2 <- getNewUniqueID
+                condi <- getNewUniqueID
+                n3 <- getNewUniqueID
+                l4 <- getNewUniqueLabel
+                l5 <- getNewUniqueLabel
+                let
+                    checker = [ARel [ATemp n2] (genRelOp Ge) [ALoc $ ATemp n', AImm 0],
+                            ARel [ATemp n3] (genRelOp Lt) [ALoc $ ATemp n', AImm 32],
+                            AControl $ ACJump (ALoc $ ATemp n2) l4 l5,
+                            AControl $ ALab l4,
+                            AAsm [ATemp condi] ANop [ALoc $ ATemp n3],
+                            AControl $ ALab l5,
+                            AAsm [ATemp condi] ANop [ALoc $ ATemp n2]]
+                    combine = [AAsm [dest] (genBinOp binop) [ALoc $ ATemp n, ALoc $ ATemp n']]
+                l1 <- getNewUniqueLabel
+                l2 <- getNewUniqueLabel
+                l3 <- getNewUniqueLabel
+                let
+                    cmp = [AControl $ ACJump (ALoc $ ATemp condi) l1 l2]
+                failure <- genExp (TBinop Div (TInt 1) (TInt 0)) dest
+                return $
+                    gen1 ++
+                    gen2 ++ 
+                    checker ++
+                    cmp ++ [AControl $ ALab l1] ++ combine ++ [AControl $ AJump l3, AControl $ ALab l2] ++ 
+                    failure ++ [AControl $ AJump l3, AControl $ ALab l3]
     | binop == Add || binop == Sub || binop == Mul =
         case (exp1, exp2) of
             (TInt x1, _) -> do
@@ -446,14 +496,25 @@ genExp (TAlloc tp) dest = do
                 AAsm [AReg 4] ANopq [AImm sizefact],
                 ACall "calloc" [] 2,
                 AAsm [dest] ANopq [ALoc $ AReg 0]
-            ]
+            ]            
+genExp (TArrAlloc tp (TInt x)) dest = do
+    info <- State.gets structInfo
+    let siz = findSize tp info
+    if x < 0 || (siz /= 0 && x > 1073741816 `div` siz)
+        then return [AControl $ AJump "memerror"]
+        else return
+                 [ AAsm [AReg 3] ANopq [AImm 1]
+                 , AAsm [AReg 4] ANopq [AImm (x * siz + 8)]
+                 , ACall "calloc" [] 2
+                 , AAsm [APtr $ AReg 0] ANop [AImm x]
+                 , AAsm [dest] AAddq [ALoc $ AReg 0, AImm 8]
+                 ]
 genExp (TArrAlloc tp size) dest = do
     n <- getNewUniqueID
     n' <- getNewUniqueID
     n'' <- getNewUniqueID
-    sizeinfo <- getNewUniqueID
     l1 <- getNewUniqueLabel
-    size <- genExp size (ATemp n)
+    siz <- genExp size (ATemp n)
     info <- State.gets structInfo
     let
         sizefact = findSize tp info
@@ -468,24 +529,55 @@ genExp (TArrAlloc tp size) dest = do
             AAsm [APtr $ AReg 0] ANop [ALoc $ ATemp n], -- put the size in the block before beginning of array
             AAsm [dest] AAddq [ALoc $ AReg 0, AImm 8]
             ]
-    return $ size ++ sizechk ++ success
+    return $ siz ++ sizechk ++ success
+genExp (TArrAccess (TIdent a _) (TInt x) tp) dest = do
+    info <- State.gets structInfo
+    let siz = findSize tp info
+    if x > 1073741816 `div` siz then return [AControl $ AJump "memerror"] else do
+        allocmap <- State.gets variables
+        let arr = ATemp $ allocmap Map.! a
+        bounds <- checkBounds arr (AImm x)
+        let off = siz * x
+        return $ bounds ++ [AAsm [dest] AAddq [ALoc arr, AImm off]] ++ assignHeap tp dest dest
+genExp (TArrAccess exp1 (TInt x) tp) dest = do
+    info <- State.gets structInfo
+    let siz = findSize tp info
+    if x > 1073741816 `div` siz then return [AControl $ AJump "memerror"] else do
+        n <- getNewUniqueID
+        arr <- genExp exp1 (ATemp n)
+        bounds <- checkBounds (ATemp n) (AImm x)
+        let off = siz * x
+        return $ arr ++ bounds ++ [AAsm [dest] AAddq [ALoc $ ATemp n, AImm off]] ++ assignHeap tp dest dest
+genExp (TArrAccess (TIdent a _) exp2 tp) dest = do
+    n' <- getNewUniqueID
+    allocmap <- State.gets variables
+    access <- genExp exp2 (ATemp n')
+    let arr = ATemp $ allocmap Map.! a
+    bounds <- checkBounds arr (ALoc $ ATemp n')
+    info <- State.gets structInfo
+    let
+        sizefact = findSize tp info
+        offset =
+            [
+            AAsm [dest] AMulq [AImm sizefact, ALoc $ ATemp n'],
+            AAsm [dest] AAddq [ALoc dest, ALoc arr]
+            ]
+    return $ access ++ bounds ++ offset ++ assignHeap tp dest dest
 genExp (TArrAccess exp1 exp2 tp) dest = do
     n <- getNewUniqueID
     n' <- getNewUniqueID
-    n'' <- getNewUniqueID
-    addr <- getNewUniqueID
     arr <- genExp exp1 (ATemp n)
     access <- genExp exp2 (ATemp n')
-    bounds <- checkBounds (ATemp n) (ATemp n')
+    bounds <- checkBounds (ATemp n) (ALoc $ ATemp n')
     info <- State.gets structInfo
     let
         sizefact = findSize tp info
         offset = 
             [
-            AAsm [ATemp n''] AMulq [AImm sizefact, ALoc $ ATemp n'],
-            AAsm [ATemp addr] AAddq [ALoc $ ATemp n, ALoc $ ATemp n'']
+            AAsm [dest] AMulq [AImm sizefact, ALoc $ ATemp n'],
+            AAsm [dest] AAddq [ALoc dest, ALoc $ ATemp n]
             ]
-    return $ arr ++ access ++ bounds ++ offset ++ assignHeap tp (ATemp addr) dest
+    return $ arr ++ access ++ bounds ++ offset ++ assignHeap tp dest dest
 genExp (TDeref exp1 tp) dest = do
     n <- getNewUniqueID
     ptr <- genExp exp1 (ATemp n)
