@@ -9,3 +9,6 @@
 *.iml
 *out
 *.lock
+*.bc
+*.i
+*.o
