@@ -410,7 +410,7 @@ toAsm (ACall fun stks _) coloring header =
                 then [Movl (Reg EAX) (Reg R11D)] ++ popSeq' ++ [Movl (Reg R11D) (Reg EAX)]
                 else popSeq'
         fn
-            | Map.member fun (fnDecl header) || (fun == "abort") || (fun == "raise") || (fun == "calloc") = fun
+            | Map.member fun (fnDecl header) || (fun == "abort") || (fun == "calloc") = fun
             | (fun == "a bort") = "_c0_abort_local411"
             | otherwise = "_c0_" ++ fun
      in if length stks' `mod` 2 == 0

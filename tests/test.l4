@@ -1,6 +1,0 @@
-int main() {
-  int[][] a = alloc_array(int[], 2);
-  a[1] = alloc_array(int, 2);
-  a[1][0] += 2;
-  return a[1][0];
-}

@@ -1,12 +1,11 @@
 //test div-by-zero
 
+typedef bool curiosity;
+
 int iReturnZero(){
     curiosity * bar;
     return 0;
 }
-
-typedef bool curiosity;
-
 
 curiosity iReturnTrue(){
     curiosity * bar;
