@@ -53,7 +53,6 @@ generateFunc (fn, aasms, localVar) header =
                                  , (AReg 4, 2)
                                  , (AReg 5, 5)
                                  , (AReg 6, 6)
-                                 , (AReg 7, 7)
                                  ]
                          seo = mcs graph precolor
                          in color graph seo precolor
