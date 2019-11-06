@@ -387,6 +387,7 @@ isPtrType e = case e of
     ArrayAccess _ _ -> True
     Ptrderef _ -> True 
     Field _ _ -> True
+    Access _ _ -> True
     _ -> False
 
 --TODO: separate the case, if its not ident, separate case because we need to check memerror
