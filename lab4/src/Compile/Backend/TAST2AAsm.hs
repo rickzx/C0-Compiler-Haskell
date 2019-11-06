@@ -306,12 +306,12 @@ genAddr (TField (TIdent x tp) field _) dest sinfo = do
                 _ -> error "Malformed. Check type-checker."
     nullcheck <- checkNull st
     return $
-        nullcheck ++ [AAsm [dest] AAddq [ALoc st, AImm offset]]                
+        nullcheck ++ [AAsm [dest] AAddq [ALoc st, AImm offset]]
 genAddr (TField e field _) dest sinfo = do
-    let 
+    let
         (b, boffset) = fieldOffset e sinfo
     gen <- genAddr b dest sinfo
-    let 
+    let
         addBOffset = [AAsm [dest] AAddq [ALoc dest, AImm boffset]]
         offset =
             case typeOfTExp e of
@@ -567,7 +567,7 @@ genExp (TAlloc tp) dest = do
 genExp (TArrAlloc tp (TInt x)) dest = do
     info <- State.gets structInfo
     let siz = findSize tp info
-    if x < 0
+    if x < 0 || (siz /= 0 && x > 2147483648 `div` siz)
         then return [AControl $ AJump "memerror"]
         else return
                  [ AAsm [AReg 3] ANopq [AImm 1]
