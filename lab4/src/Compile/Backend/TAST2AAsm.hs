@@ -132,12 +132,52 @@ genTast (TPtrAssign (TVIdent x typ) (AsnOp b) e) = do
 genTast (TPtrAssign lv (AsnOp b) e) = do
     n <- getNewUniqueID
     n' <- getNewUniqueID
+    n'' <- getNewUniqueID
     sinfo <- State.gets structInfo
     lvgen <- genAddr (toTExp lv) (ATemp n) sinfo
     asgnmnt <- genExp e (ATemp n')
     nullchk <- checkNull (ATemp n)
-    let performOp = [AAsm [APtr $ ATemp n] (genBinOp b) [ALoc $ APtr $ ATemp n, ALoc $ ATemp n']]
-    return $ lvgen ++ asgnmnt ++ nullchk ++ performOp
+    shiftcheck <- case b of
+        Sal -> do
+            n2 <- getNewUniqueID
+            n3 <- getNewUniqueID
+            l1 <- getNewUniqueLabel
+            l2 <- getNewUniqueLabel
+            l3 <- getNewUniqueLabel
+            let
+                checker = [
+                    ARel [ATemp n2] (genRelOp Ge) [ALoc $ ATemp n', AImm 0],
+                    ARel [ATemp n3] (genRelOp Lt) [ALoc $ ATemp n', AImm 32],
+                    AControl $ ACJump (ALoc $ ATemp n2) l1 l2,
+                    AControl $ ALab l1,
+                    AControl $ ACJump (ALoc $ ATemp n3) l3 l2,
+                    AControl $ ALab l2
+                    ]
+            failure <- genExp (TBinop Div (TInt 1) (TInt 0)) (APtr $ ATemp n)
+            return $ checker ++ failure ++ [AControl $ ALab l3]
+        Sar -> do
+            n2 <- getNewUniqueID
+            n3 <- getNewUniqueID
+            l1 <- getNewUniqueLabel
+            l2 <- getNewUniqueLabel
+            l3 <- getNewUniqueLabel
+            let
+                checker = [
+                    ARel [ATemp n2] (genRelOp Ge) [ALoc $ ATemp n', AImm 0],
+                    ARel [ATemp n3] (genRelOp Lt) [ALoc $ ATemp n', AImm 32],
+                    AControl $ ACJump (ALoc $ ATemp n2) l1 l2,
+                    AControl $ ALab l1,
+                    AControl $ ACJump (ALoc $ ATemp n3) l3 l2,
+                    AControl $ ALab l2
+                    ]
+            failure <- genExp (TBinop Div (TInt 1) (TInt 0)) (APtr $ ATemp n)
+            return $ checker ++ failure ++ [AControl $ ALab l3]
+        _ -> return []
+    let performOp = [AAsm [ATemp n''] (genBinOp b) [ALoc $ APtr $ ATemp n, ALoc $ ATemp n']]
+    if findSize (typeOfLVal lv) sinfo == 4 then
+        return $ lvgen ++ asgnmnt ++ nullchk ++ shiftcheck ++ performOp ++ [AAsm [APtr $ ATemp n] ANop [ALoc $ ATemp n'']]
+        else
+            return $ lvgen ++ asgnmnt ++ nullchk ++ shiftcheck ++ performOp ++ [AAsm [APtr $ ATemp n] ANopq [ALoc $ ATemp n'']]
 genTast (TDef fn t e) = do
     let ARROW ts _r = t
         args = map fst ts
@@ -229,18 +269,8 @@ toTExp (TVField e field t) = TField (toTExp e) field t
 toTExp (TVDeref p t) = TDeref (toTExp p) t
 toTExp (TVArrAccess arr idx t) = TArrAccess (toTExp arr) idx t
 
-genAddr :: TExp -> ALoc -> StructInfo -> CodeGenStateM [AAsm]
-genAddr (TDeref (TIdent x _) _) dest _sinfo = do
-    allocmap <- State.gets variables
-    return [AAsm [dest] ANopq [ALoc $ ATemp $ allocmap Map.! x]]
-genAddr (TDeref e _) dest _ = do
-    n <- getNewUniqueID
-    gen <- genExp e (ATemp n)
-    return $ gen ++ [AAsm [dest] ANopq [ALoc $ ATemp n]]
-genAddr (TField e field _) dest sinfo = do
-    n <- getNewUniqueID
-    n' <- getNewUniqueID
-    gen <- genAddr e (ATemp n) sinfo
+fieldOffset :: TExp -> StructInfo -> (TExp, Int)
+fieldOffset (TField e field _) sinfo =
     let offset =
             case typeOfTExp e of
                 STRUCT s ->
@@ -251,9 +281,52 @@ genAddr (TField e field _) dest sinfo = do
                                 _ -> error "Malformed. Check type-checker."
                         _ -> error "Malformed. Check type-checker."
                 _ -> error "Malformed. Check type-checker."
-    nullcheck <- checkNull (ATemp n)
+        (b, boffset) = fieldOffset e sinfo
+    in
+        (b, boffset + offset)
+fieldOffset texp _ = (texp, 0)
+
+genAddr :: TExp -> ALoc -> StructInfo -> CodeGenStateM [AAsm]
+genAddr (TDeref (TIdent x _) _) dest _sinfo = do
+    allocmap <- State.gets variables
+    return [AAsm [dest] ANopq [ALoc $ ATemp $ allocmap Map.! x]]
+genAddr (TDeref e _) dest _ = genExp e dest
+genAddr (TField (TIdent x tp) field _) dest sinfo = do
+    allocmap <- State.gets variables
+    let st = ATemp $ allocmap Map.! x
+    let offset =
+            case tp of
+                STRUCT s ->
+                    case Map.lookup s sinfo of
+                        Just (_, _, offsets) ->
+                            case Map.lookup field offsets of
+                                Just (o, _) -> o
+                                _ -> error "Malformed. Check type-checker."
+                        _ -> error "Malformed. Check type-checker."
+                _ -> error "Malformed. Check type-checker."
+    nullcheck <- checkNull st
     return $
-        gen ++ nullcheck ++ [AAsm [ATemp n'] AAddq [ALoc $ ATemp n, AImm offset], AAsm [dest] ANopq [ALoc $ ATemp n']]
+        nullcheck ++ [AAsm [dest] AAddq [ALoc st, AImm offset]]                
+genAddr (TField e field _) dest sinfo = do
+    let 
+        (b, boffset) = fieldOffset e sinfo
+    gen <- genAddr b dest sinfo
+    let 
+        addBOffset = [AAsm [dest] AAddq [ALoc dest, AImm boffset]]
+        offset =
+            case typeOfTExp e of
+                STRUCT s ->
+                    case Map.lookup s sinfo of
+                        Just (_, _, offsets) ->
+                            case Map.lookup field offsets of
+                                Just (o, _) -> o
+                                _ -> error "Malformed. Check type-checker."
+                        _ -> error "Malformed. Check type-checker."
+                _ -> error "Malformed. Check type-checker."
+    nullcheck1 <- checkNull dest
+    nullcheck2 <- checkNull dest
+    return $
+        gen ++ nullcheck1 ++ addBOffset ++ nullcheck2 ++ [AAsm [dest] AAddq [ALoc dest, AImm offset]]
 genAddr (TArrAccess (TIdent a _) (TInt x) typ) dest sinfo = do
     let siz = findSize typ sinfo
     if x > 1073741816 `div` siz then return [AControl $ AJump "memerror"] else do
@@ -382,30 +455,25 @@ genExp expr@(TBinop binop exp1 exp2) dest
                 n' <- getNewUniqueID
                 gen2 <- genExp exp2 (ATemp n')
                 n2 <- getNewUniqueID
-                condi <- getNewUniqueID
                 n3 <- getNewUniqueID
+                l1 <- getNewUniqueLabel
+                l2 <- getNewUniqueLabel
+                l3 <- getNewUniqueLabel
                 l4 <- getNewUniqueLabel
-                l5 <- getNewUniqueLabel
+
                 let
                     checker = [ARel [ATemp n2] (genRelOp Ge) [ALoc $ ATemp n', AImm 0],
                             ARel [ATemp n3] (genRelOp Lt) [ALoc $ ATemp n', AImm 32],
-                            AControl $ ACJump (ALoc $ ATemp n2) l4 l5,
+                            AControl $ ACJump (ALoc $ ATemp n2) l4 l2,
                             AControl $ ALab l4,
-                            AAsm [ATemp condi] ANop [ALoc $ ATemp n3],
-                            AControl $ ALab l5,
-                            AAsm [ATemp condi] ANop [ALoc $ ATemp n2]]
+                            AControl $ ACJump (ALoc $ ATemp n3) l1 l2]
                     combine = [AAsm [dest] (genBinOp binop) [ALoc $ ATemp n, ALoc $ ATemp n']]
-                l1 <- getNewUniqueLabel
-                l2 <- getNewUniqueLabel
-                l3 <- getNewUniqueLabel
-                let
-                    cmp = [AControl $ ACJump (ALoc $ ATemp condi) l1 l2]
                 failure <- genExp (TBinop Div (TInt 1) (TInt 0)) dest
                 return $
                     gen1 ++
                     gen2 ++ 
                     checker ++
-                    cmp ++ [AControl $ ALab l1] ++ combine ++ [AControl $ AJump l3, AControl $ ALab l2] ++ 
+                    [AControl $ ALab l1] ++ combine ++ [AControl $ AJump l3, AControl $ ALab l2] ++ 
                     failure ++ [AControl $ AJump l3, AControl $ ALab l3]
     | binop == Add || binop == Sub || binop == Mul =
         case (exp1, exp2) of
@@ -483,10 +551,9 @@ genExp (TFunc fn args typ) dest = do
         assign = assignType typ (AReg 0) dest
     return $ gen ++ movArg ++ [ACall fn inStk (length inReg)] ++ assign
 genExp expr@(TField _ _ typ) dest = do
-    n <- getNewUniqueID
     sinfo <- State.gets structInfo
-    addr <- genAddr expr (ATemp n) sinfo
-    return $ addr ++ assignHeap typ (ATemp n) dest
+    addr <- genAddr expr dest sinfo
+    return $ addr ++ assignHeap typ dest dest
 genExp (TAlloc tp) dest = do
     info <- State.gets structInfo
     let
@@ -500,7 +567,7 @@ genExp (TAlloc tp) dest = do
 genExp (TArrAlloc tp (TInt x)) dest = do
     info <- State.gets structInfo
     let siz = findSize tp info
-    if x < 0 || (siz /= 0 && x > 1073741816 `div` siz)
+    if x < 0
         then return [AControl $ AJump "memerror"]
         else return
                  [ AAsm [AReg 3] ANopq [AImm 1]
@@ -579,10 +646,9 @@ genExp (TArrAccess exp1 exp2 tp) dest = do
             ]
     return $ arr ++ access ++ bounds ++ offset ++ assignHeap tp dest dest
 genExp (TDeref exp1 tp) dest = do
-    n <- getNewUniqueID
-    ptr <- genExp exp1 (ATemp n)
-    nullchk <- checkNull (ATemp n)
-    return $ ptr ++ nullchk ++ assignHeap tp (ATemp n) dest
+    ptr <- genExp exp1 dest
+    nullchk <- checkNull dest
+    return $ ptr ++ nullchk ++ assignHeap tp dest dest
 
 --Type, src temp, dest temp
 assignType :: Type -> ALoc -> ALoc -> [AAsm]
