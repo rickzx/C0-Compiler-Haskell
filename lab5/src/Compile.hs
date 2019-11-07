@@ -60,8 +60,8 @@ compile job = do
             let optEast = optTAST tast
             case jobOutFormat job of
                 TC -> liftEIO (Right ()) -- By now, we should have thrown any typechecking errors
-                Asm -> writeString (jobOut job) $ asmGen optEast header allStructs
-                Abs -> writeString (jobOut job) $ testPrintAAsm (codeGen optEast allStructs) (jobOut job)
+                Asm -> writeString (jobOut job) $ asmGen optEast header allStructs (jobOutUnsafe job)
+                Abs -> writeString (jobOut job) $ testPrintAAsm (codeGen optEast allStructs (jobOutUnsafe job)) (jobOut job)
     case res of
         Left msg -> error msg
         Right () -> return ()

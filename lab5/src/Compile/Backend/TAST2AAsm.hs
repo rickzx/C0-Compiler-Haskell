@@ -21,6 +21,7 @@ data CodeGenState =
         , currentFunction :: String
     -- ^ current function we are in
         , structInfo :: StructInfo
+        , unsafeflag :: Bool 
         } deriving Show
 
 -- Using the state monad with CodeGenState as the state allows us to implicitly
@@ -33,19 +34,19 @@ type StructInfo = Map.Map Ident (Int, Int, Map.Map Ident (Int, Int)) -- (Struct 
 getNewUniqueID :: CodeGenStateM Int
 getNewUniqueID = do
     currentCount <- State.gets uniqueIDCounter
-    State.modify' $ \(CodeGenState vs counter lab genf cf si) -> CodeGenState vs (counter + 1) lab genf cf si
+    State.modify' $ \(CodeGenState vs counter lab genf cf si us) -> CodeGenState vs (counter + 1) lab genf cf si us
     return currentCount
 
 getNewUniqueLabel :: CodeGenStateM String
 getNewUniqueLabel = do
     currentCount <- State.gets uniqueLabelCounter
-    State.modify' $ \(CodeGenState vs counter lab genf cf si) -> CodeGenState vs counter (lab + 1) genf cf si
+    State.modify' $ \(CodeGenState vs counter lab genf cf si us) -> CodeGenState vs counter (lab + 1) genf cf si us
     let lab = "L" ++ show currentCount
     return lab
 
 --for each term, (function name, AASM generated, # of var)
-aasmGen :: TAST -> [(Ident, Map.Map Ident Type)] -> [(Ident, ([AAsm], Int))]
-aasmGen tast structs = State.evalState assemM initialState
+aasmGen :: TAST -> [(Ident, Map.Map Ident Type)] -> Bool -> [(Ident, ([AAsm], Int))]
+aasmGen tast structs unsafe = State.evalState assemM initialState
   where
     initialState =
         CodeGenState
@@ -55,11 +56,12 @@ aasmGen tast structs = State.evalState assemM initialState
             , genFunctions = []
             , currentFunction = ""
             , structInfo = buildStructInfo structs
+            , unsafeflag = unsafe
             }
     assemM :: CodeGenStateM [(Ident, ([AAsm], Int))]
     assemM = do
         _genAAsm <- genTast tast
-        CodeGenState _ _ _ genf _ _ <- State.get
+        CodeGenState _ _ _ genf _ _ _<- State.get
         return (reverse genf)
 
 buildStructInfo :: [(Ident, Map.Map Ident Type)] -> StructInfo
@@ -183,13 +185,13 @@ genTast (TDef fn t e) = do
         args = map fst ts
         decls = args ++ getDecls e
         v' = Map.fromList $ zip decls [0 ..]
-    State.modify' $ \(CodeGenState _vs _counter lab genf _cf si) -> CodeGenState v' (length decls) lab genf fn si
+    State.modify' $ \(CodeGenState _vs _counter lab genf _cf si us) -> CodeGenState v' (length decls) lab genf fn si us
     let (inReg, inStk) = splitAt 6 (map (\a -> ATemp $ v' Map.! a) args)
         movArg = map (\(i, tmp) -> AAsm [tmp] ANopq [ALoc $ argRegs !! i]) $ zip [0 ..] inReg
     gen <- genTast e
     let funGen = [AFun fn inStk] ++ movArg ++ gen
-    State.modify' $ \(CodeGenState vs counter lab genf cf si) ->
-        CodeGenState vs counter lab ((fn, (funGen, counter)) : genf) cf si
+    State.modify' $ \(CodeGenState vs counter lab genf cf si us) ->
+        CodeGenState vs counter lab ((fn, (funGen, counter)) : genf) cf si us
     return funGen
 genTast (TAssert expr) = do
     let trans = TIf expr TNop (TLeaf $ TFunc "abort" [] VOID)
@@ -379,35 +381,39 @@ genAddr (TArrAccess arr idx typ) dest sinfo = do
 --check if a we are writing to or dereferencing NULL
 checkNull :: ALoc -> CodeGenStateM [AAsm]
 checkNull ptr = do
+    unsafe <- State.gets unsafeflag
     l1 <- getNewUniqueLabel
-    return [AControl $ ACJump' AEqq (ALoc ptr) (AImm 0) "memerror" l1, AControl $ ALab l1]
+    if unsafe then return [] else 
+        return [AControl $ ACJump' AEqq (ALoc ptr) (AImm 0) "memerror" l1, AControl $ ALab l1]
 
 --creates the labels and temps needed to check the bounds of the array access
 --input is the ALoc representing the first element of the Array, and second ALoc representing index
 checkBounds :: ALoc -> AVal -> CodeGenStateM [AAsm]
 checkBounds arr idx = do
-    l2 <- getNewUniqueLabel
-    l3 <- getNewUniqueLabel
-    size <- getNewUniqueID
-    let
-        gensize = [AAsm [ATemp size] ASubq [ALoc arr, AImm 8],
-            AAsm [ATemp size] ANop [ALoc $ APtr $ ATemp size]]
-        sizechk =
-            case idx of
-                AImm x | x < 0 -> [AControl $ AJump "memerror"]
-                       | otherwise ->
-                            [
+    unsafe <- State.gets unsafeflag
+    if unsafe then return [] else do
+        l2 <- getNewUniqueLabel
+        l3 <- getNewUniqueLabel
+        size <- getNewUniqueID
+        let
+            gensize = [AAsm [ATemp size] ASubq [ALoc arr, AImm 8],
+                AAsm [ATemp size] ANop [ALoc $ APtr $ ATemp size]]
+            sizechk =
+                case idx of
+                    AImm x | x < 0 -> [AControl $ AJump "memerror"]
+                        | otherwise ->
+                                [
+                                AControl $ ACJump' ALe (ALoc $ ATemp size) idx "memerror" l3,
+                                AControl $ ALab l3
+                                ]
+                    _ -> [
+                            AControl $ ACJump' ALt idx (AImm 0) "memerror" l2,
+                            AControl $ ALab l2,
                             AControl $ ACJump' ALe (ALoc $ ATemp size) idx "memerror" l3,
                             AControl $ ALab l3
-                            ]
-                _ -> [
-                         AControl $ ACJump' ALt idx (AImm 0) "memerror" l2,
-                         AControl $ ALab l2,
-                         AControl $ ACJump' ALe (ALoc $ ATemp size) idx "memerror" l3,
-                         AControl $ ALab l3
-                     ]
-    nullcheck <- checkNull arr
-    return $ nullcheck ++ gensize ++ sizechk
+                        ]
+        nullcheck <- checkNull arr
+        return $ nullcheck ++ gensize ++ sizechk
 
 findSize :: Type -> StructInfo -> Int
 findSize tp info = 
@@ -450,10 +456,14 @@ genExp expr@(TBinop binop exp1 exp2) dest
             [AControl $ ALab l2, AAsm [dest] ANop [AImm $ fromIntegral (0 :: Int32)], AControl $ AJump l3] ++
             [AControl $ ALab l3]
     | binop == Sal || binop == Sar = do
-                n <- getNewUniqueID
-                gen1 <- genExp exp1 (ATemp n)
-                n' <- getNewUniqueID
-                gen2 <- genExp exp2 (ATemp n')
+        unsafe <- State.gets unsafeflag
+        n <- getNewUniqueID
+        gen1 <- genExp exp1 (ATemp n)
+        n' <- getNewUniqueID
+        gen2 <- genExp exp2 (ATemp n')
+        if unsafe then
+            return [AAsm [dest] (genBinOp binop) [ALoc $ ATemp n, ALoc $ ATemp n']]
+            else do
                 n2 <- getNewUniqueID
                 n3 <- getNewUniqueID
                 l1 <- getNewUniqueLabel
@@ -570,12 +580,12 @@ genExp (TArrAlloc tp (TInt x)) dest = do
     if x < 0 || (siz /= 0 && x > 2147483648 `div` siz)
         then return [AControl $ AJump "memerror"]
         else return
-                 [ AAsm [AReg 3] ANopq [AImm 1]
-                 , AAsm [AReg 4] ANopq [AImm (x * siz + 8)]
-                 , ACall "calloc" [] 2
-                 , AAsm [APtr $ AReg 0] ANop [AImm x]
-                 , AAsm [dest] AAddq [ALoc $ AReg 0, AImm 8]
-                 ]
+                [ AAsm [AReg 3] ANopq [AImm 1]
+                , AAsm [AReg 4] ANopq [AImm (x * siz + 8)]
+                , ACall "calloc" [] 2
+                , AAsm [APtr $ AReg 0] ANop [AImm x]
+                , AAsm [dest] AAddq [ALoc $ AReg 0, AImm 8]
+                ]
 genExp (TArrAlloc tp size) dest = do
     n <- getNewUniqueID
     n' <- getNewUniqueID
@@ -744,5 +754,5 @@ testGenEast = do
                           "g"
                           (ARROW [("x", (ARRAY INTEGER))] INTEGER)
                           (TRet (Just $ TArrAccess (TIdent "x" (ARRAY INTEGER)) (TInt 3) INTEGER))))
-        funs = aasmGen east []
+        funs = aasmGen east [] True
     putStr $ show funs

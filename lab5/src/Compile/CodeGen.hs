@@ -17,23 +17,23 @@ import qualified Data.List as List
 import qualified Data.Map as Map
 import Debug.Trace
 
-codeGen :: TAST -> [(Ident,Map.Map Ident Type)] -> [AAsm]
+codeGen :: TAST -> [(Ident,Map.Map Ident Type)] -> Bool -> [AAsm]
 --codeGen t | (trace $ show t) False = undefined
-codeGen tast structs =
+codeGen tast structs unsafe =
     let 
-        tastGen = aasmGen tast structs
-        memerr = [
+        tastGen = aasmGen tast structs unsafe
+        memerr = if unsafe then [] else [
             AControl $ ALab "memerror",
             AAsm [AReg 3] ANop [AImm 12],
             ACall "raise" [] 1
             ]
      in memerr ++ concatMap (\(_fn, (aasm, _lv)) -> aasm) tastGen
 
-asmGen :: TAST -> Header -> [(Ident,Map.Map Ident Type)] -> String
+asmGen :: TAST -> Header -> [(Ident,Map.Map Ident Type)] -> Bool -> String
 --asmGen t h | (trace $ show t ++ "\n\n" ++ show h) False = undefined
-asmGen tast header structs =
-    let memerr = ".memerror:\n\tmovl $12, %edi\n\txorl %eax, %eax\n\tcall raise\n"
-        tastGen = aasmGen tast structs
+asmGen tast header structs unsafe =
+    let memerr = if unsafe then "" else ".memerror:\n\tmovl $12, %edi\n\txorl %eax, %eax\n\tcall raise\n"
+        tastGen = aasmGen tast structs unsafe
         globs = map (\(x, _) -> if x == "a bort" then Global "_c0_abort_local411" else Global $ "_c0_" ++ x) tastGen
         globString = concatMap (\line -> show line ++ "\n") globs
      in globString ++ concatMap (\(fn, (aasms, lv)) -> generateFunc (fn, aasms, lv) header) tastGen ++ memerr
