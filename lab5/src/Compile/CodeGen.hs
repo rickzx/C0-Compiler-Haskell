@@ -79,7 +79,10 @@ generateFunc (fn, aasms, localVar) header =
                      map (Pushq . Reg . toReg64) calleeSaved -- Save callee-saved registers used in the function
                       ++
                      [Subq (Imm (stackVarAligned * 8)) (Reg RSP)] -- Allocate stack space
-                else [Fun fname, Pushq (Reg RBP), Movq (Reg RSP) (Reg RBP)] ++ map (Pushq . Reg . toReg64) calleeSaved
+                      ++
+                     [Label $ fname ++ "_start"] --for tail recursion purposes
+
+                else [Fun fname, Pushq (Reg RBP), Movq (Reg RSP) (Reg RBP)] ++ map (Pushq . Reg . toReg64) calleeSaved ++ [Label $ fname ++ "_start"]
         epilog =
             if stackVarAligned > 0
                 then [Label $ fname ++ "_ret", Addq (Imm (stackVarAligned * 8)) (Reg RSP)] ++

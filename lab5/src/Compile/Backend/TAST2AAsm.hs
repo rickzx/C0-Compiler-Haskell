@@ -139,8 +139,9 @@ genTast (TPtrAssign lv (AsnOp b) e) = do
     lvgen <- genAddr (toTExp lv) (ATemp n) sinfo
     asgnmnt <- genExp e (ATemp n')
     nullchk <- checkNull (ATemp n)
-    shiftcheck <- case b of
-        Sal -> do
+    unsafe <- State.gets unsafeflag
+    shiftcheck <- case (b, unsafe) of
+        (Sal, False) -> do
             n2 <- getNewUniqueID
             n3 <- getNewUniqueID
             l1 <- getNewUniqueLabel
@@ -157,7 +158,7 @@ genTast (TPtrAssign lv (AsnOp b) e) = do
                     ]
             failure <- genExp (TBinop Div (TInt 1) (TInt 0)) (APtr $ ATemp n)
             return $ checker ++ failure ++ [AControl $ ALab l3]
-        Sar -> do
+        (Sar, False) -> do
             n2 <- getNewUniqueID
             n3 <- getNewUniqueID
             l1 <- getNewUniqueLabel
@@ -223,6 +224,18 @@ genTast (TRet expr) = do
                 then "_c0_abort_local411"
                 else "_c0_" ++ fn
     case expr of
+        Just e@(TFunc fun args tp) -> if fun == fn then do
+                let argLen = length args
+                ids <- replicateM argLen getNewUniqueID
+                let tmpVars = map ATemp ids
+                gens <- mapM (\(i, e) -> genExp e (tmpVars !! i)) $ zip [0 ..] args
+                let gen = join gens
+                let (inReg, inStk) = splitAt 6 tmpVars
+                    movArg = map (\(i, tmp) -> AAsm [argRegs !! i] ANopq [ALoc tmp]) $ zip [0 ..] inReg
+                return $ gen ++ movArg ++ [AControl $ AJump $ fname ++ "_start"]  
+            else do
+                gen <- genExp e (AReg 0)
+                return $ gen ++ [AControl $ AJump $ fname ++ "_ret"]
         Just e -> do
             gen <- genExp e (AReg 0)
             return $ gen ++ [AControl $ AJump $ fname ++ "_ret"]
@@ -576,10 +589,19 @@ genExp (TAlloc tp) dest = do
             ]            
 genExp (TArrAlloc tp (TInt x)) dest = do
     info <- State.gets structInfo
+    unsafe <- State.gets unsafeflag
     let siz = findSize tp info
     if x < 0 || (siz /= 0 && x > 2147483648 `div` siz)
         then return [AControl $ AJump "memerror"]
-        else return
+        else if unsafe then
+            return
+                [ AAsm [AReg 3] ANopq [AImm 1]
+                , AAsm [AReg 4] ANopq [AImm (x * siz)]
+                , ACall "calloc" [] 2
+                , AAsm [dest] ANopq [ALoc $ AReg 0]
+                ]
+        else
+            return
                 [ AAsm [AReg 3] ANopq [AImm 1]
                 , AAsm [AReg 4] ANopq [AImm (x * siz + 8)]
                 , ACall "calloc" [] 2
@@ -755,4 +777,24 @@ testGenEast = do
                           (ARROW [("x", (ARRAY INTEGER))] INTEGER)
                           (TRet (Just $ TArrAccess (TIdent "x" (ARRAY INTEGER)) (TInt 3) INTEGER))))
         funs = aasmGen east [] True
+    putStr $ show funs
+testGenRecursive :: IO ()
+testGenRecursive = do
+    let east = 
+            TSeq
+                (TDecl 
+                    "f" (ARROW [("x", INTEGER)] INTEGER)
+                    (TDef "f"
+                        (ARROW [("x", INTEGER)] INTEGER)
+                        (TIf (TBinop Le (TIdent "x" INTEGER) (TInt 0))
+                        (TRet (Just $ TIdent "x" INTEGER))(TRet (Just $ TFunc "f" [TBinop Add (TIdent "x" INTEGER) (TInt 2)] INTEGER)
+                        ))))
+                (TDecl
+                     "g"
+                     (ARROW [("x", (ARRAY INTEGER))] INTEGER)
+                     (TDef
+                          "g"
+                          (ARROW [("x", (ARRAY INTEGER))] INTEGER)
+                          (TRet (Just $ TArrAccess (TIdent "x" (ARRAY INTEGER)) (TInt 3) INTEGER))))
+        funs = aasmGen east [] False
     putStr $ show funs
