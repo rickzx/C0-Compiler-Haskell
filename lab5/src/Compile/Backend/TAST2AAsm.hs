@@ -216,7 +216,16 @@ genTast (TWhile expr e) = do
     l3 <- getNewUniqueLabel -- label after while block
     cmp <- genCmp expr l2 l3
     gen <- genTast e
-    return $ [AControl $ ALab l1] ++ cmp ++ [AControl $ ALab l2] ++ gen ++ [AControl $ AJump l1, AControl $ ALab l3]
+    return $ [AControl $ ALab l1] ++ cmp ++ [AControl $ ALab l2] ++ gen ++ [AControl $ AJump l1, 
+        AControl $ ALab l3]
+-- --change while loops into a repeat loop
+-- genTast (TWhile expr e) = do
+--     l1 <- getNewUniqueLabel -- label before while guard
+--     l2 <- getNewUniqueLabel -- label of the while block
+--     l3 <- getNewUniqueLabel -- label after while block
+--     cmp <- genCmp expr l1 l2
+--     gen <- genTast e
+--     return $ cmp ++ [AControl $ ALab l1] ++ gen ++ cmp ++ [AControl $ ALab l2]
 genTast (TRet expr) = do
     fn <- State.gets currentFunction
     let fname =
@@ -224,13 +233,13 @@ genTast (TRet expr) = do
                 then "_c0_abort_local411"
                 else "_c0_" ++ fn
     case expr of
-        Just e@(TFunc fun args tp) -> if fun == fn then do
+        Just e@(TFunc fun args _tp) -> if fun == fn then do
                 let argLen = length args
                 ids <- replicateM argLen getNewUniqueID
                 let tmpVars = map ATemp ids
-                gens <- mapM (\(i, e) -> genExp e (tmpVars !! i)) $ zip [0 ..] args
+                gens <- mapM (\(i, ex) -> genExp ex (tmpVars !! i)) $ zip [0 ..] args
                 let gen = join gens
-                let (inReg, inStk) = splitAt 6 tmpVars
+                let (inReg, _inStk) = splitAt 6 tmpVars
                     movArg = map (\(i, tmp) -> AAsm [argRegs !! i] ANopq [ALoc tmp]) $ zip [0 ..] inReg
                 return $ gen ++ movArg ++ [AControl $ AJump $ fname ++ "_start"]  
             else do
@@ -498,7 +507,7 @@ genExp expr@(TBinop binop exp1 exp2) dest
                     checker ++
                     [AControl $ ALab l1] ++ combine ++ [AControl $ AJump l3, AControl $ ALab l2] ++ 
                     failure ++ [AControl $ AJump l3, AControl $ ALab l3]
-    | binop == Add || binop == Sub || binop == Mul =
+    | binop == Add || binop == Sub =
         case (exp1, exp2) of
             (TInt x1, _) -> do
                 n <- getNewUniqueID
@@ -517,6 +526,8 @@ genExp expr@(TBinop binop exp1 exp2) dest
                 codegen2 <- genExp exp2 (ATemp n')
                 let combine = [AAsm [dest] (genBinOp binop) [ALoc $ ATemp n, ALoc $ ATemp n']]
                 return $ codegen1 ++ codegen2 ++ combine
+    | binop == Mul = mulOptimize exp1 exp2 dest
+    | binop == Div = divOptimize exp1 exp2 dest
     | otherwise = do
         n <- getNewUniqueID
         codegen1 <- genExp exp1 (ATemp n)
@@ -682,6 +693,66 @@ genExp (TDeref exp1 tp) dest = do
     nullchk <- checkNull dest
     return $ ptr ++ nullchk ++ assignHeap tp dest dest
 
+--expr1, expr2, dest
+mulOptimize :: TExp -> TExp -> ALoc -> CodeGenStateM[AAsm]
+mulOptimize exp1 exp2 dest = 
+    case (exp1, exp2) of
+        (TInt x1, _) -> do
+            n <- getNewUniqueID
+            codegen <- genExp exp2 (ATemp n)
+            if x1 == 0 then return $ codegen ++ [AAsm [dest] ANop [AImm 0]] else do
+                let
+                    flr = (floor . logBase 2.0 . fromIntegral) x1
+                    ceil = (ceiling . logBase 2.0 . fromIntegral) x1
+                    combine = if flr == ceil then
+                            [AAsm [dest] (genBinOp Sal) [ALoc $ ATemp n, AImm flr]]
+                        else
+                            [AAsm [dest] (genBinOp Mul) [AImm x1, ALoc $ ATemp n]]
+                return $ codegen ++ combine
+        (_, TInt x1) -> do
+            n <- getNewUniqueID
+            codegen <- genExp exp1 (ATemp n)
+            if x1 == 0 then return $ codegen ++ [AAsm [dest] ANop [AImm 0]] else do
+                let
+                    flr = (floor . logBase 2.0 . fromIntegral) x1
+                    ceil = (ceiling . logBase 2.0 . fromIntegral) x1
+                    combine = if flr == ceil then
+                            [AAsm [dest] (genBinOp Sal) [ALoc $ ATemp n, AImm flr]]
+                        else
+                            [AAsm [dest] (genBinOp Mul) [AImm x1, ALoc $ ATemp n]]
+                return $ codegen ++ combine
+        (_, _) -> do 
+            n <- getNewUniqueID
+            codegen1 <- genExp exp1 (ATemp n)
+            n' <- getNewUniqueID
+            codegen2 <- genExp exp2 (ATemp n')
+            let combine = [AAsm [dest] (genBinOp Mul) [ALoc $ ATemp n, ALoc $ ATemp n']]
+            return $ codegen1 ++ codegen2 ++ combine
+
+divOptimize :: TExp -> TExp -> ALoc -> CodeGenStateM[AAsm]
+divOptimize exp1 exp2 dest = 
+    case (exp1, exp2) of 
+        (_, TInt x1) -> do 
+            n <- getNewUniqueID
+            codegen <- genExp exp1 (ATemp n)
+            if x1 == 0 then return $ codegen ++ [AAsm [dest] (genBinOp Div) [ALoc $ ATemp n, AImm 0]]
+            else do
+                let
+                    flr = (floor . logBase 2.0 . fromIntegral) x1
+                    ceil = (ceiling . logBase 2.0 . fromIntegral) x1
+                    combine = if flr == ceil then
+                            [AAsm [dest] (genBinOp Sar) [ALoc $ ATemp n, AImm flr]]
+                        else
+                            [AAsm [dest] (genBinOp Div) [ALoc $ ATemp n, AImm x1]]
+                return $ codegen ++ combine
+        _ -> do 
+            n <- getNewUniqueID
+            codegen1 <- genExp exp1 (ATemp n)
+            n' <- getNewUniqueID
+            codegen2 <- genExp exp2 (ATemp n')
+            let combine = [AAsm [dest] (genBinOp Div) [ALoc $ ATemp n, ALoc $ ATemp n']]
+            return $ codegen1 ++ codegen2 ++ combine
+                
 --Type, src temp, dest temp
 assignType :: Type -> ALoc -> ALoc -> [AAsm]
 assignType tp src dest =

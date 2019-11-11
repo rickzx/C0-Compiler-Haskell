@@ -90,5 +90,18 @@ generateFunc (fn, aasms, localVar) header =
                 else [Label $ fname ++ "_ret"] ++ map (Popq . Reg . toReg64) (reverse calleeSaved) ++ [Popq (Reg RBP), Ret]
         -- (trace $ show fn ++ "\n" ++ show coloring ++ "\n\n" ++ show aasms)
         insts = concatMap (\x -> List.filter nonTrivial (toAsm x coloring header)) aasms
-        fun = prolog ++ insts ++ epilog
+        --optimize out the redundant move operations
+        optinsts = remove_move insts 
+                where 
+                    remove_move :: [Inst] -> [Inst]
+                    remove_move [] = []
+                    remove_move [x] = [x]
+                    remove_move (x:y:xs) = case (x, y) of
+                        (Movl op1 op2, Movl op3 op4) -> if op1 == op4 && op2 == op3 then remove_move(x:xs) else
+                            x:remove_move(y:xs)
+                        (Movq op1 op2, Movq op3 op4) -> if op1 == op4 && op2 == op3 then remove_move(x:xs) else
+                            x:remove_move(y:xs)
+                        _ -> x:remove_move(y:xs)
+
+        fun = prolog ++ optinsts ++ epilog
      in concatMap (\line -> show line ++ "\n") fun
