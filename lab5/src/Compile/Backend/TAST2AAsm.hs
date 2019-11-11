@@ -213,7 +213,7 @@ genTast (TWhile expr e) = do
     l3 <- getNewUniqueLabel -- label after while block
     cmp <- genCmp expr l2 l3
     gen <- genTast e
-    return $ [AControl $ ALab l1] ++ cmp ++ [AControl $ ALab l2] ++ gen ++ [AControl $ AJump l1, AControl $ ALab l3]
+    return $ [AControl $ AJump l1, AControl $ ALab l1] ++ cmp ++ [AControl $ ALab l2] ++ gen ++ [AControl $ AJump l1, AControl $ ALab l3]
 genTast (TRet expr) = do
     fn <- State.gets currentFunction
     let fname =

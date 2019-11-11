@@ -1,0 +1,13 @@
+int pow(int b, int e) {
+	int r = 1;
+	while (e > 0) {
+		r = r * b;
+		e = e - 1;
+	}
+
+	return r;
+}
+
+int main() {
+	return 0;
+}

@@ -16,7 +16,7 @@ type Pred = Map.Map Int (Set.Set ALoc, [Int], Set.Set ALoc)
 type Ancestor = Map.Map Int (Set.Set Int)
 
 --line num to corresponding live variables
-type Livelist = Map.Map Int (Set.Set ALoc)
+type LiveList = Map.Map Int (Set.Set ALoc)
 
 --given a list of AVal, we just care about the temps, not the
 --constants.
@@ -29,12 +29,6 @@ getLoc (x:rest) =
         ALoc (APtr p) -> Set.insert p (getLoc rest)
         ALoc (APtrq p) -> Set.insert p (getLoc rest)
         _ -> getLoc rest
-
---reverse the abstract assembly, so that we can work backwards for live variables
---Stop at first return statment seen
---reverserAAsm accumulate original -> reversed result
-reverseAAsm :: [(Int, AAsm)] -> [(Int, AAsm)] -> [(Int, AAsm)]
-reverseAAsm = foldl (flip (:))
 
 addLineNum :: [AAsm] -> [(Int, AAsm)]
 addLineNum = zip [0 ..]
@@ -125,21 +119,21 @@ findAncestor = Map.foldlWithKey f Map.empty
 
 --check whether the variable is already in the livelist of the line, if it is
 --then it must also be in all of its predecessors so we dont have to compute again
-linelive :: Livelist -> ALoc -> Int -> (Livelist, Bool)
+linelive :: LiveList -> ALoc -> Int -> (LiveList, Bool)
 linelive livel var idx =
     let curr = Maybe.fromMaybe Set.empty (Map.lookup idx livel)
      in if Set.member var curr
             then (livel, False)
             else (Map.insert idx (Set.insert var curr) livel, True)
 
-singleVarLive :: ALoc -> Set.Set Int -> Pred -> Ancestor -> Livelist -> Livelist
+singleVarLive :: ALoc -> Set.Set Int -> Pred -> Ancestor -> LiveList -> LiveList
 --ALoc -> ancestor list -> predicate -> livelist
 singleVarLive a ancesset pr ancest livel =
     if ancesset == Set.empty
         then livel
         else Set.foldr g livel ancesset
   where
-    g :: Int -> Livelist -> Livelist
+    g :: Int -> LiveList -> LiveList
     g line liveset =
         let (defset, _, _) = pr Map.! line
             currlive = Maybe.fromMaybe Set.empty (Map.lookup line liveset)
@@ -156,7 +150,7 @@ singleVarLive a ancesset pr ancest livel =
 --i is the line we start looking at, initialized as the length of AASM, when i = 0 we done,
 --we only increment i if there is no more used variable to look at at the line i
 --ances is the list of predessors we use to look upwards
-computeLive :: Int -> Int -> Pred -> Ancestor -> Livelist -> Livelist
+computeLive :: Int -> Int -> Pred -> Ancestor -> LiveList -> LiveList
 computeLive 0 _ _ _ livel = livel
 computeLive linenum varidx pr ances livel =
     let (_, _, useset) = pr Map.! linenum
@@ -187,7 +181,7 @@ isSameLoc x y =
         ALoc x' -> x' == y
         _ -> False
 
-combinelive :: [Int] -> Livelist -> Set.Set ALoc
+combinelive :: [Int] -> LiveList -> Set.Set ALoc
 combinelive l live = foldl h (Set.empty) l
   where
     h :: Set.Set ALoc -> Int -> Set.Set ALoc
@@ -197,7 +191,7 @@ combinelive l live = foldl h (Set.empty) l
 
 --build interference graph, we can just care about the succlist relationship for each line, but
 --we do need to case on div, mod (rax, rdx) and shift (rcx) for special register allocation.
-buildInterfere :: [(Int, AAsm)] -> Livelist -> Pred -> Graph -> Graph
+buildInterfere :: [(Int, AAsm)] -> LiveList -> Pred -> Graph -> Graph
 buildInterfere [] _ _ g = g
 buildInterfere ((idx, x):xs) live pr g =
     let (_, succlist, _) = pr Map.! idx
@@ -329,7 +323,7 @@ buildInterfere ((idx, x):xs) live pr g =
 --(function name, (AASM generated, # of var)
 computerInterfere :: [AAsm] -> Graph
 computerInterfere aasm =
-    let processed = reverseAAsm [] (addLineNum aasm)
+    let processed = reverse (addLineNum aasm)
         labels = findlabels processed Map.empty
         predec = computePredicate processed labels Map.empty
         ancestors = findAncestor predec
@@ -340,3 +334,16 @@ computerInterfere aasm =
         liveness = computeLive size 0 predec ancestors Map.empty
         -- (trace $ "Predicate: " ++ show predec ++ "\n\n" ++ "Ancestors :" ++ show ancestors ++ "\n\n" ++ "Liveness: " ++ show liveness ++ "\n")
      in buildInterfere processed liveness predec Map.empty
+     
+ssaLive :: [AAsm] -> (LiveList, Pred)
+ssaLive aasm =
+    let processed = reverse (addLineNum aasm)
+        labels = findlabels processed Map.empty
+        predec = computePredicate processed labels Map.empty
+        ancestors = findAncestor predec
+        size =
+            case processed of
+                [] -> 0
+                (idx, _):_xs -> idx
+        ll = computeLive size 0 predec ancestors Map.empty
+    in (ll, predec)

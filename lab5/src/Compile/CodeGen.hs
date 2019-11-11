@@ -12,6 +12,7 @@ import Compile.Backend.AAsm2Asm
 import Compile.Backend.TAST2AAsm
 import Compile.Backend.LiveVariable
 import Compile.Backend.RegisterAlloc
+import Compile.Backend.SSA
 import Compile.Types
 import qualified Data.List as List
 import qualified Data.Map as Map
@@ -36,26 +37,31 @@ asmGen tast header structs =
         tastGen = aasmGen tast structs
         globs = map (\(x, _) -> if x == "a bort" then Global "_c0_abort_local411" else Global $ "_c0_" ++ x) tastGen
         globString = concatMap (\line -> show line ++ "\n") globs
-     in globString ++ concatMap (\(fn, (aasms, lv)) -> generateFunc (fn, aasms, lv) header) tastGen ++ memerr
+     in globString ++ concatMap (\(fn, (aasms, _)) -> generateFunc (fn, aasms) header) tastGen ++ memerr
 
-generateFunc :: (String, [AAsm], Int) -> Header -> String
-generateFunc (fn, aasms, localVar) header =
-    let (coloring, stackVar, calleeSaved) =
-            if localVar > 1000 && localVar /= 2007 then allStackColor localVar--2007 was a bad year
-                else let graph = computerInterfere aasms
-              -- (trace $ "Interference graph: " ++ show graph ++ "\n\n")
-                         precolor =
-                             Map.fromList
-                                 [ (AReg 0, 0)
-                                 , (AReg 1, 3)
-                                 , (AReg 2, 4)
-                                 , (AReg 3, 1)
-                                 , (AReg 4, 2)
-                                 , (AReg 5, 5)
-                                 , (AReg 6, 6)
-                                 ]
-                         seo = mcs graph precolor
-                         in color graph seo precolor
+generateFunc :: (String, [AAsm]) -> Header -> String
+generateFunc (fn, aasms) header =
+    let 
+        fname
+            | Map.member fn (fnDecl header) = fn
+            | fn == "a bort" = "_c0_abort_local411"
+            | otherwise = "_c0_" ++ fn
+        (blk, lMap, _) = ssa aasms (ssaLive aasms) fname
+        elim = deSSA blk lMap
+        (coloring, stackVar, calleeSaved) =
+            let graph = computerInterfere elim
+                precolor =
+                     Map.fromList
+                         [ (AReg 0, 0)
+                         , (AReg 1, 3)
+                         , (AReg 2, 4)
+                         , (AReg 3, 1)
+                         , (AReg 4, 2)
+                         , (AReg 5, 5)
+                         , (AReg 6, 6)
+                         ]
+                seo = mcs graph precolor
+                 in color graph seo precolor
         nonTrivial asm =
             case asm of
                 Movl op1 op2 -> op1 /= op2
@@ -68,10 +74,6 @@ generateFunc (fn, aasms, localVar) header =
                      else stackVar)
             | stackVar `mod` 2 == 0 = stackVar
             | otherwise = stackVar + 1
-        fname
-            | Map.member fn (fnDecl header) = fn
-            | fn == "a bort" = "_c0_abort_local411"
-            | otherwise = "_c0_" ++ fn
         prolog =
             if stackVarAligned > 0
                 then [Fun fname, Pushq (Reg RBP), Movq (Reg RSP) (Reg RBP)] -- Save rbp of parent, update rbp using rsp
@@ -85,7 +87,7 @@ generateFunc (fn, aasms, localVar) header =
                 then [Label $ fname ++ "_ret", Addq (Imm (stackVarAligned * 8)) (Reg RSP)] ++
                      map (Popq . Reg . toReg64) (reverse calleeSaved) ++ [Popq (Reg RBP), Ret]
                 else [Label $ fname ++ "_ret"] ++ map (Popq . Reg . toReg64) (reverse calleeSaved) ++ [Popq (Reg RBP), Ret]
-        -- (trace $ show fn ++ "\n" ++ show coloring ++ "\n\n" ++ show aasms)
-        insts = concatMap (\x -> List.filter nonTrivial (toAsm x coloring header)) aasms
+        -- (trace $ show aasms ++ "\n\n" ++ show blk ++ "\n\n" ++ show elim ++ "\n\n")
+        insts = concatMap (\x -> List.filter nonTrivial (toAsm x coloring header)) elim
         fun = prolog ++ insts ++ epilog
      in concatMap (\line -> show line ++ "\n") fun
