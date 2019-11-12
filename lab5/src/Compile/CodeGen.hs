@@ -21,8 +21,8 @@ codeGen :: TAST -> [(Ident,Map.Map Ident Type)] -> Bool -> [AAsm]
 --codeGen t | (trace $ show t) False = undefined
 codeGen tast structs unsafe =
     let 
-        tastGen = aasmGen tast structs unsafe
-        memerr = if unsafe then [] else [
+        (tastGen, _tr) = aasmGen tast structs unsafe
+        memerr = [
             AControl $ ALab "memerror",
             AAsm [AReg 3] ANop [AImm 12],
             ACall "raise" [] 1
@@ -32,14 +32,14 @@ codeGen tast structs unsafe =
 asmGen :: TAST -> Header -> [(Ident,Map.Map Ident Type)] -> Bool -> String
 --asmGen t h | (trace $ show t ++ "\n\n" ++ show h) False = undefined
 asmGen tast header structs unsafe =
-    let memerr = if unsafe then "" else ".memerror:\n\tmovl $12, %edi\n\txorl %eax, %eax\n\tcall raise\n"
-        tastGen = aasmGen tast structs unsafe
+    let memerr = ".memerror:\n\tmovl $12, %edi\n\txorl %eax, %eax\n\tcall raise\n"
+        (tastGen, tr) = aasmGen tast structs unsafe
         globs = map (\(x, _) -> if x == "a bort" then Global "_c0_abort_local411" else Global $ "_c0_" ++ x) tastGen
         globString = concatMap (\line -> show line ++ "\n") globs
-     in globString ++ concatMap (\(fn, (aasms, lv)) -> generateFunc (fn, aasms, lv) header) tastGen ++ memerr
+     in globString ++ concatMap (\(fn, (aasms, lv)) -> generateFunc (fn, aasms, lv) header tr) tastGen ++ memerr
 
-generateFunc :: (String, [AAsm], Int) -> Header -> String
-generateFunc (fn, aasms, localVar) header =
+generateFunc :: (String, [AAsm], Int) -> Header -> Map.Map String String -> String
+generateFunc (fn, aasms, localVar) header trdict =
     let (coloring, stackVar, calleeSaved) =
             if localVar > 1000 && localVar /= 2007 then allStackColor localVar--2007 was a bad year
                 else let graph = computerInterfere aasms
@@ -53,6 +53,7 @@ generateFunc (fn, aasms, localVar) header =
                                  , (AReg 4, 2)
                                  , (AReg 5, 5)
                                  , (AReg 6, 6)
+                                 , (AReg 9, 7)
                                  ]
                          seo = mcs graph precolor
                          in color graph seo precolor
@@ -79,17 +80,32 @@ generateFunc (fn, aasms, localVar) header =
                      map (Pushq . Reg . toReg64) calleeSaved -- Save callee-saved registers used in the function
                       ++
                      [Subq (Imm (stackVarAligned * 8)) (Reg RSP)] -- Allocate stack space
-                      ++
-                     [Label $ fname ++ "_start"] --for tail recursion purposes
 
-                else [Fun fname, Pushq (Reg RBP), Movq (Reg RSP) (Reg RBP)] ++ map (Pushq . Reg . toReg64) calleeSaved ++ [Label $ fname ++ "_start"]
-        epilog =
-            if stackVarAligned > 0
-                then [Label $ fname ++ "_ret", Addq (Imm (stackVarAligned * 8)) (Reg RSP)] ++
+                else [Fun fname, Pushq (Reg RBP), Movq (Reg RSP) (Reg RBP)] ++ map (Pushq . Reg . toReg64) calleeSaved
+        epilog = case Map.lookup fn trdict of
+            Just "ADD" -> 
+                if stackVarAligned > 0
+                then [Label $ fname ++ "_ret", Addl (Reg R12D) (Reg EAX), Addq (Imm (stackVarAligned * 8)) (Reg RSP)] ++
                      map (Popq . Reg . toReg64) (reverse calleeSaved) ++ [Popq (Reg RBP), Ret]
+                else [Label $ fname ++ "_ret", Addl (Reg R12D) (Reg EAX)] ++ map (Popq . Reg . toReg64) (reverse calleeSaved) ++ [Popq (Reg RBP), Ret]
+            Just "MUL" -> 
+                if stackVarAligned > 0
+                then [Label $ fname ++ "_ret", Imull (Reg R12D) (Reg EAX), Addq (Imm (stackVarAligned * 8)) (Reg RSP)] ++
+                     map (Popq . Reg . toReg64) (reverse calleeSaved) ++ [Popq (Reg RBP), Ret]
+                else [Label $ fname ++ "_ret", Imull (Reg R12D) (Reg EAX)] ++ map (Popq . Reg . toReg64) (reverse calleeSaved) ++ [Popq (Reg RBP), Ret]
+            _ ->
+                if stackVarAligned > 0
+                then [Label $ fname ++ "_ret", Addq (Imm (stackVarAligned * 8)) (Reg RSP)] ++
+                        map (Popq . Reg . toReg64) (reverse calleeSaved) ++ [Popq (Reg RBP), Ret]
                 else [Label $ fname ++ "_ret"] ++ map (Popq . Reg . toReg64) (reverse calleeSaved) ++ [Popq (Reg RBP), Ret]
         -- (trace $ show fn ++ "\n" ++ show coloring ++ "\n\n" ++ show aasms)
-        insts = concatMap (\x -> List.filter nonTrivial (toAsm x coloring header)) aasms
+        insts = concatMap (\x -> List.filter nonTrivial (toAsm x coloring header)) (findstart aasms)
+                    where 
+                        findstart :: [AAsm] -> [AAsm]
+                        findstart [] = []
+                        findstart (x:rest) = case x of
+                            AFun _fn _instk -> x:rest
+                            _ -> findstart rest
         --optimize out the redundant move operations
         optinsts = remove_move insts 
                 where 
@@ -101,7 +117,7 @@ generateFunc (fn, aasms, localVar) header =
                             x:remove_move(y:xs)
                         (Movq op1 op2, Movq op3 op4) -> if op1 == op4 && op2 == op3 then remove_move(x:xs) else
                             x:remove_move(y:xs)
-                        _ -> x:remove_move(y:xs)
-
+                        (Jmp l1 , Label l2) -> if l1 == l2 then remove_move(y:xs) else x:remove_move(y:xs) --delete redundant jumps
+                        _ -> x:remove_move(y:xs)                     
         fun = prolog ++ optinsts ++ epilog
      in concatMap (\line -> show line ++ "\n") fun

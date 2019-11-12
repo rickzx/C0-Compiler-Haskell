@@ -78,6 +78,8 @@ instance Show ALoc where
   show (AReg 6) = "%r9d"
   show (AReg 7) = "%r10d"
   show (AReg 8) = "%r11d"
+  show (AReg 9) = "%r12d"
+  show (AReg 10) = "%r13d"
   show (AReg _) = "%ill-formed"
   show (ATemp n) = "%t" ++ show n
   show (APtr n) = "(" ++ show n ++ ")"
