@@ -18,11 +18,11 @@ import qualified Data.List as List
 import qualified Data.Map as Map
 import Debug.Trace
 
-codeGen :: TAST -> [(Ident,Map.Map Ident Type)] -> [AAsm]
+codeGen :: TAST -> [(Ident,Map.Map Ident Type)] -> Bool -> [AAsm]
 --codeGen t | (trace $ show t) False = undefined
-codeGen tast structs =
+codeGen tast structs unsafe =
     let 
-        tastGen = aasmGen tast structs
+        (tastGen, _tr) = aasmGen tast structs unsafe
         memerr = [
             AControl $ ALab "memerror",
             AAsm [AReg 3] ANop [AImm 12],
@@ -30,17 +30,17 @@ codeGen tast structs =
             ]
      in memerr ++ concatMap (\(_fn, (aasm, _lv)) -> aasm) tastGen
 
-asmGen :: TAST -> Header -> [(Ident,Map.Map Ident Type)] -> String
+asmGen :: TAST -> Header -> [(Ident,Map.Map Ident Type)] -> Bool -> String
 --asmGen t h | (trace $ show t ++ "\n\n" ++ show h) False = undefined
-asmGen tast header structs =
+asmGen tast header structs unsafe =
     let memerr = ".memerror:\n\tmovl $12, %edi\n\txorl %eax, %eax\n\tcall raise\n"
-        tastGen = aasmGen tast structs
+        (tastGen, tr) = aasmGen tast structs unsafe
         globs = map (\(x, _) -> if x == "a bort" then Global "_c0_abort_local411" else Global $ "_c0_" ++ x) tastGen
         globString = concatMap (\line -> show line ++ "\n") globs
-     in globString ++ concatMap (\(fn, (aasms, _)) -> generateFunc (fn, aasms) header) tastGen ++ memerr
+     in globString ++ concatMap (\(fn, (aasms, lv)) -> generateFunc (fn, aasms, lv) header tr) tastGen ++ memerr
 
-generateFunc :: (String, [AAsm]) -> Header -> String
-generateFunc (fn, aasms) header =
+generateFunc :: (String, [AAsm], Int) -> Header -> Map.Map String String -> String
+generateFunc (fn, aasms, localVar) header trdict =
     let 
         fname
             | Map.member fn (fnDecl header) = fn
@@ -49,19 +49,22 @@ generateFunc (fn, aasms) header =
         (renamed, finalblk, finalG, finalP, serial) = ssa aasms fname
         elim = deSSA finalP renamed serial
         (coloring, stackVar, calleeSaved) =
-            let graph = computerInterfere elim
-                precolor =
-                     Map.fromList
-                         [ (AReg 0, 0)
-                         , (AReg 1, 3)
-                         , (AReg 2, 4)
-                         , (AReg 3, 1)
-                         , (AReg 4, 2)
-                         , (AReg 5, 5)
-                         , (AReg 6, 6)
-                         ]
-                seo = mcs graph precolor
-                 in color graph seo precolor
+            if localVar > 1000 && localVar /= 2007 then allStackColor localVar--2007 was a bad year
+                else let graph = computerInterfere aasms
+              -- (trace $ "Interference graph: " ++ show graph ++ "\n\n")
+                         precolor =
+                             Map.fromList
+                                 [ (AReg 0, 0)
+                                 , (AReg 1, 3)
+                                 , (AReg 2, 4)
+                                 , (AReg 3, 1)
+                                 , (AReg 4, 2)
+                                 , (AReg 5, 5)
+                                 , (AReg 6, 6)
+                                 , (AReg 9, 7)
+                                 ]
+                         seo = mcs graph precolor
+                         in color graph seo precolor
         nonTrivial asm =
             case asm of
                 Movl op1 op2 -> op1 /= op2
@@ -81,13 +84,45 @@ generateFunc (fn, aasms) header =
                      map (Pushq . Reg . toReg64) calleeSaved -- Save callee-saved registers used in the function
                       ++
                      [Subq (Imm (stackVarAligned * 8)) (Reg RSP)] -- Allocate stack space
+
                 else [Fun fname, Pushq (Reg RBP), Movq (Reg RSP) (Reg RBP)] ++ map (Pushq . Reg . toReg64) calleeSaved
-        epilog =
-            if stackVarAligned > 0
-                then [Label $ fname ++ "_ret", Addq (Imm (stackVarAligned * 8)) (Reg RSP)] ++
+        epilog = case Map.lookup fn trdict of
+            Just "ADD" -> 
+                if stackVarAligned > 0
+                then [Label $ fname ++ "_ret", Addl (Reg R12D) (Reg EAX), Addq (Imm (stackVarAligned * 8)) (Reg RSP)] ++
                      map (Popq . Reg . toReg64) (reverse calleeSaved) ++ [Popq (Reg RBP), Ret]
+                else [Label $ fname ++ "_ret", Addl (Reg R12D) (Reg EAX)] ++ map (Popq . Reg . toReg64) (reverse calleeSaved) ++ [Popq (Reg RBP), Ret]
+            Just "MUL" -> 
+                if stackVarAligned > 0
+                then [Label $ fname ++ "_ret", Imull (Reg R12D) (Reg EAX), Addq (Imm (stackVarAligned * 8)) (Reg RSP)] ++
+                     map (Popq . Reg . toReg64) (reverse calleeSaved) ++ [Popq (Reg RBP), Ret]
+                else [Label $ fname ++ "_ret", Imull (Reg R12D) (Reg EAX)] ++ map (Popq . Reg . toReg64) (reverse calleeSaved) ++ [Popq (Reg RBP), Ret]
+            _ ->
+                if stackVarAligned > 0
+                then [Label $ fname ++ "_ret", Addq (Imm (stackVarAligned * 8)) (Reg RSP)] ++
+                        map (Popq . Reg . toReg64) (reverse calleeSaved) ++ [Popq (Reg RBP), Ret]
                 else [Label $ fname ++ "_ret"] ++ map (Popq . Reg . toReg64) (reverse calleeSaved) ++ [Popq (Reg RBP), Ret]
-        -- (trace $ show aasms ++ "\n\n" ++ show blk ++ "\n\n" ++ show elim ++ "\n\n")
-        insts = concatMap (\x -> List.filter nonTrivial (toAsm x coloring header)) elim
-        fun = prolog ++ insts ++ epilog
-     in (trace $ show aasms ++ "\n\n" ++ show finalblk ++ "\n\n" ++ show elim) concatMap (\line -> show line ++ "\n") fun
+
+        -- (trace $ show fn ++ "\n" ++ show coloring ++ "\n\n" ++ show aasms)
+        insts = concatMap (\x -> List.filter nonTrivial (toAsm x coloring header)) (findstart elim)
+                    where 
+                        findstart :: [AAsm] -> [AAsm]
+                        findstart [] = []
+                        findstart (x:rest) = case x of
+                            AFun _fn _instk -> x:rest
+                            _ -> findstart rest
+        --optimize out the redundant move operations
+        optinsts = remove_move insts 
+                where 
+                    remove_move :: [Inst] -> [Inst]
+                    remove_move [] = []
+                    remove_move [x] = [x]
+                    remove_move (x:y:xs) = case (x, y) of
+                        (Movl op1 op2, Movl op3 op4) -> if op1 == op4 && op2 == op3 then remove_move(x:xs) else
+                            x:remove_move(y:xs)
+                        (Movq op1 op2, Movq op3 op4) -> if op1 == op4 && op2 == op3 then remove_move(x:xs) else
+                            x:remove_move(y:xs)
+                        (Jmp l1 , Label l2) -> if l1 == l2 then remove_move(y:xs) else x:remove_move(y:xs) --delete redundant jumps
+                        _ -> x:remove_move(y:xs)                     
+        fun = prolog ++ optinsts ++ epilog
+     in concatMap (\line -> show line ++ "\n") fun

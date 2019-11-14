@@ -67,6 +67,7 @@ allStackColor localVar =
              , (AReg 4, 2)
              , (AReg 5, 5)
              , (AReg 6, 6)
+             , (AReg 9, 7)
              ]
         vars = map ATemp [0..localVar]
         l = zip vars [0..]

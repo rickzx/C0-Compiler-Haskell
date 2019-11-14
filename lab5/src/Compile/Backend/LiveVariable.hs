@@ -44,7 +44,6 @@ findlabels ((idx, x):xs) mapping =
              in findlabels xs newmap
         _ -> findlabels xs mapping
 
---TODO: make this an useful error message instead of just -1
 findlabelIdx :: ALabel -> Map.Map ALabel Int -> Int
 findlabelIdx l mapping = Maybe.fromMaybe (-1) (Map.lookup l mapping)
 
