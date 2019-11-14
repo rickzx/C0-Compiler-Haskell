@@ -3,6 +3,7 @@ module Compile.Backend.LiveVariable where
 import qualified Data.Map as Map
 import qualified Data.Maybe as Maybe
 import qualified Data.Set as Set
+import qualified Data.List as List
 import Debug.Trace
 
 import Compile.Types
@@ -86,9 +87,13 @@ computePredicate ((idx, x):xs) mapping pr =
         AControl c ->
             case c of
                 ALab _ -> computePredicate xs mapping (Map.insert idx (Set.empty, [idx + 1], Set.empty) pr)
-                AJump l ->
-                    let labelidx = findlabelIdx l mapping
-                     in computePredicate xs mapping (Map.insert idx (Set.empty, [labelidx], Set.empty) pr)
+                AJump l 
+                    | "_ret" `List.isSuffixOf` l ->
+                        let labelidx = findlabelIdx l mapping
+                         in computePredicate xs mapping (Map.insert idx (Set.empty, [labelidx], Set.singleton (AReg 0)) pr)                        
+                    | otherwise -> 
+                        let labelidx = findlabelIdx l mapping
+                         in computePredicate xs mapping (Map.insert idx (Set.empty, [labelidx], Set.empty) pr)
                 ACJump val l1 l2 ->
                     let label1 = findlabelIdx l1 mapping
                         label2 = findlabelIdx l2 mapping

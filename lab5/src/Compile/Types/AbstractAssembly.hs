@@ -46,9 +46,6 @@ data ACtrl
   | AJump ALabel
   | ACJump AVal ALabel ALabel   -- Conditional Jump, if x then l1 else l2
   | ACJump' ARelOp AVal AVal ALabel ALabel  -- Conditional Jump, if (x ? y) then l1 else l2
-  | AJumpP ALabelP
-  | ACJumpP AVal ALabelP ALabelP
-  | ACJumpP' ARelOp AVal AVal ALabelP ALabelP
 
 instance Show AAsm where
   show (AAsm [dest] ANop [src]) = "\t" ++ show dest ++ " <-- " ++ show src ++ "\n"
@@ -92,9 +89,6 @@ instance Show ACtrl where
   show (AJump s) = "\tGoto ." ++ s
   show (ACJump x l1 l2) = "\tIf " ++ show x ++ " goto ." ++ l1 ++ " else goto ." ++ l2
   show (ACJump' op a b l1 l2) = "\tIf " ++ show a ++ " " ++ show op ++ " " ++ show b ++ " goto ." ++ l1 ++ " else goto ." ++ l2
-  show (AJumpP s) = "\tGoto ." ++ show s
-  show (ACJumpP x l1 l2) = "\tIf " ++ show x ++ " goto ." ++ show l1 ++ " else goto ." ++ show l2
-  show (ACJumpP' op a b l1 l2) = "\tIf " ++ show a ++ " " ++ show op ++ " " ++ show b ++ " goto ." ++ show l1 ++ " else goto ." ++ show l2
 
 -- A hack to work with an AAsm tool
 testPrintAAsm :: [AAsm] -> String -> String

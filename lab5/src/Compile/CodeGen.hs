@@ -46,8 +46,8 @@ generateFunc (fn, aasms) header =
             | Map.member fn (fnDecl header) = fn
             | fn == "a bort" = "_c0_abort_local411"
             | otherwise = "_c0_" ++ fn
-        (blk, lMap, _) = ssa aasms (ssaLive aasms) fname
-        elim = deSSA blk lMap
+        (renamed, finalblk, finalG, finalP, serial) = ssa aasms fname
+        elim = deSSA finalP renamed serial
         (coloring, stackVar, calleeSaved) =
             let graph = computerInterfere elim
                 precolor =
@@ -90,4 +90,4 @@ generateFunc (fn, aasms) header =
         -- (trace $ show aasms ++ "\n\n" ++ show blk ++ "\n\n" ++ show elim ++ "\n\n")
         insts = concatMap (\x -> List.filter nonTrivial (toAsm x coloring header)) elim
         fun = prolog ++ insts ++ epilog
-     in concatMap (\line -> show line ++ "\n") fun
+     in (trace $ show aasms ++ "\n\n" ++ show finalblk ++ "\n\n" ++ show elim) concatMap (\line -> show line ++ "\n") fun
