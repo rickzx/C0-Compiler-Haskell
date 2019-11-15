@@ -81,7 +81,9 @@ ssa aasms fn =
                 addjmp = completeJump finalG renamed
                 serialize = bfs finalG [] Set.empty [fn]
                 finalblk =
-                    map (\nme -> (nme, fromMaybe (error $ "Elem not found1: " ++ nme) (Map.lookup nme addjmp))) serialize
+                    map
+                        (\nme -> (nme, fromMaybe (error $ "Elem not found1: " ++ nme) (Map.lookup nme addjmp)))
+                        serialize
             return (addjmp, finalblk, finalG, Map.insert fn Map.empty finalP, serialize)
         blockInitState =
             BlockState
@@ -239,26 +241,66 @@ blockDefined aasms =
                       _ -> s)
              []
              aasms)
-    
+
 toBlockM :: [AAsm] -> Ident -> State BlockState ()
-toBlockM [] _ = do
+toBlockM [] fn = do
+    flagGoto <- gets seenGoto
     aasms <- gets currAAsm
     dsite <- gets defsites
     lab <- gets currLabel
     let defned = blockDefined aasms
         newdsite = foldr (\d m -> Map.insertWith Set.union d (Set.singleton lab) m) dsite defned
-    modify' $ \(BlockState aasm l blk pre blst ori _ goto) ->
-        BlockState [] l blk pre (reverse ((lab, ([], reverse aasm)) : blst)) (Map.insert lab defned ori) newdsite goto
+    if flagGoto
+        then modify' $ \(BlockState aasm l blk pre blst ori _ goto) ->
+                 BlockState
+                     []
+                     l
+                     blk
+                     pre
+                     (reverse ((lab, ([], reverse aasm)) : blst))
+                     (Map.insert lab defned ori)
+                     newdsite
+                     goto
+        else modify' $ \(BlockState aasm l blk pre blst ori _ goto) ->
+                 BlockState
+                     []
+                     l
+                     blk
+                     pre
+                     (reverse ((lab, ([], reverse $ (AControl $ AJump $ fn ++ "_ret") : aasm)) : blst))
+                     (Map.insert lab defned ori)
+                     newdsite
+                     goto
 toBlockM (x:xs) fn =
     case x of
         AControl (ALab l) -> do
+            flagGoto <- gets seenGoto
             aasms <- gets currAAsm
             dsite <- gets defsites
             lab <- gets currLabel
             let defned = blockDefined aasms
                 newdsite = foldr (\d m -> Map.insertWith Set.union d (Set.singleton lab) m) dsite defned
-            modify' $ \(BlockState aasm _ blk pre blst ori _ _) ->
-                BlockState [x] l blk pre ((lab, ([], reverse aasm)) : blst) (Map.insert lab defned ori) newdsite False
+            if flagGoto
+                then modify' $ \(BlockState aasm _ blk pre blst ori _ _) ->
+                         BlockState
+                             [x]
+                             l
+                             blk
+                             pre
+                             ((lab, ([], reverse aasm)) : blst)
+                             (Map.insert lab defned ori)
+                             newdsite
+                             False
+                else modify' $ \(BlockState aasm _ blk pre blst ori _ _) ->
+                         BlockState
+                             [x]
+                             l
+                             blk
+                             pre
+                             ((lab, ([], reverse $ (AControl $ AJump $ fn ++ "_ret") : aasm)) : blst)
+                             (Map.insert lab defned ori)
+                             newdsite
+                             False
             toBlockM xs fn
         AControl (AJump l)
             | l /= fn ++ "_ret" && l /= "memerror" -> do
@@ -267,10 +309,15 @@ toBlockM (x:xs) fn =
                     modify' $ \(BlockState aasm lab blk pre blst ori ds _) ->
                         BlockState (x : aasm) lab (insertHelper lab l blk) (insertHelper l lab pre) blst ori ds True
                 toBlockM xs fn
+            | otherwise -> do
+                modify' $ \(BlockState aasm lab blk pre blst ori ds _) ->
+                                BlockState (x : aasm) lab blk pre blst ori ds True
+                toBlockM xs fn
         AControl (ACJump _ l1 l2) -> do
             flagGoto <- gets seenGoto
             unless flagGoto $ do
-                modify' $ \(BlockState aasm lab blk pre blst ori ds _) -> BlockState (x : aasm) lab blk pre blst ori ds True
+                modify' $ \(BlockState aasm lab blk pre blst ori ds _) ->
+                    BlockState (x : aasm) lab blk pre blst ori ds True
                 when (l1 /= fn ++ "_ret" && l1 /= "memerror") $
                     modify' $ \(BlockState aasm lab blk pre blst ori ds goto) ->
                         BlockState aasm lab (insertHelper lab l1 blk) (insertHelper l1 lab pre) blst ori ds goto
@@ -281,7 +328,8 @@ toBlockM (x:xs) fn =
         AControl (ACJump' _ _ _ l1 l2) -> do
             flagGoto <- gets seenGoto
             unless flagGoto $ do
-                modify' $ \(BlockState aasm lab blk pre blst ori ds _) -> BlockState (x : aasm) lab blk pre blst ori ds True
+                modify' $ \(BlockState aasm lab blk pre blst ori ds _) ->
+                    BlockState (x : aasm) lab blk pre blst ori ds True
                 when (l1 /= fn ++ "_ret" && l1 /= "memerror") $
                     modify' $ \(BlockState aasm lab blk pre blst ori ds goto) ->
                         BlockState aasm lab (insertHelper lab l1 blk) (insertHelper l1 lab pre) blst ori ds goto
