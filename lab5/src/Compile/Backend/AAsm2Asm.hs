@@ -287,7 +287,7 @@ toAsm (ARel [assign] AEq [src1, src2]) coloring _ =
             , Movzbl (Reg R11B) (Reg R11D)
             , Movl (Reg R11D) assign'
             ]
-     in if isMem assign' && isMem src1'
+     in if (isMem assign' && isMem src1') || (isMem src1' && isMem src2')
             then asm
             else [Cmp src2' src1', Sete (Reg R11B)] ++ genMovzbl (Reg R11B) assign'
 toAsm (ARel [assign] ANe [src1, src2]) coloring _ =
@@ -300,7 +300,7 @@ toAsm (ARel [assign] ANe [src1, src2]) coloring _ =
             , Movzbl (Reg R11B) (Reg R11D)
             , Movl (Reg R11D) assign'
             ]
-     in if isMem assign' && isMem src1'
+     in if (isMem assign' && isMem src1') || (isMem src1' && isMem src2')
             then asm
             else [Cmp src2' src1', Setne (Reg R11B)] ++ genMovzbl (Reg R11B) assign'
 toAsm (ARel [assign] AEqq [src1, src2]) coloring _ =
@@ -313,7 +313,7 @@ toAsm (ARel [assign] AEqq [src1, src2]) coloring _ =
             , Movzbl (Reg R11B) (Reg R11D)
             , Movl (Reg R11D) assign'
             ]
-     in if isMem assign' && isMem src1'
+     in if (isMem assign' && isMem src1') || (isMem src1' && isMem src2')
             then asm
             else [Cmpq src2' src1', Sete (Reg R11B)] ++ genMovzbl (Reg R11B) assign'
 toAsm (ARel [assign] ANeq [src1, src2]) coloring _ =
@@ -326,7 +326,7 @@ toAsm (ARel [assign] ANeq [src1, src2]) coloring _ =
             , Movzbl (Reg R11B) (Reg R11D)
             , Movl (Reg R11D) assign'
             ]
-     in if isMem assign' && isMem src1'
+     in if (isMem assign' && isMem src1') || (isMem src1' && isMem src2')
             then asm
             else [Cmpq src2' src1', Setne (Reg R11B)] ++ genMovzbl (Reg R11B) assign'
 toAsm (ARel [assign] ALt [src1, src2]) coloring _ =
@@ -339,7 +339,7 @@ toAsm (ARel [assign] ALt [src1, src2]) coloring _ =
             , Movzbl (Reg R11B) (Reg R11D)
             , Movl (Reg R11D) assign'
             ]
-     in if isMem assign' && isMem src1'
+     in if (isMem assign' && isMem src1') || (isMem src1' && isMem src2')
             then asm
             else [Cmp src2' src1', Setl (Reg R11B)] ++ genMovzbl (Reg R11B) assign'
 toAsm (ARel [assign] AGt [src1, src2]) coloring _ =
@@ -352,7 +352,7 @@ toAsm (ARel [assign] AGt [src1, src2]) coloring _ =
             , Movzbl (Reg R11B) (Reg R11D)
             , Movl (Reg R11D) assign'
             ]
-     in if isMem assign' && isMem src1'
+     in if (isMem assign' && isMem src1') || (isMem src1' && isMem src2')
             then asm
             else [Cmp src2' src1', Setg (Reg R11B)] ++ genMovzbl (Reg R11B) assign'
 toAsm (ARel [assign] ALe [src1, src2]) coloring _ =
@@ -365,7 +365,7 @@ toAsm (ARel [assign] ALe [src1, src2]) coloring _ =
             , Movzbl (Reg R11B) (Reg R11D)
             , Movl (Reg R11D) assign'
             ]
-     in if isMem assign' && isMem src1'
+     in if (isMem assign' && isMem src1') || (isMem src1' && isMem src2')
             then asm
             else [Cmp src2' src1', Setle (Reg R11B)] ++ genMovzbl (Reg R11B) assign'
 toAsm (ARel [assign] AGe [src1, src2]) coloring _ =
@@ -378,7 +378,7 @@ toAsm (ARel [assign] AGe [src1, src2]) coloring _ =
             , Movzbl (Reg R11B) (Reg R11D)
             , Movl (Reg R11D) assign'
             ]
-     in if isMem assign' && isMem src1'
+     in if (isMem assign' && isMem src1') || (isMem src1' && isMem src2')
             then asm
             else [Cmp src2' src1', Setge (Reg R11B)] ++ genMovzbl (Reg R11B) assign'
 toAsm (ACall fun stks _) coloring header =

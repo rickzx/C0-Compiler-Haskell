@@ -24,6 +24,7 @@ data BlockState =
         , blockList :: [(Ident, Block)]
         , origin :: Map.Map Ident [ALoc]
         , defsites :: Map.Map ALoc (Set.Set Ident)
+        , seenGoto :: Bool
         }
     deriving (Show)
 
@@ -74,13 +75,13 @@ ssa aasms fn =
                 phis = insertPhis dsite df origm fullp (Map.fromList b)
                 domGraph =
                     Map.foldrWithKey' (\child par domg -> insertHelper par child domg) Map.empty (Map.delete fn i)
-                fullDomG = (trace $ show dsite ++ "\n\n" ++ show phis)foldr (\(n, _) gr -> initHelper n gr) domGraph b
+                fullDomG = foldr (\(n, _) gr -> initHelper n gr) domGraph b
                 renamed = rename fn fullg fullDomG pOrd orig phis
                 (finalG, finalP) = edgeSplit fullg pOrd
                 addjmp = completeJump finalG renamed
                 serialize = bfs finalG [] Set.empty [fn]
                 finalblk =
-                    map (\nme -> (nme, fromMaybe (error $ "Elem not found: " ++ nme) (Map.lookup nme addjmp))) serialize
+                    map (\nme -> (nme, fromMaybe (error $ "Elem not found1: " ++ nme) (Map.lookup nme addjmp))) serialize
             return (addjmp, finalblk, finalG, Map.insert fn Map.empty finalP, serialize)
         blockInitState =
             BlockState
@@ -91,6 +92,7 @@ ssa aasms fn =
                 , blockList = []
                 , origin = Map.empty
                 , defsites = Map.empty
+                , seenGoto = False
                 }
      in evalState runToBlock blockInitState
 
@@ -237,7 +239,7 @@ blockDefined aasms =
                       _ -> s)
              []
              aasms)
-
+    
 toBlockM :: [AAsm] -> Ident -> State BlockState ()
 toBlockM [] _ = do
     aasms <- gets currAAsm
@@ -245,8 +247,8 @@ toBlockM [] _ = do
     lab <- gets currLabel
     let defned = blockDefined aasms
         newdsite = foldr (\d m -> Map.insertWith Set.union d (Set.singleton lab) m) dsite defned
-    modify' $ \(BlockState aasm l blk pre blst ori _) ->
-        BlockState [] l blk pre (reverse ((lab, ([], reverse aasm)) : blst)) (Map.insert lab defned ori) newdsite
+    modify' $ \(BlockState aasm l blk pre blst ori _ goto) ->
+        BlockState [] l blk pre (reverse ((lab, ([], reverse aasm)) : blst)) (Map.insert lab defned ori) newdsite goto
 toBlockM (x:xs) fn =
     case x of
         AControl (ALab l) -> do
@@ -255,34 +257,43 @@ toBlockM (x:xs) fn =
             lab <- gets currLabel
             let defned = blockDefined aasms
                 newdsite = foldr (\d m -> Map.insertWith Set.union d (Set.singleton lab) m) dsite defned
-            modify' $ \(BlockState aasm _ blk pre blst ori _) ->
-                BlockState [x] l blk pre ((lab, ([], reverse aasm)) : blst) (Map.insert lab defned ori) newdsite
+            modify' $ \(BlockState aasm _ blk pre blst ori _ _) ->
+                BlockState [x] l blk pre ((lab, ([], reverse aasm)) : blst) (Map.insert lab defned ori) newdsite False
             toBlockM xs fn
         AControl (AJump l)
             | l /= fn ++ "_ret" && l /= "memerror" -> do
-                modify' $ \(BlockState aasm lab blk pre blst ori ds) ->
-                    BlockState (x : aasm) lab (insertHelper lab l blk) (insertHelper l lab pre) blst ori ds
+                flagGoto <- gets seenGoto
+                unless flagGoto $
+                    modify' $ \(BlockState aasm lab blk pre blst ori ds _) ->
+                        BlockState (x : aasm) lab (insertHelper lab l blk) (insertHelper l lab pre) blst ori ds True
                 toBlockM xs fn
         AControl (ACJump _ l1 l2) -> do
-            modify' $ \(BlockState aasm lab blk pre blst ori ds) -> BlockState (x : aasm) lab blk pre blst ori ds
-            when (l1 /= fn ++ "_ret" && l1 /= "memerror") $
-                modify' $ \(BlockState aasm lab blk pre blst ori ds) ->
-                    BlockState aasm lab (insertHelper lab l1 blk) (insertHelper l1 lab pre) blst ori ds
-            when (l2 /= fn ++ "_ret" && l2 /= "memerror") $
-                modify' $ \(BlockState aasm lab blk pre blst ori ds) ->
-                    BlockState aasm lab (insertHelper lab l2 blk) (insertHelper l2 lab pre) blst ori ds
+            flagGoto <- gets seenGoto
+            unless flagGoto $ do
+                modify' $ \(BlockState aasm lab blk pre blst ori ds _) -> BlockState (x : aasm) lab blk pre blst ori ds True
+                when (l1 /= fn ++ "_ret" && l1 /= "memerror") $
+                    modify' $ \(BlockState aasm lab blk pre blst ori ds goto) ->
+                        BlockState aasm lab (insertHelper lab l1 blk) (insertHelper l1 lab pre) blst ori ds goto
+                when (l2 /= fn ++ "_ret" && l2 /= "memerror") $
+                    modify' $ \(BlockState aasm lab blk pre blst ori ds goto) ->
+                        BlockState aasm lab (insertHelper lab l2 blk) (insertHelper l2 lab pre) blst ori ds goto
             toBlockM xs fn
         AControl (ACJump' _ _ _ l1 l2) -> do
-            modify' $ \(BlockState aasm lab blk pre blst ori ds) -> BlockState (x : aasm) lab blk pre blst ori ds
-            when (l1 /= fn ++ "_ret" && l1 /= "memerror") $
-                modify' $ \(BlockState aasm lab blk pre blst ori ds) ->
-                    BlockState aasm lab (insertHelper lab l1 blk) (insertHelper l1 lab pre) blst ori ds
-            when (l2 /= fn ++ "_ret" && l2 /= "memerror") $
-                modify' $ \(BlockState aasm lab blk pre blst ori ds) ->
-                    BlockState aasm lab (insertHelper lab l2 blk) (insertHelper l2 lab pre) blst ori ds
+            flagGoto <- gets seenGoto
+            unless flagGoto $ do
+                modify' $ \(BlockState aasm lab blk pre blst ori ds _) -> BlockState (x : aasm) lab blk pre blst ori ds True
+                when (l1 /= fn ++ "_ret" && l1 /= "memerror") $
+                    modify' $ \(BlockState aasm lab blk pre blst ori ds goto) ->
+                        BlockState aasm lab (insertHelper lab l1 blk) (insertHelper l1 lab pre) blst ori ds goto
+                when (l2 /= fn ++ "_ret" && l2 /= "memerror") $
+                    modify' $ \(BlockState aasm lab blk pre blst ori ds goto) ->
+                        BlockState aasm lab (insertHelper lab l2 blk) (insertHelper l2 lab pre) blst ori ds goto
             toBlockM xs fn
         _ -> do
-            modify' $ \(BlockState aasm lab blk pre blst ori ds) -> BlockState (x : aasm) lab blk pre blst ori ds
+            flagGoto <- gets seenGoto
+            unless flagGoto $
+                modify' $ \(BlockState aasm lab blk pre blst ori ds goto) ->
+                    BlockState (x : aasm) lab blk pre blst ori ds goto
             toBlockM xs fn
 
 data PhiState =
@@ -589,7 +600,7 @@ completeJump g blks =
                                                if l1 == next
                                                    then AControl $ ACJump' op a b c l2
                                                    else AControl $ ACJump' op a b l1 c
-                                           _ -> error "Cannot have multiple successors"
+                                           _ -> error $ "Cannot have multiple successors: " ++ show p
                                    newaasms = reverse (newLastInst : tail paasms)
                                 in Map.insert
                                        c
@@ -610,7 +621,7 @@ bfs g seen seenm (x:xs)
             g
             (x : seen)
             (Set.insert x seenm)
-            (xs ++ reverse (fromMaybe (error $ "Elem not found: " ++ show x) (Map.lookup x g)))
+            (xs ++ reverse (fromMaybe (error $ "Elem not found2: " ++ show x) (Map.lookup x g)))
 
 insertAt :: a -> Int -> [a] -> [a]
 insertAt newElement 0 as = newElement : as
@@ -638,7 +649,7 @@ deBlocks pre blks =
 deSSA :: Map.Map Ident (Map.Map Ident Int) -> Map.Map Ident Block -> [Ident] -> [AAsm]
 deSSA pre blks serial =
     let deblks = deBlocks pre blks
-     in concatMap (\nme -> fromMaybe (error $ "Elem not found: " ++ nme) (Map.lookup nme deblks)) serial
+     in concatMap (\nme -> fromMaybe (error $ "Elem not found3: " ++ nme) (Map.lookup nme deblks)) serial
 --deSSA :: Block -> Map.Map Ident [ALoc] -> [AAsm]
 --deSSA blk lMap =
 --    tail $ concatMap (\(lab, _, aasms) -> (AControl $ ALab lab) : concat (deBlock aasms lMap 0 ("_" ++ lab) [])) blk

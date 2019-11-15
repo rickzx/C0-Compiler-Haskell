@@ -41,30 +41,33 @@ asmGen tast header structs unsafe =
 
 generateFunc :: (String, [AAsm], Int) -> Header -> Map.Map String String -> String
 generateFunc (fn, aasms, localVar) header trdict =
-    let 
+    let
         fname
             | Map.member fn (fnDecl header) = fn
             | fn == "a bort" = "_c0_abort_local411"
             | otherwise = "_c0_" ++ fn
         (renamed, finalblk, finalG, finalP, serial) = ssa aasms fname
         elim = deSSA finalP renamed serial
+        hd = [AControl $ ALab $ "_c0_"++ fn ++ "_ret", AAsm [AReg 9] ANop [ALoc $ AReg 9]]
+        trelim = case Map.lookup fn trdict of
+            Just _ -> hd ++ elim
+            Nothing -> elim
         (coloring, stackVar, calleeSaved) =
-            if localVar > 1000 && localVar /= 2007 then allStackColor localVar--2007 was a bad year
-                else let graph = computerInterfere aasms
+            let  gr = computerInterfere trelim
               -- (trace $ "Interference graph: " ++ show graph ++ "\n\n")
-                         precolor =
-                             Map.fromList
-                                 [ (AReg 0, 0)
-                                 , (AReg 1, 3)
-                                 , (AReg 2, 4)
-                                 , (AReg 3, 1)
-                                 , (AReg 4, 2)
-                                 , (AReg 5, 5)
-                                 , (AReg 6, 6)
-                                 , (AReg 9, 7)
-                                 ]
-                         seo = mcs graph precolor
-                         in color graph seo precolor
+                 precolor =
+                     Map.fromList
+                         [ (AReg 0, 0)
+                         , (AReg 1, 3)
+                         , (AReg 2, 4)
+                         , (AReg 3, 1)
+                         , (AReg 4, 2)
+                         , (AReg 5, 5)
+                         , (AReg 6, 6)
+                         , (AReg 9, 7)
+                         ]
+                 seo = mcs gr precolor
+             in color gr seo precolor
         nonTrivial asm =
             case asm of
                 Movl op1 op2 -> op1 /= op2
@@ -103,7 +106,6 @@ generateFunc (fn, aasms, localVar) header trdict =
                         map (Popq . Reg . toReg64) (reverse calleeSaved) ++ [Popq (Reg RBP), Ret]
                 else [Label $ fname ++ "_ret"] ++ map (Popq . Reg . toReg64) (reverse calleeSaved) ++ [Popq (Reg RBP), Ret]
 
-        -- (trace $ show fn ++ "\n" ++ show coloring ++ "\n\n" ++ show aasms)
         insts = concatMap (\x -> List.filter nonTrivial (toAsm x coloring header)) (findstart elim)
                     where 
                         findstart :: [AAsm] -> [AAsm]
@@ -125,4 +127,5 @@ generateFunc (fn, aasms, localVar) header trdict =
                         (Jmp l1 , Label l2) -> if l1 == l2 then remove_move(y:xs) else x:remove_move(y:xs) --delete redundant jumps
                         _ -> x:remove_move(y:xs)                     
         fun = prolog ++ optinsts ++ epilog
+        -- (trace $ "AAsm:\n" ++ show aasms ++ "\n\nRenamed:\n" ++ show renamed ++ "\n\nElim:\n" ++ show elim)
      in concatMap (\line -> show line ++ "\n") fun

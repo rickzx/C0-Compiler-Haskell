@@ -76,16 +76,12 @@ gentailrec ((fn, (x:xs, lvr)):rest) trdict =
         Just "ADD" -> let
             addaccum = AAsm [AReg 9] ANop [AImm 0]
             --make sure the reserved register is alive through all function
-            header = [AControl $ ALab $ "_c0_"++ fn ++ "_ret",
-                AAsm [AReg 9] ANop [ALoc $ AReg 9]]
             in
-                (fn, (header ++ x:addaccum:xs, lvr)): gentailrec rest trdict
+                (fn, (x:addaccum:xs, lvr)): gentailrec rest trdict
         Just "MUL" -> let
             mulaccum = AAsm [AReg 9] ANop [AImm 1]
-            header = [AControl $ ALab $ "_c0_"++ fn ++ "_ret",
-                AAsm [AReg 9] ANop [ALoc $ AReg 9]]
             in
-                (fn, (header ++ x:mulaccum:xs, lvr)): gentailrec rest trdict
+                (fn, (x:mulaccum:xs, lvr)): gentailrec rest trdict
         _ -> (fn, (x:xs, lvr)): gentailrec rest trdict
 
 buildStructInfo :: [(Ident, Map.Map Ident Type)] -> StructInfo
@@ -217,7 +213,7 @@ genTast (TDef fn t e) = do
     let (inReg, inStk) = splitAt 6 (map (\a -> ATemp $ v' Map.! a) args)
         movArg = map (\(i, tmp) -> AAsm [tmp] ANopq [ALoc $ argRegs !! i]) $ zip [0 ..] inReg
         --have accumulating variables, put summation accumulation in r12, multiplication accumulation in r13
-        funstart = [AControl $ ALab $ fname ++ "_start"]
+        funstart = [AControl $ AJump $ fname ++ "_start", AControl $ ALab $ fname ++ "_start"]
     gen <- genTast e
     let funGen = [AFun fn inStk] ++ funstart ++ movArg ++ gen
     State.modify' $ \(CodeGenState vs counter lab genf cf si tr us) ->
