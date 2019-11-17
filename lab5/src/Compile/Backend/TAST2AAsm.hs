@@ -23,7 +23,7 @@ data CodeGenState =
         , structInfo :: StructInfo
         , tailrecFn :: Map.Map String String
     -- ^ functions that are tail recursive we can optimize on
-        , unsafeflag :: Bool 
+        , unsafeflag :: Bool
         } deriving Show
 
 -- Using the state monad with CodeGenState as the state allows us to implicitly
@@ -71,7 +71,7 @@ aasmGen tast structs unsafe = State.evalState assemM initialState
 --put it before the start label
 gentailrec :: [(Ident, ([AAsm], Int))] -> Map.Map String String -> [(Ident, ([AAsm], Int))]
 gentailrec [] _ = []
-gentailrec ((fn, (x:xs, lvr)):rest) trdict = 
+gentailrec ((fn, (x:xs, lvr)):rest) trdict =
     case Map.lookup fn trdict of
         Just "ADD" -> let
             addaccum = AAsm [AReg 9] ANop [AImm 0]
@@ -202,7 +202,7 @@ genTast (TPtrAssign lv (AsnOp b) e) = do
         else
             return $ lvgen ++ asgnmnt ++ nullchk ++ shiftcheck ++ performOp ++ [AAsm [APtr $ ATemp n] ANopq [ALoc $ ATemp n'']]
 genTast (TDef fn t e) = do
-    let 
+    let
         fname = if fn == "a bort" then "_c0_abort_local411" else
             "_c0_"++fn
         ARROW ts _r = t
@@ -259,14 +259,14 @@ genTast (TRet expr) = do
                 let (inReg, inStk) = splitAt 6 tmpVars
                     movArg = map (\(i, tmp) -> AAsm [argRegs !! i] ANopq [ALoc tmp]) $ zip [0 ..] inReg
                     movStk = map (\(i, tmp) -> AAsm [ATemp i] ANop [ALoc tmp]) $ zip [6 ..] inStk
-                return $ gen ++ movArg ++ movStk ++ [AControl $ AJump $ fname ++ "_start"]  
+                return $ gen ++ movArg ++ movStk ++ [AControl $ AJump $ fname ++ "_start"]
             else do
                 gen <- genExp e (AReg 0)
                 return $ gen ++ [AControl $ AJump $ fname ++ "_ret"]
 --TODO: stack has issues for recursive call
         Just e@(TBinop b exp1 (TFunc fun args _tp)) -> if fun == fn then
-            case b of 
-                Add -> do 
+            case b of
+                Add -> do
                         n <- getNewUniqueID
                         accum <- genExp exp1 (ATemp n)
                         let argLen = length args
@@ -279,9 +279,9 @@ genTast (TRet expr) = do
                             movStk = map (\(i, tmp) -> AAsm [ATemp i] ANop [ALoc tmp]) $ zip [6 ..] inStk
                         let
                             opera = [AAsm [AReg 9] AAdd [ALoc $ AReg 9, ALoc $ ATemp n]]
-                        State.modify' $ \(CodeGenState vs counter lab genf cf si tr us) 
+                        State.modify' $ \(CodeGenState vs counter lab genf cf si tr us)
                             -> CodeGenState vs counter lab genf cf si (Map.insert fun "ADD" tr) us
-                        return $ accum ++ opera ++ gen ++ movArg ++ movStk ++ [AControl $ AJump $ fname ++ "_start"]  
+                        return $ accum ++ opera ++ gen ++ movArg ++ movStk ++ [AControl $ AJump $ fname ++ "_start"]
                 Mul -> do
                         n <- getNewUniqueID
                         accum <- genExp exp1 (ATemp n)
@@ -295,19 +295,19 @@ genTast (TRet expr) = do
                             movStk = map (\(i, tmp) -> AAsm [ATemp i] ANop [ALoc tmp]) $ zip [6 ..] inStk
                         let
                             opera = [AAsm [AReg 9] AMul [ALoc $ AReg 9, ALoc $ ATemp n]]
-                        State.modify' $ \(CodeGenState vs counter lab genf cf si tr us) 
+                        State.modify' $ \(CodeGenState vs counter lab genf cf si tr us)
                             -> CodeGenState vs counter lab genf cf si (Map.insert fun "MUL" tr) us
                         return $ accum ++ opera ++ gen ++ movArg ++ movStk ++ [AControl $ AJump $ fname ++ "_start"]
-                _ -> do 
+                _ -> do
                         gen <- genExp e (AReg 0)
                         return $ gen ++ [AControl $ AJump $ fname ++ "_ret"]
 
-            else do 
+            else do
                 gen <- genExp e (AReg 0)
                 return $ gen ++ [AControl $ AJump $ fname ++ "_ret"]
         Just e@(TBinop b (TFunc fun args _tp) (TInt x1)) -> if fun == fn then
-            case b of 
-                Add -> do 
+            case b of
+                Add -> do
                         let argLen = length args
                         ids <- replicateM argLen getNewUniqueID
                         let tmpVars = map ATemp ids
@@ -318,9 +318,9 @@ genTast (TRet expr) = do
                             movStk = map (\(i, tmp) -> AAsm [ATemp i] ANop [ALoc tmp]) $ zip [6 ..] inStk
                         let
                             opera = [AAsm [AReg 9] AAdd [ALoc $ AReg 9, AImm x1]]
-                        State.modify' $ \(CodeGenState vs counter lab genf cf si tr us) 
+                        State.modify' $ \(CodeGenState vs counter lab genf cf si tr us)
                             -> CodeGenState vs counter lab genf cf si (Map.insert fun "ADD" tr) us
-                        return $ opera ++ gen ++ movArg ++ movStk ++ [AControl $ AJump $ fname ++ "_start"]  
+                        return $ opera ++ gen ++ movArg ++ movStk ++ [AControl $ AJump $ fname ++ "_start"]
                 Mul -> do
                         n <- getNewUniqueID
                         let argLen = length args
@@ -333,13 +333,13 @@ genTast (TRet expr) = do
                             movStk = map (\(i, tmp) -> AAsm [ATemp i] ANop [ALoc tmp]) $ zip [6 ..] inStk
                         let
                             opera = [AAsm [AReg 9] AMul [ALoc $ AReg 9, AImm x1]]
-                        State.modify' $ \(CodeGenState vs counter lab genf cf si tr us) 
+                        State.modify' $ \(CodeGenState vs counter lab genf cf si tr us)
                             -> CodeGenState vs counter lab genf cf si (Map.insert fun "MUL" tr) us
                         return $ opera ++ gen ++ movArg ++ movStk ++ [AControl $ AJump $ fname ++ "_start"]
-                _ -> do 
+                _ -> do
                         gen <- genExp e (AReg 0)
                         return $ gen ++ [AControl $ AJump $ fname ++ "_ret"]
-            else do 
+            else do
                 gen <- genExp e (AReg 0)
                 return $ gen ++ [AControl $ AJump $ fname ++ "_ret"]
         Just e -> do
@@ -358,8 +358,8 @@ genSideEffect (TFunc fn args _) = do
     let tmpVars = map ATemp ids
     gens <- mapM (\(i, e) -> genExp e (tmpVars !! i)) $ zip [0 ..] args
     let gen = join gens
-    let (inReg, inStk) = splitAt 6 tmpVars
-        movArg = map (\(i, tmp) -> AAsm [argRegs !! i] ANopq [ALoc tmp]) $ zip [0 ..] inReg
+    let (inReg, inStk) = splitAt 6 (map ALoc tmpVars)
+        movArg = map (\(i, tmp) -> AAsm [argRegs !! i] ANopq [tmp]) $ zip [0 ..] inReg
     return $ gen ++ movArg ++ [ACall fn inStk (length inReg)]
 genSideEffect expr = do
     n <- getNewUniqueID
@@ -502,7 +502,7 @@ checkNull :: ALoc -> CodeGenStateM [AAsm]
 checkNull ptr = do
     unsafe <- State.gets unsafeflag
     l1 <- getNewUniqueLabel
-    if unsafe then return [] else 
+    if unsafe then return [] else
         return [AControl $ ACJump' AEqq (ALoc ptr) (AImm 0) "memerror" l1, AControl $ ALab l1]
 
 --creates the labels and temps needed to check the bounds of the array access
@@ -535,13 +535,13 @@ checkBounds arr idx = do
         return $ nullcheck ++ gensize ++ sizechk
 
 findSize :: Type -> StructInfo -> Int
-findSize tp info = 
+findSize tp info =
     case tp of
         INTEGER -> 4
         BOOLEAN -> 4
         POINTER _ -> 8
         ARRAY _ -> 8
-        STRUCT a -> 
+        STRUCT a ->
                 case Map.lookup a info of
                     Just (size, _, _) -> size
                     Nothing -> error "accessing undeclared struct"
@@ -675,8 +675,8 @@ genExp (TFunc fn args typ) dest = do
     let tmpVars = map ATemp ids
     gens <- mapM (\(i, e) -> genExp e (tmpVars !! i)) $ zip [0 ..] args
     let gen = join gens
-    let (inReg, inStk) = splitAt 6 tmpVars
-        movArg = map (\(i, tmp) -> AAsm [argRegs !! i] ANopq [ALoc tmp]) $ zip [0 ..] inReg
+    let (inReg, inStk) = splitAt 6 (map ALoc tmpVars)
+        movArg = map (\(i, tmp) -> AAsm [argRegs !! i] ANopq [tmp]) $ zip [0 ..] inReg
         assign = assignType typ (AReg 0) dest
     return $ gen ++ movArg ++ [ACall fn inStk (length inReg)] ++ assign
 genExp expr@(TField _ _ typ) dest = do
@@ -692,7 +692,7 @@ genExp (TAlloc tp) dest = do
                 AAsm [AReg 4] ANopq [AImm sizefact],
                 ACall "calloc" [] 2,
                 AAsm [dest] ANopq [ALoc $ AReg 0]
-            ]            
+            ]
 genExp (TArrAlloc tp (TInt x)) dest = do
     info <- State.gets structInfo
     unsafe <- State.gets unsafeflag
@@ -777,7 +777,7 @@ genExp (TArrAccess exp1 exp2 tp) dest = do
     info <- State.gets structInfo
     let
         sizefact = findSize tp info
-        offset = 
+        offset =
             [
             AAsm [dest] AMulq [AImm sizefact, ALoc $ ATemp n'],
             AAsm [dest] AAddq [ALoc dest, ALoc $ ATemp n]
@@ -790,7 +790,7 @@ genExp (TDeref exp1 tp) dest = do
 
 --expr1, expr2, dest
 mulOptimize :: TExp -> TExp -> ALoc -> CodeGenStateM[AAsm]
-mulOptimize exp1 exp2 dest = 
+mulOptimize exp1 exp2 dest =
     case (exp1, exp2) of
         (TInt x1, _) -> do
             n <- getNewUniqueID
@@ -807,7 +807,7 @@ mulOptimize exp1 exp2 dest =
                     return $ codegen ++ combine
         (_, TInt x1) -> do
             n <- getNewUniqueID
-            if x1 == 1 then genExp exp1 dest else do 
+            if x1 == 1 then genExp exp1 dest else do
                 codegen <- genExp exp1 (ATemp n)
                 if x1 == 0 then return $ codegen ++ [AAsm [dest] ANop [AImm 0]] else do
                     let
@@ -818,14 +818,14 @@ mulOptimize exp1 exp2 dest =
                             else
                                 [AAsm [dest] (genBinOp Mul) [AImm x1, ALoc $ ATemp n]]
                     return $ codegen ++ combine
-        (_, _) -> do 
+        (_, _) -> do
             n <- getNewUniqueID
             codegen1 <- genExp exp1 (ATemp n)
             n' <- getNewUniqueID
             codegen2 <- genExp exp2 (ATemp n')
             let combine = [AAsm [dest] (genBinOp Mul) [ALoc $ ATemp n, ALoc $ ATemp n']]
             return $ codegen1 ++ codegen2 ++ combine
-                
+            
 --Type, src temp, dest temp
 assignType :: Type -> ALoc -> ALoc -> [AAsm]
 assignType tp src dest =
@@ -924,9 +924,9 @@ testGenEast = do
     putStr $ show funs
 testGenRecursive :: IO ()
 testGenRecursive = do
-    let east = 
+    let east =
             TSeq
-                (TDecl 
+                (TDecl
                     "f" (ARROW [("x", INTEGER)] INTEGER)
                     (TDef "f"
                         (ARROW [("x", INTEGER)] INTEGER)

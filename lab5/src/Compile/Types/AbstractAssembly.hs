@@ -26,7 +26,7 @@ data AAsm
       , aArgs   :: [AVal]
       }
   | AFun ALabel [ALoc]      -- Here, [ALoc] only contains the arguments that should be placed on the stack, if any
-  | ACall ALabel [ALoc] Int     -- Here, [ALoc] only contains the arguments that should be placed on the stack, if any
+  | ACall ALabel [AVal] Int     -- Here, [ALoc] only contains the arguments that should be placed on the stack, if any
   | ARet AVal
   | AControl ACtrl
   | AComment String

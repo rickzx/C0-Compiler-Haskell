@@ -11,9 +11,22 @@ import Debug.Trace
 
 type DiGraph a = Map.Map a [a]
 
-type Phi = (ALoc, [ALoc])
+type Phi = (ALoc, [AVal])
 
 type Block = ([Phi], [AAsm])
+
+data StmtS = PhiS Int Phi | AAsmS Int AAsm deriving (Show)
+
+instance Eq StmtS where
+    (==) (PhiS l1 _) (PhiS l2 _) = l1 == l2
+    (==) (AAsmS l1 _) (AAsmS l2 _) = l1 == l2
+    (==) _ _ = False
+    
+instance Ord StmtS where
+    compare (PhiS l1 _) (PhiS l2 _) = compare l1 l2
+    compare (AAsmS l1 _) (AAsmS l2 _) = compare l1 l2
+    compare (PhiS l1 _) (AAsmS l2 _) = compare l1 l2
+    compare (AAsmS l1 _) (PhiS l2 _) = compare l1 l2
 
 data BlockState =
     BlockState
@@ -76,7 +89,10 @@ ssa aasms fn =
                 domGraph =
                     Map.foldrWithKey' (\child par domg -> insertHelper par child domg) Map.empty (Map.delete fn i)
                 fullDomG = foldr (\(n, _) gr -> initHelper n gr) domGraph b
-                renamed = rename fn fullg fullDomG pOrd orig phis
+                (initStack, maxTmp) = foldr (\aloc (m, maxtmp) -> case aloc of
+                    ATemp n -> (Map.insert n [n] m, max n maxtmp)
+                    _ -> error "SSA temps should be primitive") (Map.empty, 0) (Map.keys dsite)
+                renamed = rename fn fullg fullDomG pOrd orig phis initStack maxTmp
                 (finalG, finalP) = edgeSplit fullg pOrd
                 addjmp = completeJump finalG renamed
                 serialize = bfs finalG [] Set.empty [fn]
@@ -229,18 +245,17 @@ isTemp (ATemp _) = True
 isTemp _ = False
 
 blockDefined :: [AAsm] -> [ALoc]
-blockDefined aasms =
-    reverse
-        (foldr
-             (\aasm s ->
-                  case aasm of
-                      AAsm [assign] _op _args
-                          | isTemp assign -> assign : s
-                      ARel [assign] _op _args
-                          | isTemp assign -> assign : s
-                      _ -> s)
-             []
-             aasms)
+blockDefined =
+    foldr
+        (\aasm s ->
+             case aasm of
+                 AAsm [assign] _op _args
+                     | isTemp assign -> assign : s
+                 ARel [assign] _op _args
+                     | isTemp assign -> assign : s
+                 AFun _ args -> args ++ s
+                 _ -> s)
+        []
 
 toBlockM :: [AAsm] -> Ident -> State BlockState ()
 toBlockM [] fn = do
@@ -346,7 +361,7 @@ toBlockM (x:xs) fn =
 
 data PhiState =
     PhiState
-        { wPhi :: [Ident]
+        { wPhi :: Set.Set Ident
         , aPhi :: Map.Map ALoc (Set.Set Ident)
         , phiBlk :: Map.Map Ident Block
         }
@@ -360,17 +375,17 @@ insertPhisM ::
 insertPhisM dsite df orig pre =
     foldM_
         (\_ a -> do
-             modify' $ \(PhiState _ api pblk) -> PhiState (Set.toList $ dsite Map.! a) api pblk
+             modify' $ \(PhiState _ api pblk) -> PhiState (dsite Map.! a) api pblk
              let loop = do
                      wp <- gets wPhi
-                     let n = head wp
-                     modify' $ \(PhiState _ api pblk) -> PhiState (tail wp) api pblk
+                     let n = Set.elemAt 0 wp
+                     modify' $ \(PhiState _ api pblk) -> PhiState (Set.deleteAt 0 wp) api pblk
                      foldM_
                          (\_ y -> do
                               aphi <- gets aPhi
                               unless (Set.member y (fromMaybe Set.empty (Map.lookup a aphi))) $ do
                                   pb <- gets phiBlk
-                                  let nap = replicate (length $ pre Map.! y) a
+                                  let nap = replicate (length $ pre Map.! y) (ALoc a)
                                       (aps, aasms) = pb Map.! y
                                   modify' $ \(PhiState w api pblk) ->
                                       PhiState
@@ -378,7 +393,7 @@ insertPhisM dsite df orig pre =
                                           (Map.insertWith Set.union a (Set.singleton y) api)
                                           (Map.insert y ((a, nap) : aps, aasms) pblk)
                                   unless (Set.member a (fromMaybe Set.empty (Map.lookup y orig))) $
-                                      modify' $ \(PhiState w api pblk) -> PhiState (y : w) api pblk)
+                                      modify' $ \(PhiState w api pblk) -> PhiState (Set.insert y w) api pblk)
                          ()
                          (fromMaybe Set.empty (Map.lookup n df))
                      nw <- gets wPhi
@@ -399,7 +414,7 @@ insertPhis dsite df orig pre blk =
     let runInsertPhis = do
             insertPhisM dsite df orig pre
             gets phiBlk
-     in evalState runInsertPhis (PhiState [] Map.empty blk)
+     in evalState runInsertPhis (PhiState Set.empty Map.empty blk)
 
 testAAsm :: [AAsm]
 testAAsm =
@@ -455,7 +470,7 @@ currentVersion (ATemp x) = do
     vMap <- gets varMap
     case Map.lookup x vMap of
         Just (n:_) -> return $ ATemp n
-        _ -> nextVersion (ATemp x)
+        _ -> error $ "SSA version stack is empty: " ++ show x
 currentVersion (APtr (ATemp x)) = do
     vMap <- gets varMap
     case Map.lookup x vMap of
@@ -473,23 +488,17 @@ currentVersion' (ALoc (ATemp x)) = do
     vMap <- gets varMap
     case Map.lookup x vMap of
         Just (n:_) -> return $ ALoc (ATemp n)
-        _ -> do
-            aloc <- nextVersion (ATemp x)
-            return $ ALoc aloc
+        _ -> error $ "SSA version stack is empty: " ++ show x
 currentVersion' (ALoc (APtr (ATemp x))) = do
     vMap <- gets varMap
     case Map.lookup x vMap of
         Just (n:_) -> return $ ALoc (APtr (ATemp n))
-        _ -> do
-            aloc <- nextVersion (APtr (ATemp x))
-            return $ ALoc aloc
+        _ -> error "Undefined Ptr"
 currentVersion' (ALoc (APtrq (ATemp x))) = do
     vMap <- gets varMap
     case Map.lookup x vMap of
         Just (n:_) -> return $ ALoc (APtrq (ATemp n))
-        _ -> do
-            aloc <- nextVersion (APtrq (ATemp x))
-            return $ ALoc aloc
+        _ -> error "Undefined Ptr"
 currentVersion' aval = return aval
 
 blockSSA :: [AAsm] -> [AAsm] -> State RenameState [AAsm]
@@ -508,7 +517,7 @@ blockSSA (x:xs) ssas =
             nassigns <- mapM nextVersion assigns
             blockSSA xs (ARel nassigns op nargs : ssas)
         ACall fn args num -> do
-            nargs <- mapM currentVersion args
+            nargs <- mapM currentVersion' args
             blockSSA xs (ACall fn nargs num : ssas)
         ARet e -> do
             ne <- currentVersion' e
@@ -556,7 +565,7 @@ renameM n blkGraph domGraph pre orig = do
                  foldM
                      (\acc (a, p) -> do
                           let oper = p !! jth
-                          noper <- currentVersion oper
+                          noper <- currentVersion' oper
                           let nphi = replaceNth jth noper p
                           return ((a, nphi) : acc))
                      []
@@ -583,12 +592,14 @@ rename ::
     -> Map.Map Ident (Map.Map Ident Int)
     -> Map.Map Ident [ALoc]
     -> Map.Map Ident Block
+    -> Map.Map Int [Int]
+    -> Int
     -> Map.Map Ident Block
-rename n blkGraph domGraph pre orig blkMap =
+rename n blkGraph domGraph pre orig blkMap initStack maxTmp =
     let runRename = do
             renameM n blkGraph domGraph pre orig
             gets renamedBlocks
-     in evalState runRename (RenameState Map.empty 0 blkMap)
+     in evalState runRename (RenameState initStack (maxTmp + 1) blkMap)
 
 insertHelper' :: (Ord k, Ord v) => k -> v -> w -> Map.Map k (Map.Map v w) -> Map.Map k (Map.Map v w)
 insertHelper' k v w m =
@@ -683,7 +694,7 @@ deBlocks pre blks =
                  (\(a, ps) m' ->
                       Map.foldrWithKey'
                           (\prdc idx m'' ->
-                               let mov = AAsm [a] ANopq [ALoc (ps !! idx)]
+                               let mov = AAsm [a] ANopq [ps !! idx]
                                    paasms = m'' Map.! prdc
                                    newpaasms = insertAt mov (length paasms - 1) paasms
                                 in Map.insert prdc newpaasms m'')
@@ -698,6 +709,7 @@ deSSA :: Map.Map Ident (Map.Map Ident Int) -> Map.Map Ident Block -> [Ident] -> 
 deSSA pre blks serial =
     let deblks = deBlocks pre blks
      in concatMap (\nme -> fromMaybe (error $ "Elem not found3: " ++ nme) (Map.lookup nme deblks)) serial
+     
 --deSSA :: Block -> Map.Map Ident [ALoc] -> [AAsm]
 --deSSA blk lMap =
 --    tail $ concatMap (\(lab, _, aasms) -> (AControl $ ALab lab) : concat (deBlock aasms lMap 0 ("_" ++ lab) [])) blk

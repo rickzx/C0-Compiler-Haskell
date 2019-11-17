@@ -208,7 +208,7 @@ instance Show Inst where
     show (Jle label) = "\tjle ." ++ label
     show (Jg label) = "\tjg ." ++ label
     show (Jge label) = "\tjge ." ++ label
-    show (Movzbl x1 x2) = "\tmovzbl " ++ show x1 ++ ", " ++ show x2 
+    show (Movzbl x1 x2) = "\tmovzbl " ++ show x1 ++ ", " ++ show x2
     show (Call f) = "\tcall " ++ f
     show (Fun f) = f ++ ":"
     show (Global f) = "\t.globl " ++ f

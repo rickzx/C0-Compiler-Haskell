@@ -76,12 +76,8 @@ computePredicate ((idx, x):xs) mapping pr =
         ACall l extraargs number ->
             let definedregs = [AReg 3, AReg 4, AReg 1, AReg 2, AReg 5, AReg 6, AReg 0, AReg 7, AReg 8]
                 usedregs = take number definedregs
-                extra = map (\arg -> case arg of
-                                AReg _ -> arg
-                                ATemp _ -> arg
-                                APtr p -> p
-                                APtrq p -> p) extraargs
-                linemap = Map.insert idx (Set.fromList definedregs, [idx + 1], Set.fromList (usedregs ++ extra)) pr
+                extra = getLoc extraargs
+                linemap = Map.insert idx (Set.fromList definedregs, [idx + 1], Set.union extra (Set.fromList usedregs)) pr
              in computePredicate xs mapping linemap
         AControl c ->
             case c of

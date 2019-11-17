@@ -13,6 +13,7 @@ import Compile.Backend.TAST2AAsm
 import Compile.Backend.LiveVariable
 import Compile.Backend.RegisterAlloc
 import Compile.Backend.SSA
+import Compile.Backend.SSAOptimize
 import Compile.Types
 import qualified Data.List as List
 import qualified Data.Map as Map
@@ -47,7 +48,8 @@ generateFunc (fn, aasms, localVar) header trdict =
             | fn == "a bort" = "_c0_abort_local411"
             | otherwise = "_c0_" ++ fn
         (renamed, finalblk, finalG, finalP, serial) = ssa aasms fname
-        elim = deSSA finalP renamed serial
+        optSSA = ssaOptimize renamed
+        elim = deSSA finalP optSSA serial
         hd = [AControl $ ALab $ "_c0_"++ fn ++ "_ret", AAsm [AReg 9] ANop [ALoc $ AReg 9]]
         trelim = case Map.lookup fn trdict of
             Just _ -> hd ++ elim
@@ -114,8 +116,8 @@ generateFunc (fn, aasms, localVar) header trdict =
                             AFun _fn _instk -> x:rest
                             _ -> findstart rest
         --optimize out the redundant move operations
-        optinsts = remove_move insts 
-                where 
+        optinsts = remove_move insts
+                where
                     remove_move :: [Inst] -> [Inst]
                     remove_move [] = []
                     remove_move [x] = [x]
@@ -125,7 +127,7 @@ generateFunc (fn, aasms, localVar) header trdict =
                         (Movq op1 op2, Movq op3 op4) -> if op1 == op4 && op2 == op3 then remove_move(x:xs) else
                             x:remove_move(y:xs)
                         (Jmp l1 , Label l2) -> if l1 == l2 then remove_move(y:xs) else x:remove_move(y:xs) --delete redundant jumps
-                        _ -> x:remove_move(y:xs)                     
+                        _ -> x:remove_move(y:xs)
         fun = prolog ++ optinsts ++ epilog
         -- (trace $ "AAsm:\n" ++ show aasms ++ "\n\nRenamed:\n" ++ show renamed ++ "\n\nElim:\n" ++ show elim)
-     in (trace $ "AAsm:\n" ++ show aasms ++ "\n\nRenamed:\n" ++ show renamed ++ "\n\nElim:\n" ++ show elim) concatMap (\line -> show line ++ "\n") fun
+     in concatMap (\line -> show line ++ "\n") fun
