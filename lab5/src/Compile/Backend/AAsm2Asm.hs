@@ -93,7 +93,7 @@ toAsm (AAsm [assign] ASubq [src1, src2]) coloring _ =
             (Mem' {}, _) -> [Movq src1' (Reg R11), Subq src2' (Reg R11)] ++ genMovMemqDest (Reg R11) assign'
             (_, Mem {}) -> [Movq src1' (Reg R11), Subq src2' (Reg R11)] ++ genMovMemqDest (Reg R11) assign'
             (_, Mem' {}) -> [Movq src1' (Reg R11), Subq src2' (Reg R11)] ++ genMovMemqDest (Reg R11) assign'
-            _ -> 
+            _ ->
                 case assign' of
                     Mem loc@Mem' {} -> [Movq loc (Reg R10), Movq src1' (Mem (Reg R10)), Subq src2' (Mem (Reg R10))]
                     _ ->
@@ -424,7 +424,7 @@ toAsm (ACall fun stks _) coloring header =
                          Mem' im b -> Pushq $ Mem' (im + 8 * i) b
                          _ -> Pushq x)
                 (zip [1 ..] (reverse stks'))
-        popSeq = map (\(Pushq x) -> 
+        popSeq = map (\(Pushq x) ->
                     case x of
                         Imm _ -> Addq (Imm 8) (Reg RSP)
                         _ -> Popq x) (reverse pushStks)
@@ -454,7 +454,7 @@ toAsm (AFun _fn stks) coloring _ =
 toAsm _ _ _ = error "ill-formed abstract assembly"
 
 genMovMemlSrc :: Operand -> Operand -> [Inst]
-genMovMemlSrc (Mem loc@Mem' {}) tmp@(Reg r) = [Movq loc (Reg $ toReg64 r), Movl (Mem tmp) tmp]
+genMovMemlSrc (Mem loc@Mem' {}) tmp@(Reg r) = [Movq loc (Reg $ toReg64 r), Movl (Mem (Reg $ toReg64 r)) tmp]
 genMovMemlSrc src@(Mem _) tmp = [Movl src tmp]
 
 genMovMemqSrc :: Operand -> Operand -> [Inst]

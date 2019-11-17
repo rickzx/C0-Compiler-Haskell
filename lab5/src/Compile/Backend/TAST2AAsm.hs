@@ -516,7 +516,7 @@ checkBounds arr idx = do
         size <- getNewUniqueID
         let
             gensize = [AAsm [ATemp size] ASubq [ALoc arr, AImm 8],
-                AAsm [ATemp size] ANop [ALoc $ APtr $ ATemp size]]
+                AAsm [ATemp size] ANop [ALoc $ APtrq $ ATemp size]]
             sizechk =
                 case idx of
                     AImm x | x < 0 -> [AControl $ AJump "memerror"]

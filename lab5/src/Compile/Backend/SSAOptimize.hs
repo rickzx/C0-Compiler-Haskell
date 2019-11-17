@@ -15,13 +15,13 @@ import Debug.Trace
 ssaOptimize :: Map.Map Ident Block -> Map.Map Ident Block
 ssaOptimize blks =
     let (eblk, defs, uses, sset, _) = enumBlks blks
-        toDelete = deadCodeElim defs uses (Set.fromList (Map.keys defs)) Set.empty
+        (nuses, toDelete) = deadCodeElim defs uses (Set.fromList (Map.keys defs)) Set.empty
         removeDead = removeStmts eblk (toDelete, Map.empty)
-        (toDelete', toModify') = constantProp uses sset (Set.empty, Map.empty)
+        (toDelete', toModify') = constantProp nuses sset (Set.empty, Map.empty)
         propConst = removeStmts removeDead (toDelete', toModify')
         bblk = backToBlk propConst
-     in 
---        (trace $ "RemoveDead: \n" ++ show removeDead ++ "\n\nToDelete: \n" ++ show toDelete' ++ "\n\nToModify: \n" ++ show toModify' ++ "\n\nFinal\n" ++ show bblk) 
+     in
+--        (trace $ "RemoveDead: \n" ++ show removeDead ++ "\n\nToDelete: \n" ++ show toDelete' ++ "\n\nToModify: \n" ++ show toModify' ++ "\n\nFinal\n" ++ show bblk)
         bblk
 
 getLineNum :: StmtS -> Int
@@ -129,10 +129,10 @@ hasSideEffect (AAsmS _ aasm) =
         ACall {} -> True
         _ -> False
 
-deadCodeElim :: Map.Map ALoc StmtS -> Map.Map ALoc [StmtS] -> Set.Set ALoc -> Set.Set Int -> Set.Set Int
+deadCodeElim :: Map.Map ALoc StmtS -> Map.Map ALoc [StmtS] -> Set.Set ALoc -> Set.Set Int -> (Map.Map ALoc [StmtS], Set.Set Int)
 deadCodeElim def use work toDelete =
     if null work
-        then toDelete
+        then (use, toDelete)
         else let v = Set.elemAt 0 work
                  nwork = Set.deleteAt 0 work
               in if not (Map.member v def)
@@ -150,6 +150,8 @@ deadCodeElim def use work toDelete =
                                         in deadCodeElim def nuse nwork' (Set.insert (getLineNum st) toDelete)
                                   else deadCodeElim def use nwork toDelete
 
+
+-- Performs simple constant propagation, constant folding, copy propagation, constant condition folding all at once
 constantProp ::
        Map.Map ALoc [StmtS] -> Set.Set StmtS -> (Set.Set Int, Map.Map Int StmtS) -> (Set.Set Int, Map.Map Int StmtS)
 constantProp use work (toDelete, toModify) =
@@ -165,6 +167,12 @@ constantProp use work (toDelete, toModify) =
                                  Nothing -> st
                          _ -> st
               in case cstphi of
+                     PhiS _ (x, [y]) ->
+                        let ts = map (\t -> if Map.member (getLineNum t) toModify then toModify Map.! getLineNum t else t) (fromMaybe [] (Map.lookup x use))
+                            substT = map (substitute y (ALoc x)) ts
+                            nwork' = foldr Set.insert nwork substT
+                            nmodify = foldr (\t m -> Map.insert (getLineNum t) t m) toModify substT
+                        in constantProp use nwork' (Set.insert (getLineNum st) toDelete, nmodify)
                      AAsmS _ (AAsm [v] ANop [AImm c])
                          | isTemp v ->
                              let ts =
@@ -174,7 +182,7 @@ constantProp use work (toDelete, toModify) =
                                                   then toModify Map.! getLineNum t
                                                   else t)
                                          (fromMaybe [] (Map.lookup v use))
-                                 substT = map (substitute c (ALoc v)) ts
+                                 substT = map (substitute (AImm c) (ALoc v)) ts
                                  nwork' = foldr Set.insert nwork substT
                                  nmodify = foldr (\t m -> Map.insert (getLineNum t) t m) toModify substT
                               in constantProp use nwork' (Set.insert (getLineNum st) toDelete, nmodify)
@@ -187,7 +195,7 @@ constantProp use work (toDelete, toModify) =
                                                   then toModify Map.! getLineNum t
                                                   else t)
                                          (fromMaybe [] (Map.lookup v use))
-                                 substT = map (substitute c (ALoc v)) ts
+                                 substT = map (substitute (AImm c) (ALoc v)) ts
                                  nwork' = foldr Set.insert nwork substT
                                  nmodify = foldr (\t m -> Map.insert (getLineNum t) t m) toModify substT
                               in constantProp use nwork' (Set.insert (getLineNum st) toDelete, nmodify)
@@ -220,7 +228,7 @@ constantProp use work (toDelete, toModify) =
                                 op == ASub ||
                                 op == ASubq ||
                                 op == AMul || op == ABAnd || op == ALAnd || op == ABOr || op == ALOr || op == AXor) ->
-                             let 
+                             let
                                  c1' = fromIntegral c1 :: Int32
                                  c2' = fromIntegral c2 :: Int32
                                  foldop =
@@ -284,29 +292,29 @@ constantProp use work (toDelete, toModify) =
     substArgs c v [] = []
     substArgs c v (x:xs) =
         if x == v
-            then AImm c : substArgs c v xs
+            then c : substArgs c v xs
             else x : substArgs c v xs
     substitute c v (PhiS idx (a, ps)) = PhiS idx (a, substArgs c v ps)
     substitute c v (AAsmS idx aasm) =
         case aasm of
             ARet val ->
                 if val == v
-                    then AAsmS idx (ARet (AImm c))
+                    then AAsmS idx (ARet c)
                     else AAsmS idx aasm
             AAsm [dest] op args -> AAsmS idx (AAsm [dest] op (substArgs c v args))
             ARel [dest] op args -> AAsmS idx (ARel [dest] op (substArgs c v args))
             AControl (ACJump val l1 l2) ->
                 if val == v
-                    then AAsmS idx (AControl (ACJump (AImm c) l1 l2))
+                    then AAsmS idx (AControl (ACJump c l1 l2))
                     else AAsmS idx aasm
             AControl (ACJump' op val1 val2 l1 l2) ->
                 let val1' =
                         if val1 == v
-                            then AImm c
+                            then c
                             else val1
                     val2' =
                         if val2 == v
-                            then AImm c
+                            then c
                             else val2
                  in AAsmS idx (AControl (ACJump' op val1' val2' l1 l2))
             ACall fn args narg -> AAsmS idx (ACall fn (substArgs c v args) narg)

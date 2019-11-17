@@ -81,6 +81,7 @@ regOrder =
 -- Map a variable in abstract assembly to a register / memory location
 mapToReg :: ALoc -> Coloring -> Operand
 mapToReg (APtr aloc) coloring = Mem (mapToReg64 aloc coloring)
+mapToReg (APtrq aloc) coloring = Mem (mapToReg64 aloc coloring)
 mapToReg reg coloring = if coloringIdx < length regOrder
     then Reg $ regOrder !! coloringIdx
     else Mem' ((coloringIdx - length regOrder + 1) * 8) RSP
