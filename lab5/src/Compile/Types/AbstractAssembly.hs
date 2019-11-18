@@ -39,7 +39,8 @@ data ALoc
   = AReg Int
   | ATemp Int 
   | APtr ALoc 
-  | APtrq ALoc deriving (Eq, Ord)
+  | APtrq ALoc 
+  | APtrNull deriving (Eq, Ord)
 
 data ACtrl
   = ALab ALabel
@@ -85,6 +86,7 @@ instance Show ALoc where
   show (ATemp n) = "%t" ++ show n
   show (APtr n) = "(" ++ show n ++ ")"
   show (APtrq n) = "(" ++ show n ++ ")"
+  show APtrNull = "(0x0)"
 
 instance Show ACtrl where
   show (ALab s) = "." ++ s ++ ":"

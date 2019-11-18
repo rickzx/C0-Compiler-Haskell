@@ -64,6 +64,7 @@ computePredicate ((idx, x):xs) mapping pr =
                     ATemp _ -> Map.insert idx (Set.singleton assign, [idx + 1], getLoc args) pr
                     APtr p -> Map.insert idx (Set.singleton p, [idx + 1], Set.insert p $ getLoc args) pr
                     APtrq p -> Map.insert idx (Set.singleton p, [idx + 1], Set.insert p $ getLoc args) pr
+                    APtrNull -> Map.insert idx (Set.empty, [idx + 1], getLoc args) pr
              in computePredicate xs mapping linemap
         ARel [assign] _ args ->
             let linemap = case assign of
@@ -71,6 +72,7 @@ computePredicate ((idx, x):xs) mapping pr =
                     ATemp _ -> Map.insert idx (Set.singleton assign, [idx + 1], getLoc args) pr
                     APtr p -> Map.insert idx (Set.singleton p, [idx + 1], Set.insert p $ getLoc args) pr
                     APtrq p -> Map.insert idx (Set.singleton p, [idx + 1], Set.insert p $ getLoc args) pr
+                    APtrNull -> Map.insert idx (Set.empty, [idx + 1], getLoc args) pr
              in computePredicate xs mapping linemap
         AFun l extraargs -> computePredicate xs mapping (Map.insert idx (Set.empty, [idx + 1], Set.empty) pr)
         ACall l extraargs number ->

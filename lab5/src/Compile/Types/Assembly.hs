@@ -161,6 +161,7 @@ instance Show Register where
 instance Show Operand where
     show (Imm x) = "$" ++ show x
     show (Reg r) = show r
+    show (Mem (Imm 0)) = "(0x0)"
     show (Mem o) = "(" ++ show o ++ ")"
     show (Mem' x b) = show x ++ "(" ++ show b ++ ")"
 

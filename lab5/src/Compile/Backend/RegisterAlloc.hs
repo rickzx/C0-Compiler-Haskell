@@ -82,6 +82,7 @@ regOrder =
 mapToReg :: ALoc -> Coloring -> Operand
 mapToReg (APtr aloc) coloring = Mem (mapToReg64 aloc coloring)
 mapToReg (APtrq aloc) coloring = Mem (mapToReg64 aloc coloring)
+mapToReg APtrNull coloring = Mem (Imm 0)
 mapToReg reg coloring = if coloringIdx < length regOrder
     then Reg $ regOrder !! coloringIdx
     else Mem' ((coloringIdx - length regOrder + 1) * 8) RSP
@@ -90,6 +91,7 @@ mapToReg reg coloring = if coloringIdx < length regOrder
 -- 64 bit version of mapToReg
 mapToReg64 :: ALoc -> Coloring -> Operand
 mapToReg64 (APtrq aloc) coloring = Mem (mapToReg64 aloc coloring)
+mapToReg64 APtrNull coloring = Mem (Imm 0)
 mapToReg64 reg coloring = case mappedReg of
     Reg r -> Reg $ toReg64 r
     _     -> mappedReg
