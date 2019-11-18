@@ -121,4 +121,4 @@ generateFunc (fn, aasms, localVar) header trdict =
                         _ -> x:remove_move(y:xs)
         fun = prolog ++ optinsts ++ epilog
         -- (trace $ "AAsm:\n" ++ show aasms ++ "\n\nRenamed:\n" ++ show renamed ++ "\n\nElim:\n" ++ show elim)
-     in concatMap (\line -> show line ++ "\n") fun
+     in (trace $ "deblocked SSA: " ++ show elim ++ "\n\n") concatMap (\line -> show line ++ "\n") fun

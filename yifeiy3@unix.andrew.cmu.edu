@@ -1,0 +1,192 @@
+	.globl _c0_load_array
+	.globl _c0_main
+_c0_load_array:
+	pushq %rbp
+	movq %rsp, %rbp
+	pushq %r12
+	subq $8, %rsp
+._c0_load_array_start:
+	movq %rdi, %rax
+	movq %rsi, %rcx
+	movl $0, %r8d
+	movq %rdi, %r9
+	movq %rdi, %rdx
+	movq %rdi, %rdx
+	movq %rdi, %rsi
+	movq %rdi, %rsi
+	movq %rdi, %rsi
+	movq %r8, %rdx
+.L0:
+	movl %edx, %r8d
+	cmpl %ecx, %r8d
+	jl .L1
+	jmp .L2
+.L1:
+	movq $4, %rdi
+	imulq %rdx, %rdi
+	movq %rdi, %rsi
+	addq %rax, %rsi
+	movl %edx, %r12d
+	movl %r12d, %r11d
+	movl %r11d, (%rsi)
+	movl %edx, %r9d
+	movl %r9d, %edi
+	addl $1, %edi
+	movq %r12, %rdx
+	movq %rcx, %rsi
+	movq %r8, %rsi
+	movq %rdi, %rdx
+	jmp .L0
+.L2:
+._c0_load_array_ret:
+	addq $8, %rsp
+	popq %r12
+	popq %rbp
+	retq
+_c0_main:
+	pushq %rbp
+	movq %rsp, %rbp
+	pushq %r12
+	pushq %r13
+	pushq %r14
+	pushq %r15
+	pushq %rbx
+	subq $56, %rsp
+._c0_main_start:
+	movl $1048575, %ebx
+	movl %ebx, %r13d
+	cmpl $0, %r13d
+	jl .memerror
+.L4:
+	movq $4, %rax
+	imulq %r13, %rax
+	addq $8, %rax
+	movq $1, %rdi
+	movq %rax, %rsi
+	xorl %eax, %eax
+	call calloc
+	movl %r13d, %r11d
+	movl %r11d, (%rax)
+	movq %rax, %r15
+	addq $8, %r15
+	movl %ebx, %r13d
+	cmpl $0, %r13d
+	jl .memerror
+.L5:
+	movq $4, %rax
+	imulq %r13, %rax
+	addq $8, %rax
+	movq $1, %rdi
+	movq %rax, %rsi
+	xorl %eax, %eax
+	call calloc
+	movl %r13d, %r11d
+	movl %r11d, (%rax)
+	movq %rax, %r14
+	addq $8, %r14
+	movl %ebx, %r13d
+	cmpl $0, %r13d
+	jl .memerror
+.L6:
+	movq $4, %rax
+	imulq %r13, %rax
+	addq $8, %rax
+	movq $1, %rdi
+	movq %rax, %rsi
+	xorl %eax, %eax
+	call calloc
+	movl %r13d, %r11d
+	movl %r11d, (%rax)
+	movq %rax, %r13
+	addq $8, %r13
+	movq %r15, %rdi
+	movl %ebx, %eax
+	movq %rax, %rsi
+	xorl %eax, %eax
+	call _c0_load_array
+	movq %r14, %rdi
+	movl %ebx, %eax
+	movq %rax, %rsi
+	xorl %eax, %eax
+	call _c0_load_array
+	movl $0, %eax
+	movq %r12, %rdi
+	movq %r12, %rdi
+	movq %r12, %rdi
+	movq %r12, %rdi
+	movq %r12, %rdi
+	movq %r12, %rdi
+	movq %r12, %rdi
+	movq %r12, %rdi
+	movq %r12, %rdi
+	movq %r12, %rdi
+	movq %r12, %rdi
+	movq %r12, %rdi
+	movq %rax, %rdi
+.L7:
+	movl %edi, %r9d
+	cmpl %ebx, %r9d
+	jl .L8
+	jmp .L9
+.L8:
+	movl %edi, %r8d
+	movq $4, %rax
+	imulq %r8, %rax
+	movq %rax, %rcx
+	addq %r13, %rcx
+	movl %edi, %r12d
+	movq $4, %rax
+	imulq %r12, %rax
+	addq %r15, %rax
+	movl (%rax), %r11d
+	movl %r11d, %edx
+	movl %edi, 16(%rsp)
+	movl %edi, 32(%rsp)
+	movq 32(%rsp), %r11
+	imulq $4, %r11
+	movq %r11, %rax
+	addq %r14, %rax
+	movl (%rax), %r11d
+	movl %r11d, 24(%rsp)
+	movl 16(%rsp), %r11d
+	imull 24(%rsp), %r11d
+	movl %r11d, 8(%rsp)
+	addl %edx, %r11d
+	movl %r11d, %esi
+	movl %r11d, (%rcx)
+	movl %edi, %eax
+	addl $1, %eax
+	movq 32(%rsp), %rdi
+	movq 24(%rsp), %rdi
+	movq 16(%rsp), %rdi
+	movq 8(%rsp), %rdi
+	movq %r12, %rdi
+	movq %rdx, %rdi
+	movq %r8, %rdi
+	movq %rsi, %rdi
+	movq %rcx, %rdi
+	movq %rbx, %rdi
+	movq %r9, %rdi
+	movq %rax, %rdi
+	jmp .L7
+.L9:
+	movl %ebx, %eax
+	subl $1, %eax
+	imulq $4, %rax
+	addq %r13, %rax
+	movl (%rax), %r11d
+	movl %r11d, %eax
+	jmp ._c0_main_ret
+._c0_main_ret:
+	addq $56, %rsp
+	popq %rbx
+	popq %r15
+	popq %r14
+	popq %r13
+	popq %r12
+	popq %rbp
+	retq
+.memerror:
+	movl $12, %edi
+	xorl %eax, %eax
+	call raise

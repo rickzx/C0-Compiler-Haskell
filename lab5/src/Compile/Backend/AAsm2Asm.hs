@@ -71,35 +71,38 @@ toAsm (AAsm [assign] AAddq [src1, src2]) coloring _ =
 toAsm (AAsm [assign] ASub [src1, src2]) coloring _ =
     let assign' = mapToReg assign coloring
         [src1', src2'] = getRegAlloc [src1, src2] coloring False
-     in case (src1', src2') of
-            (Mem {}, Mem {}) -> genMovMemlSrc src1' (Reg R11D) ++ genMovMemlSrc src2' (Reg R10D)
-                ++ [Subl (Reg R10D) (Reg R11D)] ++ genMovMemlDest (Reg R11D) assign'
-            (Mem {}, _) -> genMovMemlSrc src1' (Reg R11D) ++ [Subl src2' (Reg R11D)] ++ genMovMemlDest (Reg R11D) assign'
-            (Mem' {}, _) -> [Movl src1' (Reg R11D), Subl src2' (Reg R11D)] ++ genMovMemlDest (Reg R11D) assign'
-            (_, Mem {}) -> genMovMemlSrc src2' (Reg R10D) ++ [Movl src1' (Reg R11D), Subl (Reg R10D) (Reg R11D)] ++ genMovMemlDest (Reg R11D) assign'
-            (_, Mem' {}) -> [Movl src1' (Reg R11D), Subl src2' (Reg R11D)] ++ genMovMemlDest (Reg R11D) assign'
-            _ ->
-                case assign' of
-                    Mem loc@Mem' {} -> [Movq loc (Reg R10), Movl src1' (Mem (Reg R10)), Subl src2' (Mem (Reg R10))]
-                    _ ->
-                       if src2' == assign'
-                            then [Negl src2', Addl src1' src2']
-                            else [Movl src1' assign', Subl src2' assign']
+     in if src1 == src2 then genMovMemlDest (Imm 0) assign' else
+            case (src1', src2') of
+                (Mem {}, Mem {}) -> genMovMemlSrc src1' (Reg R11D) ++ genMovMemlSrc src2' (Reg R10D)
+                    ++ [Subl (Reg R10D) (Reg R11D)] ++ genMovMemlDest (Reg R11D) assign'
+                (Mem {}, _) -> genMovMemlSrc src1' (Reg R11D) ++ [Subl src2' (Reg R11D)] ++ genMovMemlDest (Reg R11D) assign'
+                (Mem' {}, _) -> [Movl src1' (Reg R11D), Subl src2' (Reg R11D)] ++ genMovMemlDest (Reg R11D) assign'
+                (_, Mem {}) -> genMovMemlSrc src2' (Reg R10D) ++ [Movl src1' (Reg R11D), Subl (Reg R10D) (Reg R11D)] ++ genMovMemlDest (Reg R11D) assign'
+                (_, Mem' {}) -> [Movl src1' (Reg R11D), Subl src2' (Reg R11D)] ++ genMovMemlDest (Reg R11D) assign'
+                _ ->
+                    case assign' of
+                        Mem loc@Mem' {} -> [Movq loc (Reg R10), Movl src1' (Mem (Reg R10)), Subl src2' (Mem (Reg R10))]
+                        _ ->
+                            if src2' == assign'
+                                    then [Negl src2', Addl src1' src2']
+                                    else [Movl src1' assign', Subl src2' assign']
 toAsm (AAsm [assign] ASubq [src1, src2]) coloring _ =
     let assign' = mapToReg64 assign coloring
         [src1', src2'] = getRegAlloc [src1, src2] coloring True
-     in case (src1', src2') of
-            (Mem {}, _) -> [Movq src1' (Reg R11), Subq src2' (Reg R11)] ++ genMovMemqDest (Reg R11) assign'
-            (Mem' {}, _) -> [Movq src1' (Reg R11), Subq src2' (Reg R11)] ++ genMovMemqDest (Reg R11) assign'
-            (_, Mem {}) -> [Movq src1' (Reg R11), Subq src2' (Reg R11)] ++ genMovMemqDest (Reg R11) assign'
-            (_, Mem' {}) -> [Movq src1' (Reg R11), Subq src2' (Reg R11)] ++ genMovMemqDest (Reg R11) assign'
-            _ ->
-                case assign' of
-                    Mem loc@Mem' {} -> [Movq loc (Reg R10), Movq src1' (Mem (Reg R10)), Subq src2' (Mem (Reg R10))]
+     in if src1 == src2 then genMovMemlDest (Imm 0) assign' else
+            case (src1', src2') of
+                    (Mem {}, _) -> [Movq src1' (Reg R11), Subq src2' (Reg R11)] ++ genMovMemqDest (Reg R11) assign'
+                    (Mem' {}, _) -> [Movq src1' (Reg R11), Subq src2' (Reg R11)] ++ genMovMemqDest (Reg R11) assign'
+                    (_, Mem {}) -> [Movq src1' (Reg R11), Subq src2' (Reg R11)] ++ genMovMemqDest (Reg R11) assign'
+                    (_, Mem' {}) -> [Movq src1' (Reg R11), Subq src2' (Reg R11)] ++ genMovMemqDest (Reg R11) assign'
                     _ ->
-                        if src2' == assign'
-                            then [Negq src2', Addq src1' src2']
-                            else [Movq src1' assign', Subq src2' assign']
+                        case assign' of
+                            Mem loc@Mem' {} -> [Movq loc (Reg R10), Movq src1' (Mem (Reg R10)), Subq src2' (Mem (Reg R10))]
+                            _ ->
+                                if src2' == assign'
+                                    then [Negq src2', Addq src1' src2']
+                                    else [Movq src1' assign', Subq src2' assign']
+--we didnt consider all the case, look back if more error occur.
 toAsm (AAsm [assign] ADiv [src1, src2]) coloring _ =
     let assign' = mapToReg assign coloring
         [src1', src2'] = getRegAlloc [src1, src2] coloring False
@@ -107,7 +110,10 @@ toAsm (AAsm [assign] ADiv [src1, src2]) coloring _ =
             Imm _ -> [Movl src2' (Reg R11D), Movl src1' (Reg EAX), Cdq, Idivl (Reg R11D)] ++ genMovMemlDest (Reg EAX) assign'
             Reg EAX -> [Movl src2' (Reg R11D), Movl src1' (Reg EAX), Cdq, Idivl (Reg R11D)] ++ genMovMemlDest (Reg EAX) assign'
             Reg EDX -> [Movl src2' (Reg R11D), Movl src1' (Reg EAX), Cdq, Idivl (Reg R11D)] ++ genMovMemlDest (Reg EAX) assign'
-            _ -> [Movl src1' (Reg EAX), Cdq, Idivl src2'] ++ genMovMemlDest (Reg EAX) assign'
+            _ -> case src1' of 
+                Mem {} -> genMovMemlSrc src1' (Reg EAX) ++ [Cdq, Idivl src2'] ++ genMovMemlDest (Reg EAX) assign'
+                _ -> [Movl src1' (Reg EAX), Cdq, Idivl src2'] ++ genMovMemlDest (Reg EAX) assign'
+
 toAsm (AAsm [assign] ADivq [src1, src2]) coloring _ =
     let assign' = mapToReg64 assign coloring
         [src1', src2'] = getRegAlloc [src1, src2] coloring True
@@ -166,6 +172,7 @@ toAsm (AAsm [assign] AMod [src1, src2]) coloring _ =
             Reg EAX -> [Movl src2' (Reg R11D), Movl src1' (Reg EAX), Cdq, Idivl (Reg R11D)] ++ genMovMemlDest (Reg EDX) assign'
             Reg EDX -> [Movl src2' (Reg R11D), Movl src1' (Reg EAX), Cdq, Idivl (Reg R11D)] ++ genMovMemlDest (Reg EDX) assign'
             _ -> [Movl src1' (Reg EAX), Cdq, Idivl src2'] ++ genMovMemlDest (Reg EDX) assign'
+
 toAsm (AAsm [assign] AModq [src1, src2]) coloring _ =
     let assign' = mapToReg64 assign coloring
         [src1', src2'] = getRegAlloc [src1, src2] coloring True
