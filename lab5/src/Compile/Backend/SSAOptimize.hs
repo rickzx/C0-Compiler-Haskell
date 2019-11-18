@@ -12,15 +12,15 @@ import qualified Data.Set as Set
 import Data.Bits
 import Debug.Trace
 
-ssaOptimize :: Map.Map Ident Block -> Map.Map Ident Block
+ssaOptimize :: Map.Map Ident Block -> (Map.Map Ident Block, Set.Set Int)
 ssaOptimize blks =
     let (eblk, defs, uses, sset, _) = enumBlks blks
         (nuses, toDelete) = deadCodeElim defs uses (Set.fromList (Map.keys defs)) Set.empty
         removeDead = removeStmts eblk (toDelete, Map.empty)
         (toDelete', toModify') = constantProp nuses sset (Set.empty, Map.empty)
         propConst = removeStmts removeDead (toDelete', toModify')
-        bblk = backToBlk propConst
-     in (trace $ "RemoveDead: \n" ++ show removeDead ++ "\n\nToDelete: \n" ++ show toDelete' ++ "\n\nToModify: \n" ++ show toModify' ++ "\n\nFinal\n" ++ show bblk)bblk
+        (bblk, allVars) = backToBlk propConst
+     in (bblk, allVars)
 
 --        (trace $ "RemoveDead: \n" ++ show removeDead ++ "\n\nToDelete: \n" ++ show toDelete' ++ "\n\nToModify: \n" ++ show toModify' ++ "\n\nFinal\n" ++ show bblk)
 getLineNum :: StmtS -> Int
@@ -57,12 +57,14 @@ getDefUse (AAsmS _ aasm) =
                 ATemp _ -> (Just assign, getLocs args)
                 APtr _ -> (Nothing, getLocs $ ALoc assign : args)
                 APtrq _ -> (Nothing, getLocs $ ALoc assign : args)
+                APtrNull -> (Nothing, getLocs $ ALoc assign : args)
         ARel [assign] _ args ->
             case assign of
                 AReg _ -> (Nothing, getLocs args)
                 ATemp _ -> (Just assign, getLocs args)
                 APtr _ -> (Nothing, getLocs $ ALoc assign : args)
                 APtrq _ -> (Nothing, getLocs $ ALoc assign : args)
+                APtrNull -> (Nothing, getLocs $ ALoc assign : args)
         AFun l extraargs -> (Nothing, Set.empty)
         ACall l extraargs number ->
             let extra = getLocs extraargs
@@ -423,17 +425,28 @@ constantProp use work (toDelete, toModify) =
             ACall fn args narg -> AAsmS idx (ACall fn (substArgs c v args) narg)
             _ -> AAsmS idx aasm
 
-backToBlk :: Map.Map Ident [StmtS] -> Map.Map Ident Block
+backToBlk :: Map.Map Ident [StmtS] -> (Map.Map Ident Block, Set.Set Int)
 backToBlk =
     Map.foldrWithKey'
-        (\nme stmts m ->
-             let (phis, aasms) =
+        (\nme stmts (m, allVars) ->
+             let (phis, aasms, allv) =
                      foldr
-                         (\stmt (p, a) ->
+                         (\stmt (p, a, allVars') ->
                               case stmt of
-                                  PhiS _ phi -> (phi : p, a)
-                                  AAsmS _ aasm -> (p, aasm : a))
-                         ([], [])
+                                  PhiS _ phi@(ATemp x, pi) -> (phi : p, a, foldr (\v s -> case v of
+                                                ALoc (ATemp n) -> Set.insert n s
+                                                _ -> s) (Set.insert x allVars') pi)
+                                  AAsmS _ aasm ->
+                                        let
+                                            (def, use) = getDefUse stmt
+                                            uses = foldr (\v s -> case v of
+                                                ATemp n -> Set.insert n s
+                                                _ -> s) allVars' use
+                                        in
+                                            case def of
+                                                Just (ATemp n) -> (p, aasm : a, Set.insert n uses)
+                                                Nothing -> (p, aasm : a, uses))
+                         ([], [], allVars)
                          stmts
-              in Map.insert nme (phis, aasms) m)
-        Map.empty
+              in (Map.insert nme (phis, aasms) m, allv))
+        (Map.empty, Set.empty)

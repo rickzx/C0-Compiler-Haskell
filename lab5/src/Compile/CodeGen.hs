@@ -48,13 +48,13 @@ generateFunc (fn, aasms, localVar) header trdict =
             | fn == "a bort" = "_c0_abort_local411"
             | otherwise = "_c0_" ++ fn
         (renamed, finalblk, finalG, finalP, serial) = ssa aasms fname
-        optSSA = ssaOptimize renamed
+        (optSSA, allVars) = ssaOptimize renamed
         elim = deSSA finalP optSSA serial
         hd = [AControl $ ALab $ "_c0_"++ fn ++ "_ret", AAsm [AReg 9] ANop [ALoc $ AReg 9]]
         trelim = case Map.lookup fn trdict of
             Just _ -> hd ++ elim
             Nothing -> elim
-        (coloring, stackVar, calleeSaved) =
+        (coloring, stackVar, calleeSaved) = if length allVars >= 1000 then allStackColor allVars else
             let  gr = computerInterfere trelim
               -- (trace $ "Interference graph: " ++ show graph ++ "\n\n")
                  precolor =
@@ -70,11 +70,6 @@ generateFunc (fn, aasms, localVar) header trdict =
                          ]
                  seo = mcs gr precolor
              in color gr seo precolor
-        nonTrivial asm =
-            case asm of
-                Movl op1 op2 -> op1 /= op2
-                Movq op1 op2 -> op1 /= op2
-                _ -> True
         stackVarAligned
             | (length calleeSaved + 1) `mod` 2 == 0 =
                 (if stackVar `mod` 2 == 0
@@ -108,7 +103,7 @@ generateFunc (fn, aasms, localVar) header trdict =
                         map (Popq . Reg . toReg64) (reverse calleeSaved) ++ [Popq (Reg RBP), Ret]
                 else [Label $ fname ++ "_ret"] ++ map (Popq . Reg . toReg64) (reverse calleeSaved) ++ [Popq (Reg RBP), Ret]
 
-        insts = concatMap (\x -> List.filter nonTrivial (toAsm x coloring header)) (findstart elim)
+        insts = concatMap (\x -> toAsm x coloring header) (findstart elim)
                     where 
                         findstart :: [AAsm] -> [AAsm]
                         findstart [] = []
@@ -122,10 +117,6 @@ generateFunc (fn, aasms, localVar) header trdict =
                     remove_move [] = []
                     remove_move [x] = [x]
                     remove_move (x:y:xs) = case (x, y) of
-                        (Movl op1 op2, Movl op3 op4) -> if op1 == op4 && op2 == op3 then remove_move(x:xs) else
-                            x:remove_move(y:xs)
-                        (Movq op1 op2, Movq op3 op4) -> if op1 == op4 && op2 == op3 then remove_move(x:xs) else
-                            x:remove_move(y:xs)
                         (Jmp l1 , Label l2) -> if l1 == l2 then remove_move(y:xs) else x:remove_move(y:xs) --delete redundant jumps
                         _ -> x:remove_move(y:xs)
         fun = prolog ++ optinsts ++ epilog

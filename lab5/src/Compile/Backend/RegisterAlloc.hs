@@ -55,8 +55,8 @@ color graph seo preColor = (coloring, maximum [maxColor - length regOrder + 3, 0
         seo
     calleeSaved = if maxColor <= 6 then [] else drop 7 (take (maxColor + 1) regOrder)
 
-allStackColor :: Int -> (Coloring, Int, [Register])
-allStackColor localVar = 
+allStackColor :: Set.Set Int -> (Coloring, Int, [Register])
+allStackColor allVars = 
     let
         precolor =
              Map.fromList
@@ -69,10 +69,9 @@ allStackColor localVar =
              , (AReg 6, 6)
              , (AReg 9, 7)
              ]
-        vars = map ATemp [0..localVar]
-        l = zip vars [0..]
+        (l, _) = foldr (\n (m, idx) -> (Map.insert (ATemp n) idx m, idx + 1)) (Map.empty, length regOrder) allVars
     in
-        (Map.union precolor (Map.fromList $ map (\(loc, i) -> (loc, i + length regOrder)) l), localVar + 3, [])
+        (Map.union precolor l, length allVars + 3, [])
 
 regOrder :: [Register]
 regOrder =

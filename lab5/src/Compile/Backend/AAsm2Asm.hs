@@ -139,20 +139,25 @@ toAsm (AAsm [assign] AMulq [src1, src2]) coloring _ =
     let assign' = mapToReg64 assign coloring
         [src1', src2'] = getRegAlloc [src1, src2] coloring False
         [src1q', src2q'] = getRegAlloc [src1, src2] coloring True
-     in case (src1', src2') of
-            (Mem {}, _) -> [Movq src1q' (Reg R11), Imulq src2q' (Reg R11)] ++ genMovMemqDest (Reg R11) assign'
-            (Mem' {}, _) -> [Movl src1' (Reg R11D), Imulq src2q' (Reg R11)] ++ genMovMemqDest (Reg R11) assign'
-            (_, Mem {}) -> [Movq src2q' (Reg R11), Imulq src1q' (Reg R11)] ++ genMovMemqDest (Reg R11) assign'
-            (_, Mem' {}) -> [Movl src2' (Reg R11D), Imulq src1q' (Reg R11)] ++ genMovMemqDest (Reg R11) assign'
-            _ ->
-                case assign' of
-                    Mem loc@Mem' {} -> [Movq loc (Reg R10), Movq src1q' (Mem (Reg R10)), Imulq src2q' (Mem (Reg R10))]
-                    _ ->
-                        if src2q' == assign'
-                            then [Imulq src1q' assign']
-                            else (case assign' of
-                                      Mem' {} -> [Movq src1q' (Reg R11), Imulq src2q' (Reg R11), Movq (Reg R11) assign']
-                                      _ -> [Movq src1q' assign', Imulq src2q' assign'])
+     in let
+            clearUpper = case src2' of
+                Reg _ -> [Movl src2' src2']
+                _ -> []
+        in
+            case (src1', src2') of
+                (Mem {}, _) -> clearUpper ++ [Movq src1q' (Reg R11), Imulq src2q' (Reg R11)] ++ genMovMemqDest (Reg R11) assign'
+                (Mem' {}, _) -> clearUpper ++ [Movl src1' (Reg R11D), Imulq src2q' (Reg R11)] ++ genMovMemqDest (Reg R11) assign'
+                (_, Mem {}) -> clearUpper ++ [Movq src2q' (Reg R11), Imulq src1q' (Reg R11)] ++ genMovMemqDest (Reg R11) assign'
+                (_, Mem' {}) -> clearUpper ++ [Movl src2' (Reg R11D), Imulq src1q' (Reg R11)] ++ genMovMemqDest (Reg R11) assign'
+                _ ->
+                    case assign' of
+                        Mem loc@Mem' {} -> clearUpper ++ [Movq loc (Reg R10), Movq src1q' (Mem (Reg R10)), Imulq src2q' (Mem (Reg R10))]
+                        _ ->
+                            if src2q' == assign'
+                                then clearUpper ++ [Imulq src1q' assign']
+                                else (case assign' of
+                                          Mem' {} -> clearUpper ++ [Movq src1q' (Reg R11), Imulq src2q' (Reg R11), Movq (Reg R11) assign']
+                                          _ -> clearUpper ++ [Movq src1q' assign', Imulq src2q' assign'])
 toAsm (AAsm [assign] AMod [src1, src2]) coloring _ =
     let assign' = mapToReg assign coloring
         [src1', src2'] = getRegAlloc [src1, src2] coloring False
