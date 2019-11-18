@@ -581,7 +581,7 @@ genExp expr@(TBinop binop exp1 exp2) dest
         n' <- getNewUniqueID
         gen2 <- genExp exp2 (ATemp n')
         if unsafe then
-            return [AAsm [dest] (genBinOp binop) [ALoc $ ATemp n, ALoc $ ATemp n']]
+            return $ gen1 ++ gen2 ++ [AAsm [dest] (genBinOp binop) [ALoc $ ATemp n, ALoc $ ATemp n']]
             else do
                 n2 <- getNewUniqueID
                 n3 <- getNewUniqueID
