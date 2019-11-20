@@ -20,7 +20,9 @@ ssaOptimize blks =
         (toDelete', toModify') = constantProp nuses sset (Set.empty, Map.empty)
         propConst = removeStmts removeDead (toDelete', toModify')
         (bblk, allVars) = backToBlk propConst
-     in (bblk, allVars)
+     in 
+        --(trace $ "RemoveDead: \n" ++ show removeDead ++ "\n\nToDelete: \n" ++ show toDelete' ++ "\n\nToModify: \n" ++ show toModify' ++ "\n\nFinal\n" ++ show bblk)
+        (bblk, allVars)
 
 --        (trace $ "RemoveDead: \n" ++ show removeDead ++ "\n\nToDelete: \n" ++ show toDelete' ++ "\n\nToModify: \n" ++ show toModify' ++ "\n\nFinal\n" ++ show bblk)
 getLineNum :: StmtS -> Int

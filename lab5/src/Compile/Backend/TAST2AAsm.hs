@@ -17,13 +17,17 @@ data CodeGenState =
         , uniqueLabelCounter :: Int
     -- ^ Next label to generate.
         , genFunctions :: [(Ident, ([AAsm], Int))]
-    -- ^ generated AASM for each function (funcname, (AASM, #vars used))
+    -- ^ generated AASM for each function (funcname, (AASM, #vars used), fnlength)
         , currentFunction :: String
     -- ^ current function we are in
+        , currentIDStart :: Int
+    -- ^ the temp that is started by the function, use to calculate stack variable
         , structInfo :: StructInfo
+    -- ^ Info for structs, offsets etc
         , tailrecFn :: Map.Map String String
     -- ^ functions that are tail recursive we can optimize on
         , unsafeflag :: Bool
+    -- ^ whether we are running in unsafe mode
         } deriving Show
 
 -- Using the state monad with CodeGenState as the state allows us to implicitly
@@ -36,13 +40,13 @@ type StructInfo = Map.Map Ident (Int, Int, Map.Map Ident (Int, Int)) -- (Struct 
 getNewUniqueID :: CodeGenStateM Int
 getNewUniqueID = do
     currentCount <- State.gets uniqueIDCounter
-    State.modify' $ \(CodeGenState vs counter lab genf cf si tr us) -> CodeGenState vs (counter + 1) lab genf cf si tr us
+    State.modify' $ \(CodeGenState vs counter lab genf cf cid si tr us) -> CodeGenState vs (counter + 1) lab genf cf cid si tr us
     return currentCount
 
 getNewUniqueLabel :: CodeGenStateM String
 getNewUniqueLabel = do
     currentCount <- State.gets uniqueLabelCounter
-    State.modify' $ \(CodeGenState vs counter lab genf cf si tr us) -> CodeGenState vs counter (lab + 1) genf cf si tr us
+    State.modify' $ \(CodeGenState vs counter lab genf cf cid si tr us) -> CodeGenState vs counter (lab + 1) genf cf cid si tr us
     let lab = "L" ++ show currentCount
     return lab
 
@@ -64,7 +68,7 @@ aasmGen tast structs unsafe = State.evalState assemM initialState
     assemM :: CodeGenStateM ([(Ident, ([AAsm], Int))], Map.Map String String)
     assemM = do
         _genAAsm <- genTast tast
-        CodeGenState _ _ _ genf _ _ tr _<- State.get
+        CodeGenState _ _ _ genf _ _ _ tr _<- State.get
         return (reverse $ gentailrec genf tr, tr)
 
 --Add accumulating variable in the beginning of the AAsm for the function that has tail recursion with accumulator,
@@ -202,22 +206,23 @@ genTast (TPtrAssign lv (AsnOp b) e) = do
         else
             return $ lvgen ++ asgnmnt ++ nullchk ++ shiftcheck ++ performOp ++ [AAsm [APtr $ ATemp n] ANopq [ALoc $ ATemp n'']]
 genTast (TDef fn t e) = do
+    currtemp <- State.gets uniqueIDCounter
     let
         fname = if fn == "a bort" then "_c0_abort_local411" else
             "_c0_"++fn
         ARROW ts _r = t
         args = map fst ts
         decls = args ++ getDecls e
-        v' = Map.fromList $ zip decls [0 ..]
-    State.modify' $ \(CodeGenState _vs _counter lab genf _cf si tr us) -> CodeGenState v' (length decls) lab genf fn si tr us
+        v' = Map.fromList $ zip decls [currtemp ..]
+    State.modify' $ \(CodeGenState _vs counter lab genf _cf _cid si tr us) -> CodeGenState v' (counter + length decls) lab genf fn counter si tr us
     let (inReg, inStk) = splitAt 6 (map (\a -> ATemp $ v' Map.! a) args)
         movArg = map (\(i, tmp) -> AAsm [tmp] ANopq [ALoc $ argRegs !! i]) $ zip [0 ..] inReg
         --have accumulating variables, put summation accumulation in r12, multiplication accumulation in r13
         funstart = [AControl $ AJump $ fname ++ "_start", AControl $ ALab $ fname ++ "_start"]
     gen <- genTast e
     let funGen = [AFun fn inStk] ++ funstart ++ movArg ++ gen
-    State.modify' $ \(CodeGenState vs counter lab genf cf si tr us) ->
-        CodeGenState vs counter lab ((fn, (funGen, counter)) : genf) cf si tr us
+    State.modify' $ \(CodeGenState vs counter lab genf cf cid si tr us) ->
+        CodeGenState vs counter lab ((fn, (funGen, counter)) : genf) cf cid si tr us
     return funGen
 genTast (TAssert expr) = do
     let trans = TIf expr TNop (TLeaf $ TFunc "abort" [] VOID)
@@ -251,6 +256,7 @@ genTast (TRet expr) = do
                 else "_c0_" ++ fn
     case expr of
         Just e@(TFunc fun args _tp) -> if fun == fn then do
+                startid <- State.gets currentIDStart
                 let argLen = length args
                 ids <- replicateM argLen getNewUniqueID
                 let tmpVars = map ATemp ids
@@ -258,15 +264,19 @@ genTast (TRet expr) = do
                 let gen = join gens
                 let (inReg, inStk) = splitAt 6 tmpVars
                     movArg = map (\(i, tmp) -> AAsm [argRegs !! i] ANopq [ALoc tmp]) $ zip [0 ..] inReg
-                    movStk = map (\(i, tmp) -> AAsm [ATemp i] ANop [ALoc tmp]) $ zip [6 ..] inStk
+                    movStk = map (\(i, tmp) -> AAsm [ATemp i] ANop [ALoc tmp]) $ zip [startid+6 ..] inStk
+                State.modify' $ \(CodeGenState vs counter lab genf cf cid si tr us)
+                    -> CodeGenState vs counter lab genf cf cid si (insertNew fn "REG" tr) us
                 return $ gen ++ movArg ++ movStk ++ [AControl $ AJump $ fname ++ "_start"]
             else do
                 gen <- genExp e (AReg 0)
+                State.modify' $ \(CodeGenState vs counter lab genf cf cid si tr us)
+                    -> CodeGenState vs counter lab genf cf cid si (insertNew fn fun tr) us
                 return $ gen ++ [AControl $ AJump $ fname ++ "_ret"]
---TODO: stack has issues for recursive call
         Just e@(TBinop b exp1 (TFunc fun args _tp)) -> if fun == fn then
             case b of
                 Add -> do
+                        startid <- State.gets currentIDStart
                         n <- getNewUniqueID
                         accum <- genExp exp1 (ATemp n)
                         let argLen = length args
@@ -276,13 +286,14 @@ genTast (TRet expr) = do
                         let gen = join gens
                         let (inReg, inStk) = splitAt 6 tmpVars
                             movArg = map (\(i, tmp) -> AAsm [argRegs !! i] ANopq [ALoc tmp]) $ zip [0 ..] inReg
-                            movStk = map (\(i, tmp) -> AAsm [ATemp i] ANop [ALoc tmp]) $ zip [6 ..] inStk
+                            movStk = map (\(i, tmp) -> AAsm [ATemp i] ANop [ALoc tmp]) $ zip [startid + 6 ..] inStk
                         let
                             opera = [AAsm [AReg 9] AAdd [ALoc $ AReg 9, ALoc $ ATemp n]]
-                        State.modify' $ \(CodeGenState vs counter lab genf cf si tr us)
-                            -> CodeGenState vs counter lab genf cf si (Map.insert fun "ADD" tr) us
+                        State.modify' $ \(CodeGenState vs counter lab genf cf cid si tr us)
+                            -> CodeGenState vs counter lab genf cf cid si (Map.insert fun "ADD" tr) us
                         return $ accum ++ opera ++ gen ++ movArg ++ movStk ++ [AControl $ AJump $ fname ++ "_start"]
                 Mul -> do
+                        startid <- State.gets currentIDStart
                         n <- getNewUniqueID
                         accum <- genExp exp1 (ATemp n)
                         let argLen = length args
@@ -292,11 +303,11 @@ genTast (TRet expr) = do
                         let gen = join gens
                         let (inReg, inStk) = splitAt 6 tmpVars
                             movArg = map (\(i, tmp) -> AAsm [argRegs !! i] ANopq [ALoc tmp]) $ zip [0 ..] inReg
-                            movStk = map (\(i, tmp) -> AAsm [ATemp i] ANop [ALoc tmp]) $ zip [6 ..] inStk
+                            movStk = map (\(i, tmp) -> AAsm [ATemp i] ANop [ALoc tmp]) $ zip [startid + 6 ..] inStk
                         let
                             opera = [AAsm [AReg 9] AMul [ALoc $ AReg 9, ALoc $ ATemp n]]
-                        State.modify' $ \(CodeGenState vs counter lab genf cf si tr us)
-                            -> CodeGenState vs counter lab genf cf si (Map.insert fun "MUL" tr) us
+                        State.modify' $ \(CodeGenState vs counter lab genf cf cid si tr us)
+                            -> CodeGenState vs counter lab genf cf cid si (Map.insert fun "MUL" tr) us
                         return $ accum ++ opera ++ gen ++ movArg ++ movStk ++ [AControl $ AJump $ fname ++ "_start"]
                 _ -> do
                         gen <- genExp e (AReg 0)
@@ -308,6 +319,7 @@ genTast (TRet expr) = do
         Just e@(TBinop b (TFunc fun args _tp) (TInt x1)) -> if fun == fn then
             case b of
                 Add -> do
+                        startid <- State.gets currentIDStart
                         let argLen = length args
                         ids <- replicateM argLen getNewUniqueID
                         let tmpVars = map ATemp ids
@@ -315,13 +327,14 @@ genTast (TRet expr) = do
                         let gen = join gens
                         let (inReg, inStk) = splitAt 6 tmpVars
                             movArg = map (\(i, tmp) -> AAsm [argRegs !! i] ANopq [ALoc tmp]) $ zip [0 ..] inReg
-                            movStk = map (\(i, tmp) -> AAsm [ATemp i] ANop [ALoc tmp]) $ zip [6 ..] inStk
+                            movStk = map (\(i, tmp) -> AAsm [ATemp i] ANop [ALoc tmp]) $ zip [startid+6 ..] inStk
                         let
                             opera = [AAsm [AReg 9] AAdd [ALoc $ AReg 9, AImm x1]]
-                        State.modify' $ \(CodeGenState vs counter lab genf cf si tr us)
-                            -> CodeGenState vs counter lab genf cf si (Map.insert fun "ADD" tr) us
+                        State.modify' $ \(CodeGenState vs counter lab genf cf cid si tr us)
+                            -> CodeGenState vs counter lab genf cf cid si (Map.insert fun "ADD" tr) us
                         return $ opera ++ gen ++ movArg ++ movStk ++ [AControl $ AJump $ fname ++ "_start"]
                 Mul -> do
+                        startid <- State.gets currentIDStart
                         n <- getNewUniqueID
                         let argLen = length args
                         ids <- replicateM argLen getNewUniqueID
@@ -330,11 +343,11 @@ genTast (TRet expr) = do
                         let gen = join gens
                         let (inReg, inStk) = splitAt 6 tmpVars
                             movArg = map (\(i, tmp) -> AAsm [argRegs !! i] ANopq [ALoc tmp]) $ zip [0 ..] inReg
-                            movStk = map (\(i, tmp) -> AAsm [ATemp i] ANop [ALoc tmp]) $ zip [6 ..] inStk
+                            movStk = map (\(i, tmp) -> AAsm [ATemp i] ANop [ALoc tmp]) $ zip [startid+6 ..] inStk
                         let
                             opera = [AAsm [AReg 9] AMul [ALoc $ AReg 9, AImm x1]]
-                        State.modify' $ \(CodeGenState vs counter lab genf cf si tr us)
-                            -> CodeGenState vs counter lab genf cf si (Map.insert fun "MUL" tr) us
+                        State.modify' $ \(CodeGenState vs counter lab genf cf cid si tr us)
+                            -> CodeGenState vs counter lab genf cf cid si (Map.insert fun "MUL" tr) us
                         return $ opera ++ gen ++ movArg ++ movStk ++ [AControl $ AJump $ fname ++ "_start"]
                 _ -> do
                         gen <- genExp e (AReg 0)
@@ -353,6 +366,7 @@ genTast (TSDef _ _ e) = genTast e
 
 genSideEffect :: TExp -> CodeGenStateM [AAsm]
 genSideEffect (TFunc fn args _) = do
+    curr <- State.gets currentFunction
     let argLen = length args
     ids <- replicateM argLen getNewUniqueID
     let tmpVars = map ATemp ids
@@ -360,10 +374,24 @@ genSideEffect (TFunc fn args _) = do
     let gen = join gens
     let (inReg, inStk) = splitAt 6 (map ALoc tmpVars)
         movArg = map (\(i, tmp) -> AAsm [argRegs !! i] ANopq [tmp]) $ zip [0 ..] inReg
-    return $ gen ++ movArg ++ [ACall fn inStk (length inReg)]
+    if curr == fn then do
+        State.modify' $ \(CodeGenState vs counter lab genf cf cid si tr us)
+                        -> CodeGenState vs counter lab genf cf cid si (insertNew curr "REG" tr) us
+        return $ gen ++ movArg ++ [ACall fn inStk (length inReg)]
+    else do
+        State.modify' $ \(CodeGenState vs counter lab genf cf cid si tr us)
+                    -> CodeGenState vs counter lab genf cf cid si (insertNew curr fn tr) us 
+        return $ gen ++ movArg ++ [ACall fn inStk (length inReg)]
 genSideEffect expr = do
     n <- getNewUniqueID
     genExp expr (ATemp n)
+
+insertNew :: String ->  String -> Map.Map String String -> Map.Map String String
+insertNew sn ch mp = case Map.lookup sn mp of 
+    Just "MUL" -> mp
+    Just "ADD" -> mp
+    Just "REG" -> mp
+    _ -> Map.insert sn ch mp
 
 typeOfLVal :: TLValue -> Type
 typeOfLVal (TVIdent _ t) = t
@@ -549,7 +577,8 @@ findSize tp info =
 
 genExp :: TExp -> ALoc -> CodeGenStateM [AAsm]
 -- genExp e _ | trace ("genExp " ++ show e ++ "\n") False = undefined
-genExp (TInt n) dest = return [AAsm [dest] ANop [AImm $ fromIntegral (fromIntegral n :: Int32)]]
+genExp (TInt n) dest = 
+    return [AAsm [dest] ANop [AImm $ fromIntegral (fromIntegral n :: Int32)]]
 genExp (TIdent var typ) dest = do
     allocmap <- State.gets variables
     return $ assignType typ (ATemp $ allocmap Map.! var) dest
@@ -563,12 +592,14 @@ genExp expr@(TBinop binop exp1 exp2) dest
         n' <- getNewUniqueID
         codegen2 <- genExp exp2 (ATemp n')
         let combine = [ARel [dest] (genRelOp binop) [ALoc $ ATemp n, ALoc $ ATemp n']]
+        
         return $ codegen1 ++ codegen2 ++ combine
     | binop == LAnd || binop == LOr = do
         l1 <- getNewUniqueLabel
         l2 <- getNewUniqueLabel
         l3 <- getNewUniqueLabel
         cmp <- genCmp expr l1 l2
+        
         return $
             cmp ++
             [AControl $ ALab l1, AAsm [dest] ANop [AImm $ fromIntegral (1 :: Int32)], AControl $ AJump l3] ++
@@ -597,6 +628,7 @@ genExp expr@(TBinop binop exp1 exp2) dest
                             AControl $ ACJump (ALoc $ ATemp n3) l1 l2]
                     combine = [AAsm [dest] (genBinOp binop) [ALoc $ ATemp n, ALoc $ ATemp n']]
                 failure <- genExp (TBinop Div (TInt 1) (TInt 0)) dest
+            
                 return $
                     gen1 ++
                     gen2 ++ 
@@ -609,11 +641,13 @@ genExp expr@(TBinop binop exp1 exp2) dest
                 n <- getNewUniqueID
                 codegen <- genExp exp2 (ATemp n)
                 let combine = [AAsm [dest] (genBinOp binop) [AImm x1, ALoc $ ATemp n]]
+                
                 return $ codegen ++ combine
             (_, TInt x2) -> if x2 == 0 then genExp exp1 dest else do
                 n <- getNewUniqueID
                 codegen <- genExp exp1 (ATemp n)
                 let combine = [AAsm [dest] (genBinOp binop) [ALoc $ ATemp n, AImm x2]]
+                
                 return $ codegen ++ combine
             _ -> do
                 n <- getNewUniqueID
@@ -621,8 +655,10 @@ genExp expr@(TBinop binop exp1 exp2) dest
                 n' <- getNewUniqueID
                 codegen2 <- genExp exp2 (ATemp n')
                 let combine = [AAsm [dest] (genBinOp binop) [ALoc $ ATemp n, ALoc $ ATemp n']]
+                
                 return $ codegen1 ++ codegen2 ++ combine
-    | binop == Mul = mulOptimize exp1 exp2 dest
+    | binop == Mul = 
+         mulOptimize exp1 exp2 dest
     | otherwise = do
         n <- getNewUniqueID
         codegen1 <- genExp exp1 (ATemp n)
@@ -637,6 +673,7 @@ genExp (TUnop unop expr) dest =
             l2 <- getNewUniqueLabel
             l3 <- getNewUniqueLabel
             cmp <- genCmp expr l1 l2
+            
             return $
                 cmp ++
                 [AControl $ ALab l1, AAsm [dest] ANop [AImm $ fromIntegral (0 :: Int32)], AControl $ AJump l3] ++
@@ -645,6 +682,7 @@ genExp (TUnop unop expr) dest =
         BNot -> do
             n <- getNewUniqueID
             gen <- genExp expr (ATemp n)
+            
             return $ gen ++ [AAsm [dest] ABNot [ALoc $ ATemp n]]
         Neg ->
             case expr of
@@ -665,11 +703,13 @@ genExp (TTernop e1 e2 e3) dest =
             cmp <- genCmp e1 l1 l2
             gen1 <- genExp e2 dest
             gen2 <- genExp e3 dest
+            
             return $
                 cmp ++
                 [AControl $ ALab l1] ++
                 gen1 ++ [AControl $ AJump l3, AControl $ ALab l2] ++ gen2 ++ [AControl $ AJump l3, AControl $ ALab l3]
 genExp (TFunc fn args typ) dest = do
+    curr <- State.gets currentFunction
     let argLen = length args
     ids <- replicateM argLen getNewUniqueID
     let tmpVars = map ATemp ids
@@ -678,7 +718,15 @@ genExp (TFunc fn args typ) dest = do
     let (inReg, inStk) = splitAt 6 (map ALoc tmpVars)
         movArg = map (\(i, tmp) -> AAsm [argRegs !! i] ANopq [tmp]) $ zip [0 ..] inReg
         assign = assignType typ (AReg 0) dest
-    return $ gen ++ movArg ++ [ACall fn inStk (length inReg)] ++ assign
+    if curr == fn then do
+        State.modify' $ \(CodeGenState vs counter lab genf cf cid si tr us)
+                    -> CodeGenState vs counter lab genf cf cid si (insertNew curr "REG" tr) us
+        return $ gen ++ movArg ++ [ACall fn inStk (length inReg)] ++ assign
+    else do
+        State.modify' $ \(CodeGenState vs counter lab genf cf cid si tr us)
+                        -> CodeGenState vs counter lab genf cf cid si (insertNew curr fn tr) us 
+        return $ gen ++ movArg ++ [ACall fn inStk (length inReg)] ++ assign
+
 genExp expr@(TField _ _ typ) dest = do
     sinfo <- State.gets structInfo
     addr <- genAddr expr dest sinfo
@@ -687,6 +735,7 @@ genExp (TAlloc tp) dest = do
     info <- State.gets structInfo
     let
         sizefact = findSize tp info
+    
     return [
                 AAsm [AReg 3] ANopq [AImm 1],
                 AAsm [AReg 4] ANopq [AImm sizefact],
@@ -699,14 +748,14 @@ genExp (TArrAlloc tp (TInt x)) dest = do
     let siz = findSize tp info
     if x < 0 || (siz /= 0 && x > 2147483648 `div` siz)
         then return [AControl $ AJump "memerror"]
-        else if unsafe then
+        else if unsafe then    
             return
                 [ AAsm [AReg 3] ANopq [AImm 1]
                 , AAsm [AReg 4] ANopq [AImm (x * siz)]
                 , ACall "calloc" [] 2
                 , AAsm [dest] ANopq [ALoc $ AReg 0]
                 ]
-        else
+        else 
             return
                 [ AAsm [AReg 3] ANopq [AImm 1]
                 , AAsm [AReg 4] ANopq [AImm (x * siz + 8)]

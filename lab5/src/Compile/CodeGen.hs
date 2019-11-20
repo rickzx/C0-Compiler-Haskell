@@ -14,6 +14,7 @@ import Compile.Backend.LiveVariable
 import Compile.Backend.RegisterAlloc
 import Compile.Backend.SSA
 import Compile.Backend.SSAOptimize
+import Compile.Backend.Inline
 import Compile.Types
 import qualified Data.List as List
 import qualified Data.Map as Map
@@ -23,7 +24,8 @@ codeGen :: TAST -> [(Ident,Map.Map Ident Type)] -> Bool -> [AAsm]
 --codeGen t | (trace $ show t) False = undefined
 codeGen tast structs unsafe =
     let 
-        (tastGen, _tr) = aasmGen tast structs unsafe
+        (tastGen, _tr) = inlineOpt $ aasmGen tast structs unsafe
+        --(tastGen, _tr) = aasmGen tast structs unsafe
         memerr = [
             AControl $ ALab "memerror",
             AAsm [AReg 3] ANop [AImm 12],
@@ -35,7 +37,8 @@ asmGen :: TAST -> Header -> [(Ident,Map.Map Ident Type)] -> Bool -> String
 --asmGen t h | (trace $ show t ++ "\n\n" ++ show h) False = undefined
 asmGen tast header structs unsafe =
     let memerr = ".memerror:\n\tmovl $12, %edi\n\txorl %eax, %eax\n\tcall raise\n"
-        (tastGen, tr) = aasmGen tast structs unsafe
+        (tastGen, tr) = inlineOpt $ aasmGen tast structs unsafe
+        --(tastGen, tr) = aasmGen tast structs unsafe
         globs = map (\(x, _) -> if x == "a bort" then Global "_c0_abort_local411" else Global $ "_c0_" ++ x) tastGen
         globString = concatMap (\line -> show line ++ "\n") globs
      in globString ++ concatMap (\(fn, (aasms, lv)) -> generateFunc (fn, aasms, lv) header tr) tastGen ++ memerr
@@ -49,12 +52,13 @@ generateFunc (fn, aasms, localVar) header trdict =
             | otherwise = "_c0_" ++ fn
         (renamed, finalblk, finalG, finalP, serial) = ssa aasms fname
         (optSSA, allVars) = ssaOptimize renamed
-        elim = deSSA finalP optSSA serial
+        elim = aasms
         hd = [AControl $ ALab $ "_c0_"++ fn ++ "_ret", AAsm [AReg 9] ANop [ALoc $ AReg 9]]
         trelim = case Map.lookup fn trdict of
             Just _ -> hd ++ elim
             Nothing -> elim
-        (coloring, stackVar, calleeSaved) = if length allVars >= 1000 then allStackColor allVars else
+        (coloring, stackVar, calleeSaved) = 
+            if length allVars >= 1500 then allStackColor allVars else
             let  gr = computerInterfere trelim
               -- (trace $ "Interference graph: " ++ show graph ++ "\n\n")
                  precolor =
@@ -70,6 +74,11 @@ generateFunc (fn, aasms, localVar) header trdict =
                          ]
                  seo = mcs gr precolor
              in color gr seo precolor
+        nonTrivial asm =
+            case asm of
+                Movl op1 op2 -> op1 /= op2
+                Movq op1 op2 -> op1 /= op2
+                _ -> True
         stackVarAligned
             | (length calleeSaved + 1) `mod` 2 == 0 =
                 (if stackVar `mod` 2 == 0
@@ -103,7 +112,7 @@ generateFunc (fn, aasms, localVar) header trdict =
                         map (Popq . Reg . toReg64) (reverse calleeSaved) ++ [Popq (Reg RBP), Ret]
                 else [Label $ fname ++ "_ret"] ++ map (Popq . Reg . toReg64) (reverse calleeSaved) ++ [Popq (Reg RBP), Ret]
 
-        insts = concatMap (\x -> toAsm x coloring header) (findstart elim)
+        insts = concatMap (\x -> List.filter nonTrivial (toAsm x coloring header)) (findstart elim)
                     where 
                         findstart :: [AAsm] -> [AAsm]
                         findstart [] = []
@@ -121,4 +130,6 @@ generateFunc (fn, aasms, localVar) header trdict =
                         _ -> x:remove_move(y:xs)
         fun = prolog ++ optinsts ++ epilog
         -- (trace $ "AAsm:\n" ++ show aasms ++ "\n\nRenamed:\n" ++ show renamed ++ "\n\nElim:\n" ++ show elim)
-     in (trace $ "deblocked SSA: " ++ show elim ++ "\n\n") concatMap (\line -> show line ++ "\n") fun
+     in 
+    --    (trace $ "allVars: " ++ show allVars ++ "\n\n") 
+        concatMap (\line -> show line ++ "\n") fun
