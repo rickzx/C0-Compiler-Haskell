@@ -141,7 +141,7 @@ toAsm (AAsm [assign] AMulq [src1, src2]) coloring _ =
         [src1q', src2q'] = getRegAlloc [src1, src2] coloring True
      in let
             clearUpper = case src2' of
-                Reg _ -> [Movl src2' src2']
+                Reg _ -> [Movls src2' src2']
                 _ -> []
         in
             case (src1', src2') of

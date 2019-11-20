@@ -103,7 +103,12 @@ generateFunc (fn, aasms, localVar) header trdict =
                         map (Popq . Reg . toReg64) (reverse calleeSaved) ++ [Popq (Reg RBP), Ret]
                 else [Label $ fname ++ "_ret"] ++ map (Popq . Reg . toReg64) (reverse calleeSaved) ++ [Popq (Reg RBP), Ret]
 
-        insts = concatMap (\x -> toAsm x coloring header) (findstart elim)
+        nonTrivial asm =
+            case asm of
+                Movl op1 op2 -> op1 /= op2
+                Movq op1 op2 -> op1 /= op2
+                _ -> True
+        insts = concatMap (\x -> List.filter nonTrivial (toAsm x coloring header)) (findstart elim)
                     where 
                         findstart :: [AAsm] -> [AAsm]
                         findstart [] = []
@@ -117,8 +122,12 @@ generateFunc (fn, aasms, localVar) header trdict =
                     remove_move [] = []
                     remove_move [x] = [x]
                     remove_move (x:y:xs) = case (x, y) of
+                        (Movl op1 op2, Movl op3 op4) -> if op1 == op4 && op2 == op3 then remove_move(x:xs) else
+                            x:remove_move(y:xs)
+                        (Movq op1 op2, Movq op3 op4) -> if op1 == op4 && op2 == op3 then remove_move(x:xs) else
+                            x:remove_move(y:xs)
                         (Jmp l1 , Label l2) -> if l1 == l2 then remove_move(y:xs) else x:remove_move(y:xs) --delete redundant jumps
                         _ -> x:remove_move(y:xs)
         fun = prolog ++ optinsts ++ epilog
         -- (trace $ "AAsm:\n" ++ show aasms ++ "\n\nRenamed:\n" ++ show renamed ++ "\n\nElim:\n" ++ show elim)
-     in concatMap (\line -> show line ++ "\n") fun
+     in (trace $ "\n\n" ++ show elim)concatMap (\line -> show line ++ "\n") fun
