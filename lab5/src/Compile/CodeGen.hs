@@ -3,6 +3,7 @@
    Modified by: Ryan Pearl <rpearl@andrew.cmu.edu>
                 Rokhini Prabhu <rokhinip@andrew.cmu.edu>
                 Anshu Bansal <anshumab@andrew.cmu.edu>
+
    Currently just a pseudolanguage with 3-operand instructions and arbitrarily many temps.
 -}
 module Compile.CodeGen where
@@ -13,7 +14,6 @@ module Compile.CodeGen where
     import Compile.Backend.RegisterAlloc
     import Compile.Backend.SSA
     import Compile.Backend.SSAOptimize
-    import Compile.Backend.Inline
     import Compile.Types
     import qualified Data.List as List
     import qualified Data.Map as Map
@@ -23,8 +23,7 @@ module Compile.CodeGen where
     --codeGen t | (trace $ show t) False = undefined
     codeGen tast structs unsafe =
         let 
-            (tastGen, _tr) = inlineOpt $ aasmGen tast structs unsafe
-            --(tastGen, _tr) = aasmGen tast structs unsafe
+            (tastGen, _tr) = aasmGen tast structs unsafe
             memerr = [
                 AControl $ ALab "memerror",
                 AAsm [AReg 3] ANop [AImm 12],
@@ -36,8 +35,7 @@ module Compile.CodeGen where
     --asmGen t h | (trace $ show t ++ "\n\n" ++ show h) False = undefined
     asmGen tast header structs unsafe =
         let memerr = ".memerror:\n\tmovl $12, %edi\n\txorl %eax, %eax\n\tcall raise\n"
-            (tastGen, tr) = inlineOpt $ aasmGen tast structs unsafe
-            --(tastGen, tr) = aasmGen tast structs unsafe
+            (tastGen, tr) = aasmGen tast structs unsafe
             globs = map (\(x, _) -> if x == "a bort" then Global "_c0_abort_local411" else Global $ "_c0_" ++ x) tastGen
             globString = concatMap (\line -> show line ++ "\n") globs
          in globString ++ concatMap (\(fn, (aasms, lv)) -> generateFunc (fn, aasms, lv) header tr) tastGen ++ memerr
@@ -50,14 +48,13 @@ module Compile.CodeGen where
                 | fn == "a bort" = "_c0_abort_local411"
                 | otherwise = "_c0_" ++ fn
             (renamed, finalblk, finalG, finalP, serial) = ssa aasms fname
-            (optSSA, allVars) = ssaOptimize renamed
-            elim = deSSA finalP optSSA serial
+            (optSSA, allVars, newG, newP) = ssaOptimize renamed finalG finalP fname
+            elim = deSSA newP optSSA serial
             hd = [AControl $ ALab $ "_c0_"++ fn ++ "_ret", AAsm [AReg 9] ANop [ALoc $ AReg 9]]
             trelim = case Map.lookup fn trdict of
                 Just _ -> hd ++ elim
                 Nothing -> elim
-            (coloring, stackVar, calleeSaved) = 
-                if length allVars >= 1000 then allStackColor allVars else
+            (coloring, stackVar, calleeSaved) = if length allVars >= 1000 then allStackColor allVars else
                 let  gr = computerInterfere trelim
                   -- (trace $ "Interference graph: " ++ show graph ++ "\n\n")
                      precolor =
@@ -73,7 +70,6 @@ module Compile.CodeGen where
                              ]
                      seo = mcs gr precolor
                  in color gr seo precolor
-    
             stackVarAligned
                 | (length calleeSaved + 1) `mod` 2 == 0 =
                     (if stackVar `mod` 2 == 0
@@ -106,7 +102,7 @@ module Compile.CodeGen where
                     then [Label $ fname ++ "_ret", Addq (Imm (stackVarAligned * 8)) (Reg RSP)] ++
                             map (Popq . Reg . toReg64) (reverse calleeSaved) ++ [Popq (Reg RBP), Ret]
                     else [Label $ fname ++ "_ret"] ++ map (Popq . Reg . toReg64) (reverse calleeSaved) ++ [Popq (Reg RBP), Ret]
-    
+
             insts = concatMap (\x -> toAsm x coloring header) (findstart elim)
                         where 
                             findstart :: [AAsm] -> [AAsm]
@@ -126,6 +122,4 @@ module Compile.CodeGen where
                             _ -> x:remove_move(y:xs)
             fun = prolog ++ optinsts ++ epilog
             -- (trace $ "AAsm:\n" ++ show aasms ++ "\n\nRenamed:\n" ++ show renamed ++ "\n\nElim:\n" ++ show elim)
-         in 
-        --    (trace $ "allVars: " ++ show allVars ++ "\n\n") 
-            concatMap (\line -> show line ++ "\n") fun
+         in concatMap (\line -> show line ++ "\n") fun
