@@ -15,18 +15,18 @@ type Phi = (ALoc, [AVal])
 
 type Block = ([Phi], [AAsm])
 
-data StmtS = PhiS Int Phi | AAsmS Int AAsm deriving (Show)
+data StmtS = PhiS Int Ident Phi | AAsmS Int Ident AAsm deriving (Show)
 
 instance Eq StmtS where
-    (==) (PhiS l1 _) (PhiS l2 _) = l1 == l2
-    (==) (AAsmS l1 _) (AAsmS l2 _) = l1 == l2
+    (==) (PhiS l1 _ _) (PhiS l2 _ _) = l1 == l2
+    (==) (AAsmS l1 _ _) (AAsmS l2 _ _) = l1 == l2
     (==) _ _ = False
     
 instance Ord StmtS where
-    compare (PhiS l1 _) (PhiS l2 _) = compare l1 l2
-    compare (AAsmS l1 _) (AAsmS l2 _) = compare l1 l2
-    compare (PhiS l1 _) (AAsmS l2 _) = compare l1 l2
-    compare (AAsmS l1 _) (PhiS l2 _) = compare l1 l2
+    compare (PhiS l1 _ _) (PhiS l2 _ _) = compare l1 l2
+    compare (AAsmS l1 _ _) (AAsmS l2 _ _) = compare l1 l2
+    compare (PhiS l1 _ _) (AAsmS l2 _ _) = compare l1 l2
+    compare (AAsmS l1 _ _) (PhiS l2 _ _) = compare l1 l2
 
 data BlockState =
     BlockState
@@ -767,4 +767,4 @@ parallelCopyM src dst tmp = do
              stat <- gets copyStat
              when (stat Map.! i == ToMove) $ moveone i)
         ()
-        [0 .. n - 1]            
+        [0 .. n - 1]
