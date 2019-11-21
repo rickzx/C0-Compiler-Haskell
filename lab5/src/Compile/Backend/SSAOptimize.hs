@@ -48,6 +48,7 @@ getLocs' (x:rest) =
         APtr p -> Set.insert p (getLocs' rest)
         APtrq p -> Set.insert p (getLocs' rest)
 
+--gets the temps defined and used at each line
 getDefUse :: StmtS -> (Maybe ALoc, Set.Set ALoc)
 getDefUse (PhiS _ (dest, srcs)) = (Just dest, getLocs srcs)
 getDefUse (AAsmS _ aasm) =
@@ -77,14 +78,16 @@ getDefUse (AAsmS _ aasm) =
                 ACJump' _ val1 val2 _ _ -> (Nothing, getLocs [val1, val2])
                 _ -> (Nothing, Set.empty)
 
+--enumerate the statemrnts within each block and get the def/use locations for each line
 enumBlks :: Map.Map Ident Block -> (Map.Map Ident [StmtS], Map.Map ALoc StmtS, Map.Map ALoc [StmtS], Set.Set StmtS, Int)
 enumBlks =
     Map.foldrWithKey'
-        (\lab (phis, aasms) (m, def, use, sset, next) ->
+        (\lab (phis, aasms) (m, def, use, sset, next) ->  
+            --(stmts after enum, Map variable to line defined, Map variable to lines used, Set of statements, linenum cnt)
              let (phists, phidef, phiuse, phisset, phinext) =
                      foldr
                          (\(a, a') (sts, def', use', sset', next') ->
-                              let st = PhiS next' (a, a')
+                              let st = PhiS next' (a, a') 
                                   (dfnst, usest) = getDefUse st
                                   ndef = maybe def' (\x -> Map.insert x st def') dfnst
                                   nuse = foldr (\u usemap -> insertHelper u st usemap) use' usest
@@ -104,6 +107,7 @@ enumBlks =
               in (Map.insert lab (phists ++ aasmsts) m, aasmdef, aasmuse, aasmsset, aasmnext))
         (Map.empty, Map.empty, Map.empty, Set.empty, 0)
 
+--remove and modify statements as needed
 removeStmts :: Map.Map Ident [StmtS] -> (Set.Set Int, Map.Map Int StmtS) -> Map.Map Ident [StmtS]
 removeStmts stmtMap (toDelete, toModify) =
     Map.foldrWithKey'
@@ -123,6 +127,7 @@ removeStmts stmtMap (toDelete, toModify) =
         Map.empty
         stmtMap
 
+--Todo: add in checking whether a function is a pure function
 hasSideEffect :: StmtS -> Bool
 hasSideEffect (PhiS _ _) = False
 hasSideEffect (AAsmS _ aasm) =
@@ -132,6 +137,7 @@ hasSideEffect (AAsmS _ aasm) =
         ACall {} -> True
         _ -> False
 
+--worklist: list of variables
 deadCodeElim ::
        Map.Map ALoc StmtS -> Map.Map ALoc [StmtS] -> Set.Set ALoc -> Set.Set Int -> (Map.Map ALoc [StmtS], Set.Set Int)
 deadCodeElim def use work toDelete =
@@ -139,7 +145,7 @@ deadCodeElim def use work toDelete =
         then (use, toDelete)
         else let v = Set.elemAt 0 work
                  nwork = Set.deleteAt 0 work
-              in if not (Map.member v def)
+              in if not (Map.member v def) --variable never defined
                      then deadCodeElim def use nwork toDelete
                      else let st = def Map.! v
                            in if (not (Map.member v use) || null (use Map.! v)) && not (hasSideEffect st)
@@ -160,6 +166,7 @@ isTmpOrConst (ALoc (ATemp _)) = True
 isTmpOrConst _ = False
 
 -- Performs simple constant propagation, constant folding, copy propagation, constant condition folding all at once
+--worklist: a set of statements
 constantProp ::
        Map.Map ALoc [StmtS] -> Set.Set StmtS -> (Set.Set Int, Map.Map Int StmtS) -> (Set.Set Int, Map.Map Int StmtS)
 constantProp use work (toDelete, toModify) =
@@ -181,17 +188,17 @@ constantProp use work (toDelete, toModify) =
                                      foldr
                                          (\t (canSubst, acc) ->
                                               case t of
-                                                  PhiS _ _ -> (False, [])
+                                                  PhiS _ _ -> (False, []) --can't copy progagate in Phi functions
                                                   AAsmS _ _
-                                                      | not canSubst -> (False, [])
+                                                      | not canSubst -> (False, []) -- the use line can not substitute
                                                       | Set.member (getLineNum t) toDelete -> (True, acc)
                                                       | Map.member (getLineNum t) toModify ->
-                                                          (True, toModify Map.! getLineNum t : acc)
+                                                          (True, toModify Map.! getLineNum t : acc) --add in the modified version of the line instead
                                                       | otherwise -> (True, t : acc))
                                          (True, [])
                                          (fromMaybe [] (Map.lookup x use))
                               in if cansub
-                                     then let substT = map (substitute y (ALoc x)) ts
+                                     then let substT = map (substitute y (ALoc x)) ts --substitute y with x for all the statements used 
                                               nwork' = foldr Set.insert nwork substT
                                               nuse =
                                                   foldr
@@ -203,10 +210,12 @@ constantProp use work (toDelete, toModify) =
                                                                ALoc (APtr p) -> insertHelper p t m
                                                                ALoc (APtrq p) -> insertHelper p t m)
                                                       use
-                                                      substT
-                                              nmodify = foldr (\t m -> Map.insert (getLineNum t) t m) toModify substT
+                                                      substT --update y to the used lists
+                                            --update all the needed to modified lines after substitution
+                                              nmodify = foldr (\t m -> Map.insert (getLineNum t) t m) toModify substT 
                                            in constantProp nuse nwork' (Set.insert (getLineNum st) toDelete, nmodify)
                                      else constantProp use nwork (toDelete, toModify)
+                    --same idea for phi function w/ copy propagation applies to ANop and ANopq
                      AAsmS _ (AAsm [v] ANop [c])
                          | isTemp v && isTmpOrConst c ->
                              let (cansub, ts) =
@@ -271,6 +280,7 @@ constantProp use work (toDelete, toModify) =
                                               nmodify = foldr (\t m -> Map.insert (getLineNum t) t m) toModify substT
                                            in constantProp nuse nwork' (Set.insert (getLineNum st) toDelete, nmodify)
                                      else constantProp use nwork (toDelete, toModify)
+                    --begin constant propagation 
                      AAsmS idx (AControl (ACJump (AImm c) l1 l2)) ->
                          let ninst =
                                  if c /= 0
@@ -293,6 +303,7 @@ constantProp use work (toDelete, toModify) =
                                      then AAsmS idx (AControl (AJump l1))
                                      else AAsmS idx (AControl (AJump l2))
                           in constantProp use nwork (toDelete, Map.insert idx ninst toModify)
+                    --once we modify the binop stmt, we insert it back to our worklist so we can continue simplifying if possible
                      AAsmS idx (AAsm [dest] op [AImm c1, AImm c2])
                          | isTemp dest &&
                                (op == AAdd ||
@@ -366,6 +377,7 @@ constantProp use work (toDelete, toModify) =
     pointerize (ALoc ptr) False = APtr ptr
     pointerize (AImm _) _ = APtrNull
 
+    --substitutions for our optimization
     substArgs c v [] = []
     substArgs c v (x:xs) =
         case x of
@@ -427,6 +439,8 @@ constantProp use work (toDelete, toModify) =
             ACall fn args narg -> AAsmS idx (ACall fn (substArgs c v args) narg)
             _ -> AAsmS idx aasm
 
+--convert our IR back to our regular blocks, remove the line number, 
+--also we insert all the temps used in allVars so we can know when to spill
 backToBlk :: Map.Map Ident [StmtS] -> (Map.Map Ident Block, Set.Set Int)
 backToBlk =
     Map.foldrWithKey'
