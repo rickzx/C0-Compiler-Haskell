@@ -51,6 +51,31 @@ toAsm (AAsm [assign] AAdd [src1, src2]) coloring _ =
                         if src2' == assign'
                             then [Addl src1' assign']
                             else [Movl src1' assign', Addl src2' assign']
+-- toAsm (AAsm [assign] AAddq [src1, src2]) coloring _ =
+--     let assign' = mapToReg64 assign coloring
+--         [src1', src2'] = getRegAlloc [src1, src2] coloring False
+--         [src1q', src2q'] = getRegAlloc [src1, src2] coloring True
+--      in let
+--         clearUpper = case src2' of
+--             Reg _ -> [Movl src2' src2']
+--             _ -> []
+--         in
+--             case (src1', src2') of
+--                 (Mem {}, _) -> clearUpper ++ [Movq src1q' (Reg R11), Addq src2q' (Reg R11)] ++ genMovMemqDest (Reg R11) assign'
+--                 (Mem' {}, _) -> clearUpper ++ [Movq src1' (Reg R11), Addq src2q' (Reg R11)] ++ genMovMemqDest (Reg R11) assign'
+--                 (_, Mem {}) -> clearUpper ++ [Movq src2q' (Reg R11), Addq src1q' (Reg R11)] ++ genMovMemqDest (Reg R11) assign'
+--                 (_, Mem' {}) -> clearUpper ++ [Movq src2' (Reg R11), Addq src1q' (Reg R11)] ++ genMovMemqDest (Reg R11) assign'
+--                 (Imm x, _) | x >= 2147483648 -> clearUpper ++ [Movq src1q' (Reg R11), Addq src2q' (Reg R11)] ++ genMovMemqDest (Reg R11) assign'
+--                 (_, Imm x) | x >= 2147483648 -> [Movq src2q' (Reg R11), Addq src1q' (Reg R11)] ++ genMovMemqDest (Reg R11) assign'
+--                 _ ->
+--                     case assign' of
+--                         Mem loc@Mem' {} -> clearUpper ++ [Movq loc (Reg R10), Movq src1q' (Mem (Reg R10)), Addq src2q' (Mem (Reg R10))]
+--                         _ ->
+--                             if src2' == assign'
+--                                 then clearUpper ++ [Addq src1q' assign']
+--                                 else (case assign' of
+--                                         Mem' {} -> clearUpper ++ [Movq src1q' (Reg R11), Addq src2q' (Reg R11), Movq (Reg R11) assign']
+--                                         _ -> clearUpper ++ [Movq src1q' assign', Addq src2q' assign'])
 toAsm (AAsm [assign] AAddq [src1, src2]) coloring _ =
     let assign' = mapToReg64 assign coloring
         [src1', src2'] = getRegAlloc [src1, src2] coloring True

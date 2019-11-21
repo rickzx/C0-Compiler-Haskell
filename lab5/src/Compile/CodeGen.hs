@@ -52,13 +52,13 @@ generateFunc (fn, aasms, localVar) header trdict =
             | otherwise = "_c0_" ++ fn
         (renamed, finalblk, finalG, finalP, serial) = ssa aasms fname
         (optSSA, allVars) = ssaOptimize renamed
-        elim = aasms
+        elim = deSSA finalP optSSA serial
         hd = [AControl $ ALab $ "_c0_"++ fn ++ "_ret", AAsm [AReg 9] ANop [ALoc $ AReg 9]]
         trelim = case Map.lookup fn trdict of
             Just _ -> hd ++ elim
             Nothing -> elim
         (coloring, stackVar, calleeSaved) = 
-            if length allVars >= 1500 then allStackColor allVars else
+            if length allVars >= 1000 then allStackColor allVars else
             let  gr = computerInterfere trelim
               -- (trace $ "Interference graph: " ++ show graph ++ "\n\n")
                  precolor =

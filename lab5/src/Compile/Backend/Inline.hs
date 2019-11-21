@@ -38,7 +38,13 @@ inline (((id, (aasm, a)), index):xs, trec, fnmap) accum =
 
 --flag = we seen return in the basic block already
 removeUseless :: Ident -> Int -> [AAsm] -> Bool -> [AAsm]
-removeUseless _ _ [] _ = []
+removeUseless fn idx [] _ = 
+    let
+        fname = if fn == "a bort" then "_c0_abort_local411" else "_c0_" ++ fn
+        retlabel = fname ++ "_ret"
+        newlabel = show idx ++ retlabel
+    in
+        [AControl(AJump newlabel)]
 removeUseless fn idx (x:xs) flag= 
     let 
         fname = if fn == "a bort" then "_c0_abort_local411" else "_c0_" ++ fn
@@ -53,6 +59,7 @@ removeUseless fn idx (x:xs) flag=
                         newlabel = show idx ++ retlabel
                     in
                         AControl(AJump newlabel):removeUseless fn idx xs True
+                | s == "memerror" -> x:removeUseless fn idx xs True
                 | otherwise -> let
                         newlabel = show idx ++ s
                     in
@@ -64,13 +71,13 @@ removeUseless fn idx (x:xs) flag=
                     in
                         AControl(ALab newlabel):removeUseless fn idx xs False
             AControl (ACJump a l1 l2) -> let
-                    newlabel1 = show idx ++ l1
-                    newlabel2 = show idx ++ l2
-                in if flag then removeUseless fn idx xs flag else 
+                    newlabel1 = if l1 == "memerror" then l1 else show idx ++ l1
+                    newlabel2 = if l2 == "memerror" then l2 else show idx ++ l2
+                in if flag then removeUseless fn idx xs flag else
                     AControl(ACJump a newlabel1 newlabel2):removeUseless fn idx xs flag
             AControl (ACJump' r a1 a2 l1 l2) -> let
-                    newlabel1 = show idx ++ l1
-                    newlabel2 = show idx ++ l2
+                    newlabel1 = if l1 == "memerror" then l1 else show idx ++ l1
+                    newlabel2 = if l2 == "memerror" then l2 else show idx ++ l2
                 in if flag then removeUseless fn idx xs flag else
                     AControl(ACJump' r a1 a2 newlabel1 newlabel2):removeUseless fn idx xs flag
             _ -> if flag then removeUseless fn idx xs flag else x:removeUseless fn idx xs flag
