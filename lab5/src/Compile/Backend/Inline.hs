@@ -28,7 +28,7 @@ inline :: ([((Ident, ([AAsm], Int)), Int)], Map.Map String String, Map.Map Ident
     ([((Ident, ([AAsm], Int)), Int)], Map.Map String String, Map.Map Ident [AAsm])
 inline ([], trec, fnmap) accum = (accum, trec, fnmap)
 inline (((id, (aasm, a)), index):xs, trec, fnmap) accum = 
-    if length aasm > 1500 then inline (xs, trec, fnmap) (((id, (aasm, a)), index):accum) else
+    if length aasm > 150 then inline (xs, trec, fnmap) (((id, (aasm, a)), index):accum) else
         let 
             processed = mapinline (id, aasm) fnmap trec index 1
             fnmap' = Map.insert id processed fnmap
