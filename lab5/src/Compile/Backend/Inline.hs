@@ -28,7 +28,7 @@ inline :: ([((Ident, ([AAsm], Int)), Int)], Map.Map String String, Map.Map Ident
     ([((Ident, ([AAsm], Int)), Int)], Map.Map String String, Map.Map Ident [AAsm])
 inline ([], trec, fnmap) accum = (accum, trec, fnmap)
 inline (((id, (aasm, a)), index):xs, trec, fnmap) accum = 
-    if length aasm > 5000 then inline (xs, trec, fnmap) (((id, (aasm, a)), index):accum) else
+    if length aasm > 1500 then inline (xs, trec, fnmap) (((id, (aasm, a)), index):accum) else
         let 
             processed = mapinline (id, aasm) fnmap trec index 1
             fnmap' = Map.insert id processed fnmap
@@ -92,7 +92,7 @@ mapinline (id, x:xs) fnmap trrec idx cnt = case x of
             len = length fungen
         in
             if len == 0 || not(null l) then x : mapinline (id, xs) fnmap trrec idx cnt else
-                case (len > 40, Map.lookup nme trrec) of
+                case (len > 35, Map.lookup nme trrec) of
                     (_, Just a) 
                         | a == "MUL" || a == "ADD" || a == "REG" || a == id 
                             -> x : mapinline (id, xs) fnmap trrec idx cnt --recursions are too complicated for fn inline
