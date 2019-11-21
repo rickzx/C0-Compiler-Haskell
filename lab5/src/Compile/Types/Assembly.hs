@@ -47,6 +47,7 @@ data Inst
     | Jge String
     | Movzbl Operand Operand
     | Global String
+    | Movls Operand Operand
     | Ret deriving (Eq, Ord)
 
 data Operand
@@ -168,6 +169,7 @@ instance Show Operand where
 instance Show Inst where
     show (Movq x1 x2) = "\tmovq " ++ show x1 ++ ", " ++ show x2
     show (Movl x1 x2) = "\tmovl " ++ show x1 ++ ", " ++ show x2
+    show (Movls x1 x2) = "\tmovl " ++ show x1 ++ ", " ++ show x2
     show (Movabsq x1 x2) = "\tmovabsq " ++ show x1 ++ ", " ++ show x2
     show (Addq x1 x2) = "\taddq " ++ show x1 ++ ", " ++ show x2
     show (Addl x1 x2) = "\taddl " ++ show x1 ++ ", " ++ show x2
