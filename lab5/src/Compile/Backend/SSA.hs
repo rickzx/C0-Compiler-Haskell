@@ -708,8 +708,63 @@ deBlocks pre blks =
 deSSA :: Map.Map Ident (Map.Map Ident Int) -> Map.Map Ident Block -> [Ident] -> [AAsm]
 deSSA pre blks serial =
     let deblks = deBlocks pre blks
-     in concatMap (\nme -> fromMaybe (error $ "Elem not found3: " ++ nme) (Map.lookup nme deblks)) serial
+     in concatMap (\nme -> fromMaybe [] (Map.lookup nme deblks)) serial
      
---deSSA :: Block -> Map.Map Ident [ALoc] -> [AAsm]
---deSSA blk lMap =
---    tail $ concatMap (\(lab, _, aasms) -> (AControl $ ALab lab) : concat (deBlock aasms lMap 0 ("_" ++ lab) [])) blk
+data CopyStatus = ToMove | BeingMoved | Moved deriving (Eq)
+
+data ParCopyState =
+    ParCopyState
+        { copyStat :: Map.Map Int CopyStatus
+        , emit :: [(ALoc, ALoc)]
+        , loc :: [ALoc]
+        }
+        
+parallelCopy :: [ALoc] -> [ALoc] -> ALoc -> [(ALoc, ALoc)]
+parallelCopy src dst tmp =
+    let
+        runParCopy = do
+            parallelCopyM src dst tmp
+            emits <- gets emit
+            return $ reverse emits
+        initState = ParCopyState Map.empty [] []
+    in
+        evalState runParCopy initState
+
+testPar :: [(ALoc, ALoc)]
+testPar =
+    let
+        src = [ATemp 0, ATemp 1, ATemp 2, ATemp 3, ATemp 4]
+        dst = [ATemp 1, ATemp 0, ATemp 3, ATemp 4, ATemp 2]
+    in
+        parallelCopy src dst (AReg 7)
+        
+parallelCopyM :: [ALoc] -> [ALoc] -> ALoc -> State ParCopyState ()
+parallelCopyM src dst tmp = do
+    let n = length src
+        cstat = foldr (\i m -> Map.insert i ToMove m) Map.empty [0..n-1]
+    modify' $ \(ParCopyState _ e _) -> ParCopyState cstat e src
+    let moveone i = do
+            locs <- gets loc
+            when (locs !! i /= dst !! i) $ do
+                modify' $ \(ParCopyState c e l) -> ParCopyState (Map.insert i BeingMoved c) e l
+                foldM_
+                    (\_ j -> do
+                         locs' <- gets loc
+                         when (locs' !! j == dst !! i) $ do
+                             stat <- gets copyStat
+                             case stat Map.! j of
+                                 ToMove -> moveone j
+                                 BeingMoved ->
+                                     modify' $ \(ParCopyState c e l) ->
+                                         ParCopyState c ((locs' !! j, tmp) : e) (replaceNth j tmp l)
+                                 Moved -> return ())
+                    ()
+                    [0 .. n - 1]
+                locs'' <- gets loc
+                modify' $ \(ParCopyState c e l) -> ParCopyState (Map.insert i Moved c) ((locs'' !! i, dst !! i) : e) l
+    foldM_
+        (\_ i -> do
+             stat <- gets copyStat
+             when (stat Map.! i == ToMove) $ moveone i)
+        ()
+        [0 .. n - 1]            

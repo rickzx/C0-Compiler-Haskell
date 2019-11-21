@@ -12,15 +12,30 @@ import qualified Data.Set as Set
 import Data.Bits
 import Debug.Trace
 
-ssaOptimize :: Map.Map Ident Block -> (Map.Map Ident Block, Set.Set Int)
-ssaOptimize blks =
+ssaOptimize ::
+       Map.Map Ident Block
+    -> DiGraph Ident
+    -> Map.Map Ident (Map.Map Ident Int)
+    -> Ident
+    -> (Map.Map Ident Block, Set.Set Int, DiGraph Ident, Map.Map Ident (Map.Map Ident Int))
+ssaOptimize blks g pre fn =
     let (eblk, defs, uses, sset, _) = enumBlks blks
         (nuses, toDelete) = deadCodeElim defs uses (Set.fromList (Map.keys defs)) Set.empty
-        removeDead = removeStmts eblk (toDelete, Map.empty)
-        (toDelete', toModify') = constantProp nuses sset (Set.empty, Map.empty)
-        propConst = removeStmts removeDead (toDelete', toModify')
-        (bblk, allVars) = backToBlk propConst
-     in (trace $ "RemoveDead: \n" ++ show removeDead ++ "\n\nToDelete: \n" ++ show toDelete' ++ "\n\nToModify: \n" ++ show toModify' ++ "\n\nFinal\n" ++ show bblk)(bblk, allVars)
+        (removeDead, _) = removeStmts eblk (toDelete, Map.empty, Map.empty)
+        (toDelete', toModify', edgeToRemove) = constantProp nuses sset (Set.empty, Map.empty, Map.empty)
+        (propConst, edgeToRemove') = removeStmts removeDead (toDelete', toModify', edgeToRemove)
+        (edgeRemovedBlk, newg, newpre) = elimUnreachable propConst edgeToRemove' g pre fn
+        (bblk, allVars) = backToBlk edgeRemovedBlk
+     in 
+--        (trace $
+--         "RemoveDead: \n" ++ show removeDead ++
+--         "\n\nToDelete: \n" ++ show toDelete' ++
+--         "\n\nToModify: \n" ++ show toModify' ++ 
+--         "\n\nedgeToRemove: \n" ++ show edgeToRemove' ++ 
+--         "\n\nFinalRemoved: \n" ++ show bblk ++
+--         "\n\nNewGraph: \n" ++ show newg ++
+--         "\n\nNewPre: \n" ++ show newpre)
+            (bblk, allVars, newg, newpre)
 
 --        (trace $ "RemoveDead: \n" ++ show removeDead ++ "\n\nToDelete: \n" ++ show toDelete' ++ "\n\nToModify: \n" ++ show toModify' ++ "\n\nFinal\n" ++ show bblk)
 getLineNum :: StmtS -> Int
@@ -102,23 +117,30 @@ enumBlks =
               in (Map.insert lab (phists ++ aasmsts) m, aasmdef, aasmuse, aasmsset, aasmnext))
         (Map.empty, Map.empty, Map.empty, Set.empty, 0)
 
-removeStmts :: Map.Map Ident [StmtS] -> (Set.Set Int, Map.Map Int StmtS) -> Map.Map Ident [StmtS]
-removeStmts stmtMap (toDelete, toModify) =
+removeStmts ::
+       Map.Map Ident [StmtS]
+    -> (Set.Set Int, Map.Map Int StmtS, Map.Map Int Ident)
+    -> (Map.Map Ident [StmtS], Map.Map Ident Ident)
+removeStmts stmtMap (toDelete, toModify, edgeToRemove) =
     Map.foldrWithKey'
-        (\nme stmts nmap ->
-             let nstmts =
+        (\nme stmts (nmap, nlabs) ->
+             let (nstmts, nedge) =
                      foldr
-                         (\stmt acc ->
+                         (\stmt (acc, acc') ->
                               let lno = getLineNum stmt
+                                  r =
+                                      case Map.lookup lno edgeToRemove of
+                                          Just l -> Map.insert nme l acc'
+                                          Nothing -> acc'
                                in if Set.member lno toDelete
-                                      then acc
+                                      then (acc, r)
                                       else if Map.member lno toModify
-                                               then (toModify Map.! lno) : acc
-                                               else stmt : acc)
-                         []
+                                               then ((toModify Map.! lno) : acc, r)
+                                               else (stmt : acc, r))
+                         ([], nlabs)
                          stmts
-              in Map.insert nme nstmts nmap)
-        Map.empty
+              in (Map.insert nme nstmts nmap, nedge))
+        (Map.empty, Map.empty)
         stmtMap
 
 hasSideEffect :: StmtS -> Bool
@@ -151,7 +173,7 @@ deadCodeElim def use work toDelete =
                                                    suse
                                         in deadCodeElim def nuse nwork' (Set.insert (getLineNum st) toDelete)
                                   else deadCodeElim def use nwork toDelete
-                                  
+
 isTmpOrConst :: AVal -> Bool
 isTmpOrConst (AImm _) = True
 isTmpOrConst (ALoc (ATemp _)) = True
@@ -159,10 +181,13 @@ isTmpOrConst _ = False
 
 -- Performs simple constant propagation, constant folding, copy propagation, constant condition folding all at once
 constantProp ::
-       Map.Map ALoc [StmtS] -> Set.Set StmtS -> (Set.Set Int, Map.Map Int StmtS) -> (Set.Set Int, Map.Map Int StmtS)
-constantProp use work (toDelete, toModify) =
+       Map.Map ALoc [StmtS]
+    -> Set.Set StmtS
+    -> (Set.Set Int, Map.Map Int StmtS, Map.Map Int Ident)
+    -> (Set.Set Int, Map.Map Int StmtS, Map.Map Int Ident)
+constantProp use work (toDelete, toModify, edgeToRemove) =
     if null work
-        then (toDelete, toModify)
+        then (toDelete, toModify, edgeToRemove)
         else let st = Set.elemAt 0 work
                  nwork = Set.deleteAt 0 work
                  cstphi =
@@ -179,7 +204,8 @@ constantProp use work (toDelete, toModify) =
                                      foldr
                                          (\t (canSubst, acc) ->
                                               case t of
-                                                  _ 
+                                                  PhiS _ _ -> (False, [])
+                                                  _
                                                       | not canSubst -> (False, [])
                                                       | Set.member (getLineNum t) toDelete -> (True, acc)
                                                       | Map.member (getLineNum t) toModify ->
@@ -202,14 +228,18 @@ constantProp use work (toDelete, toModify) =
                                                       use
                                                       substT
                                               nmodify = foldr (\t m -> Map.insert (getLineNum t) t m) toModify substT
-                                           in constantProp nuse nwork' (Set.insert (getLineNum st) toDelete, nmodify)
-                                     else constantProp use nwork (toDelete, toModify)
+                                           in constantProp
+                                                  nuse
+                                                  nwork'
+                                                  (Set.insert (getLineNum st) toDelete, nmodify, edgeToRemove)
+                                     else constantProp use nwork (toDelete, toModify, edgeToRemove)
                      AAsmS _ (AAsm [v] ANop [c])
                          | isTemp v && isTmpOrConst c ->
                              let (cansub, ts) =
                                      foldr
                                          (\t (canSubst, acc) ->
                                               case t of
+                                                  PhiS _ _ -> (False, [])
                                                   _
                                                       | not canSubst -> (False, [])
                                                       | Set.member (getLineNum t) toDelete -> (True, acc)
@@ -233,14 +263,18 @@ constantProp use work (toDelete, toModify) =
                                                       use
                                                       substT
                                               nmodify = foldr (\t m -> Map.insert (getLineNum t) t m) toModify substT
-                                           in constantProp nuse nwork' (Set.insert (getLineNum st) toDelete, nmodify)
-                                     else constantProp use nwork (toDelete, toModify)
+                                           in constantProp
+                                                  nuse
+                                                  nwork'
+                                                  (Set.insert (getLineNum st) toDelete, nmodify, edgeToRemove)
+                                     else constantProp use nwork (toDelete, toModify, edgeToRemove)
                      AAsmS _ (AAsm [v] ANopq [c])
                          | isTemp v && isTmpOrConst c ->
                              let (cansub, ts) =
                                      foldr
                                          (\t (canSubst, acc) ->
                                               case t of
+                                                  PhiS _ _ -> (False, [])
                                                   _
                                                       | not canSubst -> (False, [])
                                                       | Set.member (getLineNum t) toDelete -> (True, acc)
@@ -264,14 +298,20 @@ constantProp use work (toDelete, toModify) =
                                                       use
                                                       substT
                                               nmodify = foldr (\t m -> Map.insert (getLineNum t) t m) toModify substT
-                                           in constantProp nuse nwork' (Set.insert (getLineNum st) toDelete, nmodify)
-                                     else constantProp use nwork (toDelete, toModify)
+                                           in constantProp
+                                                  nuse
+                                                  nwork'
+                                                  (Set.insert (getLineNum st) toDelete, nmodify, edgeToRemove)
+                                     else constantProp use nwork (toDelete, toModify, edgeToRemove)
                      AAsmS idx (AControl (ACJump (AImm c) l1 l2)) ->
-                         let ninst =
+                         let (ninst, toremove) =
                                  if c /= 0
-                                     then AAsmS idx (AControl (AJump l1))
-                                     else AAsmS idx (AControl (AJump l2))
-                          in constantProp use nwork (toDelete, Map.insert idx ninst toModify)
+                                     then (AAsmS idx (AControl (AJump l1)), l2)
+                                     else (AAsmS idx (AControl (AJump l2)), l1)
+                          in constantProp
+                                 use
+                                 nwork
+                                 (toDelete, Map.insert idx ninst toModify, Map.insert idx toremove edgeToRemove)
                      AAsmS idx (AControl (ACJump' op (AImm c1) (AImm c2) l1 l2)) ->
                          let foldcmp =
                                  case op of
@@ -283,11 +323,14 @@ constantProp use work (toDelete, toModify) =
                                      ALe -> c1 <= c2
                                      AGt -> c1 > c2
                                      AGe -> c1 >= c2
-                             ninst =
+                             (ninst, toremove) =
                                  if foldcmp
-                                     then AAsmS idx (AControl (AJump l1))
-                                     else AAsmS idx (AControl (AJump l2))
-                          in constantProp use nwork (toDelete, Map.insert idx ninst toModify)
+                                     then (AAsmS idx (AControl (AJump l1)), l2)
+                                     else (AAsmS idx (AControl (AJump l2)), l1)
+                          in constantProp
+                                 use
+                                 nwork
+                                 (toDelete, Map.insert idx ninst toModify, Map.insert idx toremove edgeToRemove)
                      AAsmS idx (AAsm [dest] op [AImm c1, AImm c2])
                          | isTemp dest &&
                                (op == AAdd ||
@@ -316,7 +359,10 @@ constantProp use work (toDelete, toModify) =
                                                  else 0
                                          AXor -> c1' `xor` c2'
                                  ninst = AAsmS idx (AAsm [dest] ANop [AImm (fromIntegral foldop :: Int)])
-                              in constantProp use (Set.insert ninst nwork) (toDelete, Map.insert idx ninst toModify)
+                              in constantProp
+                                     use
+                                     (Set.insert ninst nwork)
+                                     (toDelete, Map.insert idx ninst toModify, edgeToRemove)
                      AAsmS idx (ARel [dest] op [AImm c1, AImm c2])
                          | isTemp dest ->
                              let foldcmp =
@@ -334,8 +380,11 @@ constantProp use work (toDelete, toModify) =
                                          then 1
                                          else 0
                                  ninst = AAsmS idx (AAsm [dest] ANop [AImm toint])
-                              in constantProp use (Set.insert ninst nwork) (toDelete, Map.insert idx ninst toModify)
-                     _ -> constantProp use nwork (toDelete, toModify)
+                              in constantProp
+                                     use
+                                     (Set.insert ninst nwork)
+                                     (toDelete, Map.insert idx ninst toModify, edgeToRemove)
+                     _ -> constantProp use nwork (toDelete, toModify, edgeToRemove)
   where
     allConst ps =
         if null ps
@@ -356,11 +405,9 @@ constantProp use work (toDelete, toModify) =
                              (Just n)
                              ps
                      _ -> Nothing
-
     pointerize (ALoc ptr) True = APtrq ptr
     pointerize (ALoc ptr) False = APtr ptr
     pointerize (AImm _) _ = APtrNull
-
     substArgs c v [] = []
     substArgs c v (x:xs) =
         case x of
@@ -422,6 +469,72 @@ constantProp use work (toDelete, toModify) =
             ACall fn args narg -> AAsmS idx (ACall fn (substArgs c v args) narg)
             _ -> AAsmS idx aasm
 
+data ElimState =
+    ElimState
+        { elimTodo :: [Ident]
+        , elimBlk :: Map.Map Ident [StmtS]
+        , elimG :: DiGraph Ident
+        , elimPre :: Map.Map Ident (Map.Map Ident Int)
+        }
+
+removeEdge :: Ident -> Ident -> DiGraph Ident -> DiGraph Ident
+removeEdge u v g =
+    case Map.lookup u g of
+        Just vs -> Map.insert u (List.delete v vs) g
+        Nothing -> g
+
+removeEdgeP :: Ident -> Ident -> Map.Map Ident (Map.Map Ident Int) -> Map.Map Ident (Map.Map Ident Int)
+removeEdgeP u v g =
+    case Map.lookup u g of
+        Just vs -> Map.insert u (Map.delete v vs) g
+        Nothing -> g
+
+elimUnreachable ::
+       Map.Map Ident [StmtS]
+    -> Map.Map Ident Ident
+    -> DiGraph Ident
+    -> Map.Map Ident (Map.Map Ident Int)
+    -> Ident
+    -> (Map.Map Ident [StmtS], DiGraph Ident, Map.Map Ident (Map.Map Ident Int))
+elimUnreachable blks edgeToRemove g pre fn =
+    let runElimUnreach = do
+            elimUnreachableM edgeToRemove fn
+            elimblk <- gets elimBlk
+            elimg <- gets elimG
+            elimpre <- gets elimPre
+            return (elimblk, elimg, elimpre)
+        initState = ElimState {elimTodo = Map.keys blks, elimBlk = blks, elimG = g, elimPre = pre}
+     in evalState runElimUnreach initState
+
+elimUnreachableM :: Map.Map Ident Ident -> Ident -> State ElimState ()
+elimUnreachableM edgeToRemove fn = do
+    let loop = do
+            todos <- gets elimTodo
+            let nme = head todos
+            modify' $ \(ElimState t b g p) -> ElimState (tail t) b g p
+            unless (nme == fn) $ do
+                gra <- gets elimG
+                pre <- gets elimPre
+                let prenme = fromMaybe Map.empty (Map.lookup nme pre)
+                    succnme = fromMaybe [] (Map.lookup nme gra)
+                    (npre', ng', allrem) =
+                        foldr
+                            (\p (np, ng, flag) ->
+                                 if Map.member p edgeToRemove && edgeToRemove Map.! p == nme
+                                     then (Map.delete p np, removeEdge p nme ng, flag)
+                                     else (np, ng, False))
+                            (prenme, gra, True)
+                            (Map.keys prenme)
+                if allrem
+                    then let rempre = foldr (\s p -> removeEdgeP s nme p) (Map.delete nme pre) succnme
+                             remg = Map.delete nme ng'
+                          in modify' $ \(ElimState t b g p) -> ElimState (t ++ succnme) (Map.delete nme b) remg rempre
+                    else modify' $ \(ElimState t b g p) -> ElimState t b ng' (Map.insert nme npre' p)
+            todos' <- gets elimTodo
+            unless (null todos') loop
+    todos <- gets elimTodo
+    unless (null todos) loop
+
 backToBlk :: Map.Map Ident [StmtS] -> (Map.Map Ident Block, Set.Set Int)
 backToBlk =
     Map.foldrWithKey'
@@ -430,19 +543,29 @@ backToBlk =
                      foldr
                          (\stmt (p, a, allVars') ->
                               case stmt of
-                                  PhiS _ phi@(ATemp x, pi) -> (phi : p, a, foldr (\v s -> case v of
-                                                ALoc (ATemp n) -> Set.insert n s
-                                                _ -> s) (Set.insert x allVars') pi)
+                                  PhiS _ phi@(ATemp x, pi) ->
+                                      ( phi : p
+                                      , a
+                                      , foldr
+                                            (\v s ->
+                                                 case v of
+                                                     ALoc (ATemp n) -> Set.insert n s
+                                                     _ -> s)
+                                            (Set.insert x allVars')
+                                            pi)
                                   AAsmS _ aasm ->
-                                        let
-                                            (def, use) = getDefUse stmt
-                                            uses = foldr (\v s -> case v of
-                                                ATemp n -> Set.insert n s
-                                                _ -> s) allVars' use
-                                        in
-                                            case def of
-                                                Just (ATemp n) -> (p, aasm : a, Set.insert n uses)
-                                                Nothing -> (p, aasm : a, uses))
+                                      let (def, use) = getDefUse stmt
+                                          uses =
+                                              foldr
+                                                  (\v s ->
+                                                       case v of
+                                                           ATemp n -> Set.insert n s
+                                                           _ -> s)
+                                                  allVars'
+                                                  use
+                                       in case def of
+                                              Just (ATemp n) -> (p, aasm : a, Set.insert n uses)
+                                              _ -> (p, aasm : a, uses))
                          ([], [], allVars)
                          stmts
               in (Map.insert nme (phis, aasms) m, allv))

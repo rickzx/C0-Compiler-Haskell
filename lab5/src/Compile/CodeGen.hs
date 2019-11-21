@@ -48,8 +48,8 @@ generateFunc (fn, aasms, localVar) header trdict =
             | fn == "a bort" = "_c0_abort_local411"
             | otherwise = "_c0_" ++ fn
         (renamed, finalblk, finalG, finalP, serial) = ssa aasms fname
-        (optSSA, allVars) = ssaOptimize renamed
-        elim = deSSA finalP optSSA serial
+        (optSSA, allVars, newG, newP) = ssaOptimize renamed finalG finalP fname
+        elim = deSSA newP optSSA serial
         hd = [AControl $ ALab $ "_c0_"++ fn ++ "_ret", AAsm [AReg 9] ANop [ALoc $ AReg 9]]
         trelim = case Map.lookup fn trdict of
             Just _ -> hd ++ elim
@@ -130,4 +130,4 @@ generateFunc (fn, aasms, localVar) header trdict =
                         _ -> x:remove_move(y:xs)
         fun = prolog ++ optinsts ++ epilog
         -- (trace $ "AAsm:\n" ++ show aasms ++ "\n\nRenamed:\n" ++ show renamed ++ "\n\nElim:\n" ++ show elim)
-     in (trace $ "\n\n" ++ show elim)concatMap (\line -> show line ++ "\n") fun
+     in concatMap (\line -> show line ++ "\n") fun
