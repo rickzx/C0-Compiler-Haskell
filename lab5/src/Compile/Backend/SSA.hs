@@ -37,6 +37,7 @@ data BlockState =
         , blockList :: [(Ident, Block)]
         , origin :: Map.Map Ident [ALoc]
         , defsites :: Map.Map ALoc (Set.Set Ident)
+        , globals :: Set.Set ALoc
         , seenGoto :: Bool
         }
     deriving (Show)
@@ -78,6 +79,7 @@ ssa aasms fn =
             g <- gets blocks
             p <- gets predBlocks
             b <- gets blockList
+            glbs <- gets globals
             dsite <- gets defsites
             orig <- gets origin
             let fullg = foldr (\(n, _) gr -> initHelper n gr) g b
@@ -85,7 +87,7 @@ ssa aasms fn =
                 pOrd = Map.foldrWithKey' (\n ps m -> Map.insert n (Map.fromList $ zip ps [0 ..]) m) Map.empty fullp
                 (df, i) = domFrontiers fullg fullp fn
                 origm = Map.foldrWithKey' (\n vs m -> Map.insert n (Set.fromList vs) m) Map.empty orig
-                phis = insertPhis dsite df origm fullp (Map.fromList b)
+                phis = insertPhis glbs dsite df origm fullp (Map.fromList b)
                 domGraph =
                     Map.foldrWithKey' (\child par domg -> insertHelper par child domg) Map.empty (Map.delete fn i)
                 fullDomG = foldr (\(n, _) gr -> initHelper n gr) domGraph b
@@ -110,6 +112,7 @@ ssa aasms fn =
                 , blockList = []
                 , origin = Map.empty
                 , defsites = Map.empty
+                , globals = Set.empty
                 , seenGoto = False
                 }
      in evalState runToBlock blockInitState
@@ -244,29 +247,64 @@ isTemp :: ALoc -> Bool
 isTemp (ATemp _) = True
 isTemp _ = False
 
-blockDefined :: [AAsm] -> [ALoc]
+genLocs :: [AVal] -> Set.Set ALoc
+genLocs [] = Set.empty
+genLocs (x:rest) =
+    case x of
+        ALoc (AReg _) -> genLocs rest
+        ALoc a@(ATemp _) -> Set.insert a (genLocs rest)
+        ALoc (APtr p) -> Set.insert p (genLocs rest)
+        ALoc (APtrq p) -> Set.insert p (genLocs rest)
+        _ -> genLocs rest
+
+blockDefined :: [AAsm] -> ([ALoc], Set.Set ALoc, Set.Set ALoc)
 blockDefined =
     foldr
-        (\aasm s ->
+        (\aasm (s, varkill, global) ->
              case aasm of
-                 AAsm [assign] _op _args
-                     | isTemp assign -> assign : s
-                 ARel [assign] _op _args
-                     | isTemp assign -> assign : s
-                 AFun _ args -> args ++ s
-                 _ -> s)
-        []
-
+                 AAsm [assign] _op args
+                     | isTemp assign ->
+                         let glbs = Set.filter (\x -> not (Set.member x varkill)) (genLocs args)
+                          in (assign : s, Set.insert assign varkill, Set.union glbs global)
+                     | otherwise ->
+                         let glbs = Set.filter (\x -> not (Set.member x varkill)) (genLocs (ALoc assign : args))
+                          in (s, varkill, Set.union glbs global)
+                 ARel [assign] _op args
+                     | isTemp assign ->
+                         let glbs = Set.filter (\x -> not (Set.member x varkill)) (genLocs args)
+                          in (assign : s, Set.insert assign varkill, Set.union glbs global)
+                     | otherwise ->
+                         let glbs = Set.filter (\x -> not (Set.member x varkill)) (genLocs (ALoc assign : args))
+                          in (s, varkill, Set.union glbs global)
+                 AFun _ args -> (args ++ s, foldr Set.insert varkill args, global)
+                 ACall _ args _ ->
+                    let glbs = Set.filter (\x -> not (Set.member x varkill)) (genLocs args)
+                    in  (s, varkill, Set.union glbs global)
+                 AControl c ->
+                    case c of
+                        ACJump val _ _ ->
+                            let glbs = Set.filter (\x -> not (Set.member x varkill)) (genLocs [val])
+                            in (s, varkill, Set.union glbs global)
+                        ACJump' _ v1 v2 _ _ ->
+                             let glbs = Set.filter (\x -> not (Set.member x varkill)) (genLocs [v1, v2])
+                             in (s, varkill, Set.union glbs global)
+                        _ -> (s, varkill, global)
+                 ARet val ->
+                    let glbs = Set.filter (\x -> not (Set.member x varkill)) (genLocs [val])
+                    in (s, varkill, Set.union glbs global)
+                 _ -> (s, varkill, global))
+        ([], Set.empty, Set.empty)
+        
 toBlockM :: [AAsm] -> Ident -> State BlockState ()
 toBlockM [] fn = do
     flagGoto <- gets seenGoto
     aasms <- gets currAAsm
     dsite <- gets defsites
     lab <- gets currLabel
-    let defned = blockDefined aasms
+    let (defned, _, glbs) = blockDefined aasms
         newdsite = foldr (\d m -> Map.insertWith Set.union d (Set.singleton lab) m) dsite defned
     if flagGoto
-        then modify' $ \(BlockState aasm l blk pre blst ori _ goto) ->
+        then modify' $ \(BlockState aasm l blk pre blst ori _ glb goto) ->
                  BlockState
                      []
                      l
@@ -275,8 +313,9 @@ toBlockM [] fn = do
                      (reverse ((lab, ([], reverse aasm)) : blst))
                      (Map.insert lab defned ori)
                      newdsite
+                     (Set.union glbs glb)
                      goto
-        else modify' $ \(BlockState aasm l blk pre blst ori _ goto) ->
+        else modify' $ \(BlockState aasm l blk pre blst ori _ glb goto) ->
                  BlockState
                      []
                      l
@@ -285,6 +324,7 @@ toBlockM [] fn = do
                      (reverse ((lab, ([], reverse $ (AControl $ AJump $ fn ++ "_ret") : aasm)) : blst))
                      (Map.insert lab defned ori)
                      newdsite
+                     (Set.union glbs glb)
                      goto
 toBlockM (x:xs) fn =
     case x of
@@ -293,10 +333,10 @@ toBlockM (x:xs) fn =
             aasms <- gets currAAsm
             dsite <- gets defsites
             lab <- gets currLabel
-            let defned = blockDefined aasms
+            let (defned, _, glbs) = blockDefined aasms
                 newdsite = foldr (\d m -> Map.insertWith Set.union d (Set.singleton lab) m) dsite defned
             if flagGoto
-                then modify' $ \(BlockState aasm _ blk pre blst ori _ _) ->
+                then modify' $ \(BlockState aasm _ blk pre blst ori _ glb _) ->
                          BlockState
                              [x]
                              l
@@ -305,8 +345,9 @@ toBlockM (x:xs) fn =
                              ((lab, ([], reverse aasm)) : blst)
                              (Map.insert lab defned ori)
                              newdsite
+                             (Set.union glbs glb)
                              False
-                else modify' $ \(BlockState aasm _ blk pre blst ori _ _) ->
+                else modify' $ \(BlockState aasm _ blk pre blst ori _  glb _) ->
                          BlockState
                              [x]
                              l
@@ -315,48 +356,49 @@ toBlockM (x:xs) fn =
                              ((lab, ([], reverse $ (AControl $ AJump $ fn ++ "_ret") : aasm)) : blst)
                              (Map.insert lab defned ori)
                              newdsite
+                             (Set.union glbs glb)
                              False
             toBlockM xs fn
         AControl (AJump l)
             | l /= fn ++ "_ret" && l /= "memerror" -> do
                 flagGoto <- gets seenGoto
                 unless flagGoto $
-                    modify' $ \(BlockState aasm lab blk pre blst ori ds _) ->
-                        BlockState (x : aasm) lab (insertHelper lab l blk) (insertHelper l lab pre) blst ori ds True
+                    modify' $ \(BlockState aasm lab blk pre blst ori ds glb _) ->
+                        BlockState (x : aasm) lab (insertHelper lab l blk) (insertHelper l lab pre) blst ori ds glb True
                 toBlockM xs fn
             | otherwise -> do
-                modify' $ \(BlockState aasm lab blk pre blst ori ds _) ->
-                                BlockState (x : aasm) lab blk pre blst ori ds True
+                modify' $ \(BlockState aasm lab blk pre blst ori ds glb _) ->
+                                BlockState (x : aasm) lab blk pre blst ori ds glb True
                 toBlockM xs fn
         AControl (ACJump _ l1 l2) -> do
             flagGoto <- gets seenGoto
             unless flagGoto $ do
-                modify' $ \(BlockState aasm lab blk pre blst ori ds _) ->
-                    BlockState (x : aasm) lab blk pre blst ori ds True
+                modify' $ \(BlockState aasm lab blk pre blst ori ds glb _) ->
+                    BlockState (x : aasm) lab blk pre blst ori ds glb True
                 when (l1 /= fn ++ "_ret" && l1 /= "memerror") $
-                    modify' $ \(BlockState aasm lab blk pre blst ori ds goto) ->
-                        BlockState aasm lab (insertHelper lab l1 blk) (insertHelper l1 lab pre) blst ori ds goto
+                    modify' $ \(BlockState aasm lab blk pre blst ori ds glb goto) ->
+                        BlockState aasm lab (insertHelper lab l1 blk) (insertHelper l1 lab pre) blst ori ds glb goto
                 when (l2 /= fn ++ "_ret" && l2 /= "memerror") $
-                    modify' $ \(BlockState aasm lab blk pre blst ori ds goto) ->
-                        BlockState aasm lab (insertHelper lab l2 blk) (insertHelper l2 lab pre) blst ori ds goto
+                    modify' $ \(BlockState aasm lab blk pre blst ori ds glb goto) ->
+                        BlockState aasm lab (insertHelper lab l2 blk) (insertHelper l2 lab pre) blst ori ds glb goto
             toBlockM xs fn
         AControl (ACJump' _ _ _ l1 l2) -> do
             flagGoto <- gets seenGoto
             unless flagGoto $ do
-                modify' $ \(BlockState aasm lab blk pre blst ori ds _) ->
-                    BlockState (x : aasm) lab blk pre blst ori ds True
+                modify' $ \(BlockState aasm lab blk pre blst ori ds glb _) ->
+                    BlockState (x : aasm) lab blk pre blst ori ds glb True
                 when (l1 /= fn ++ "_ret" && l1 /= "memerror") $
-                    modify' $ \(BlockState aasm lab blk pre blst ori ds goto) ->
-                        BlockState aasm lab (insertHelper lab l1 blk) (insertHelper l1 lab pre) blst ori ds goto
+                    modify' $ \(BlockState aasm lab blk pre blst ori ds glb goto) ->
+                        BlockState aasm lab (insertHelper lab l1 blk) (insertHelper l1 lab pre) blst ori ds glb goto
                 when (l2 /= fn ++ "_ret" && l2 /= "memerror") $
-                    modify' $ \(BlockState aasm lab blk pre blst ori ds goto) ->
-                        BlockState aasm lab (insertHelper lab l2 blk) (insertHelper l2 lab pre) blst ori ds goto
+                    modify' $ \(BlockState aasm lab blk pre blst ori ds glb goto) ->
+                        BlockState aasm lab (insertHelper lab l2 blk) (insertHelper l2 lab pre) blst ori ds glb goto
             toBlockM xs fn
         _ -> do
             flagGoto <- gets seenGoto
             unless flagGoto $
-                modify' $ \(BlockState aasm lab blk pre blst ori ds goto) ->
-                    BlockState (x : aasm) lab blk pre blst ori ds goto
+                modify' $ \(BlockState aasm lab blk pre blst ori ds glb goto) ->
+                    BlockState (x : aasm) lab blk pre blst ori ds glb goto
             toBlockM xs fn
 
 data PhiState =
@@ -367,15 +409,16 @@ data PhiState =
         }
 
 insertPhisM ::
-       Map.Map ALoc (Set.Set Ident)
+       Set.Set ALoc
+    -> Map.Map ALoc (Set.Set Ident)
     -> Map.Map Ident (Set.Set Ident)
     -> Map.Map Ident (Set.Set ALoc)
     -> DiGraph Ident
     -> State PhiState ()
-insertPhisM dsite df orig pre =
+insertPhisM glbs dsite df orig pre =
     foldM_
         (\_ a -> do
-             modify' $ \(PhiState _ api pblk) -> PhiState (dsite Map.! a) api pblk
+             modify' $ \(PhiState _ api pblk) -> PhiState (fromMaybe Set.empty (Map.lookup a dsite)) api pblk
              let loop = do
                      wp <- gets wPhi
                      let n = Set.elemAt 0 wp
@@ -385,8 +428,8 @@ insertPhisM dsite df orig pre =
                               aphi <- gets aPhi
                               unless (Set.member y (fromMaybe Set.empty (Map.lookup a aphi))) $ do
                                   pb <- gets phiBlk
-                                  let nap = replicate (length $ pre Map.! y) (ALoc a)
-                                      (aps, aasms) = pb Map.! y
+                                  let nap = replicate (length (fromMaybe (error "2") (Map.lookup y pre))) (ALoc a)
+                                      (aps, aasms) = fromMaybe (error "3") (Map.lookup y pb)
                                   modify' $ \(PhiState w api pblk) ->
                                       PhiState
                                           w
@@ -401,18 +444,19 @@ insertPhisM dsite df orig pre =
              w <- gets wPhi
              unless (null w) loop)
         ()
-        (Map.keys dsite)
+        glbs
 
 insertPhis ::
-       Map.Map ALoc (Set.Set Ident)
+       Set.Set ALoc
+    -> Map.Map ALoc (Set.Set Ident)
     -> Map.Map Ident (Set.Set Ident)
     -> Map.Map Ident (Set.Set ALoc)
     -> DiGraph Ident
     -> Map.Map Ident Block
     -> Map.Map Ident Block
-insertPhis dsite df orig pre blk =
+insertPhis glbs dsite df orig pre blk =
     let runInsertPhis = do
-            insertPhisM dsite df orig pre
+            insertPhisM glbs dsite df orig pre
             gets phiBlk
      in evalState runInsertPhis (PhiState Set.empty Map.empty blk)
 
@@ -439,16 +483,6 @@ testAAsm =
     , AControl $ ALab "L2"
     , AAsm [AReg 0] ANop [ALoc $ ATemp 1]
     ]
-
-testSSA :: IO ()
-testSSA = do
-    let (renamed, finalblk, finalG, finalP, serial) = ssa testAAsm "test"
-        elim = deSSA finalP renamed serial
-    putStrLn $
-        "Renamed: \n" ++
-        show renamed ++
-        "\n\nBlocks: \n" ++
-        show finalblk ++ "\n\nGraph: \n" ++ show finalG ++ "\n\nPre: \n" ++ show finalP ++ "\n\ndeSSA: \n" ++ show elim
 
 insertHelper :: Ord k => k -> v -> Map.Map k [v] -> Map.Map k [v]
 insertHelper k v m =
@@ -681,90 +715,3 @@ bfs g seen seenm (x:xs)
             (x : seen)
             (Set.insert x seenm)
             (xs ++ reverse (fromMaybe (error $ "Elem not found2: " ++ show x) (Map.lookup x g)))
-
-insertAt :: a -> Int -> [a] -> [a]
-insertAt newElement 0 as = newElement : as
-insertAt newElement i (a:as) = a : insertAt newElement (i - 1) as
-
-deBlocks :: Map.Map Ident (Map.Map Ident Int) -> Map.Map Ident Block -> Map.Map Ident [AAsm]
-deBlocks pre blks =
-    Map.foldrWithKey'
-        (\nme (phis, _) m ->
-             foldr
-                 (\(a, ps) m' ->
-                      Map.foldrWithKey'
-                          (\prdc idx m'' ->
-                               let mov = AAsm [a] ANopq [ps !! idx]
-                                   paasms = m'' Map.! prdc
-                                   newpaasms = insertAt mov (length paasms - 1) paasms
-                                in Map.insert prdc newpaasms m'')
-                          m'
-                          (pre Map.! nme))
-                 m
-                 phis)
-        (Map.map snd blks)
-        blks
-
-deSSA :: Map.Map Ident (Map.Map Ident Int) -> Map.Map Ident Block -> [Ident] -> [AAsm]
-deSSA pre blks serial =
-    let deblks = deBlocks pre blks
-     in concatMap (\nme -> fromMaybe [] (Map.lookup nme deblks)) serial
-     
-data CopyStatus = ToMove | BeingMoved | Moved deriving (Eq)
-
-data ParCopyState =
-    ParCopyState
-        { copyStat :: Map.Map Int CopyStatus
-        , emit :: [(ALoc, ALoc)]
-        , loc :: [ALoc]
-        }
-        
-parallelCopy :: [ALoc] -> [ALoc] -> ALoc -> [(ALoc, ALoc)]
-parallelCopy src dst tmp =
-    let
-        runParCopy = do
-            parallelCopyM src dst tmp
-            emits <- gets emit
-            return $ reverse emits
-        initState = ParCopyState Map.empty [] []
-    in
-        evalState runParCopy initState
-
-testPar :: [(ALoc, ALoc)]
-testPar =
-    let
-        src = [ATemp 0, ATemp 1, ATemp 2, ATemp 3, ATemp 4]
-        dst = [ATemp 1, ATemp 0, ATemp 3, ATemp 4, ATemp 2]
-    in
-        parallelCopy src dst (AReg 7)
-        
-parallelCopyM :: [ALoc] -> [ALoc] -> ALoc -> State ParCopyState ()
-parallelCopyM src dst tmp = do
-    let n = length src
-        cstat = foldr (\i m -> Map.insert i ToMove m) Map.empty [0..n-1]
-    modify' $ \(ParCopyState _ e _) -> ParCopyState cstat e src
-    let moveone i = do
-            locs <- gets loc
-            when (locs !! i /= dst !! i) $ do
-                modify' $ \(ParCopyState c e l) -> ParCopyState (Map.insert i BeingMoved c) e l
-                foldM_
-                    (\_ j -> do
-                         locs' <- gets loc
-                         when (locs' !! j == dst !! i) $ do
-                             stat <- gets copyStat
-                             case stat Map.! j of
-                                 ToMove -> moveone j
-                                 BeingMoved ->
-                                     modify' $ \(ParCopyState c e l) ->
-                                         ParCopyState c ((locs' !! j, tmp) : e) (replaceNth j tmp l)
-                                 Moved -> return ())
-                    ()
-                    [0 .. n - 1]
-                locs'' <- gets loc
-                modify' $ \(ParCopyState c e l) -> ParCopyState (Map.insert i Moved c) ((locs'' !! i, dst !! i) : e) l
-    foldM_
-        (\_ i -> do
-             stat <- gets copyStat
-             when (stat Map.! i == ToMove) $ moveone i)
-        ()
-        [0 .. n - 1]

@@ -45,8 +45,8 @@ color graph seo preColor = (coloring, maximum [maxColor - length regOrder + 3, 0
     (coloring, maxColor) = foldl
         (\(c, maxC) v -> if Map.member v preColor
             then (c, max maxC $ preColor Map.! v)
-            else 
-                let 
+            else
+                let
                     colorToUse = lowestColor $ Map.restrictKeys c $ graph Map.! v
                 in
                     (Map.insert v colorToUse c, max maxC colorToUse)
@@ -56,7 +56,7 @@ color graph seo preColor = (coloring, maximum [maxColor - length regOrder + 3, 0
     calleeSaved = if maxColor <= 6 then [] else drop 7 (take (maxColor + 1) regOrder)
 
 allStackColor :: Set.Set Int -> (Coloring, Int, [Register])
-allStackColor allVars = 
+allStackColor allVars =
     let
         precolor =
              Map.fromList

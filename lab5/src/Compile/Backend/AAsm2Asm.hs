@@ -110,7 +110,7 @@ toAsm (AAsm [assign] ADiv [src1, src2]) coloring _ =
             Imm _ -> [Movl src2' (Reg R11D), Movl src1' (Reg EAX), Cdq, Idivl (Reg R11D)] ++ genMovMemlDest (Reg EAX) assign'
             Reg EAX -> [Movl src2' (Reg R11D), Movl src1' (Reg EAX), Cdq, Idivl (Reg R11D)] ++ genMovMemlDest (Reg EAX) assign'
             Reg EDX -> [Movl src2' (Reg R11D), Movl src1' (Reg EAX), Cdq, Idivl (Reg R11D)] ++ genMovMemlDest (Reg EAX) assign'
-            _ -> case src1' of 
+            _ -> case src1' of
                 Mem {} -> genMovMemlSrc src1' (Reg EAX) ++ [Cdq, Idivl src2'] ++ genMovMemlDest (Reg EAX) assign'
                 _ -> [Movl src1' (Reg EAX), Cdq, Idivl src2'] ++ genMovMemlDest (Reg EAX) assign'
 

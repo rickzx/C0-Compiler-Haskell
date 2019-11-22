@@ -30,7 +30,7 @@ ssaOptimize blks g pre fn =
         (bblk, allVars) = backToBlk edgeRemovedBlk
      in
 --        (trace $
---         "RemoveDead: \n" ++ show removeDead ++
+--         "RemoveDead: \n" ++ show eblk ++
 --         "\n\nToDelete: \n" ++ show toDelete' ++
 --         "\n\nToModify: \n" ++ show toModify' ++
 --         "\n\nedgeToRemove: \n" ++ show edgeToRemove' ++
