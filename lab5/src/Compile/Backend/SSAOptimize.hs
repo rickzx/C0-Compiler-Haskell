@@ -1,3 +1,5 @@
+{-# LANGUAGE BangPatterns, Strict #-}
+
 module Compile.Backend.SSAOptimize where
 
 import Compile.Backend.SSA
@@ -19,7 +21,7 @@ ssaOptimize ::
     -> Ident
     -> (Map.Map Ident Block, Set.Set Int, DiGraph Ident, Map.Map Ident (Map.Map Ident Int))
 ssaOptimize blks g pre fn =
-    let (eblk, defs, uses, sset, _) = enumBlks blks
+    let (eblk, defs, uses, sset, _, _) = enumBlks blks
         (nuses, toDelete) = deadCodeElim defs uses (Set.fromList (Map.keys defs)) Set.empty
         (removeDead, _) = removeStmts eblk (toDelete, Map.empty, Map.empty)
         (toDelete', toModify', edgeToRemove) = constantProp nuses sset (Set.empty, Map.empty, Map.empty)
@@ -27,14 +29,14 @@ ssaOptimize blks g pre fn =
         (edgeRemovedBlk, newg, newpre) = elimUnreachable propConst edgeToRemove' g pre fn
         (bblk, allVars) = backToBlk edgeRemovedBlk
      in
-        (trace $
-         "RemoveDead: \n" ++ show removeDead ++
-         "\n\nToDelete: \n" ++ show toDelete' ++
-         "\n\nToModify: \n" ++ show toModify' ++
-         "\n\nedgeToRemove: \n" ++ show edgeToRemove' ++
-         "\n\nFinalRemoved: \n" ++ show bblk ++
-         "\n\nNewGraph: \n" ++ show newg ++
-         "\n\nNewPre: \n" ++ show newpre)
+--        (trace $
+--         "RemoveDead: \n" ++ show removeDead ++
+--         "\n\nToDelete: \n" ++ show toDelete' ++
+--         "\n\nToModify: \n" ++ show toModify' ++
+--         "\n\nedgeToRemove: \n" ++ show edgeToRemove' ++
+--         "\n\nFinalRemoved: \n" ++ show bblk ++
+--         "\n\nNewGraph: \n" ++ show newg ++
+--         "\n\nNewPre: \n" ++ show newpre)
             (bblk, allVars, newg, newpre)
 
 --        (trace $ "RemoveDead: \n" ++ show removeDead ++ "\n\nToDelete: \n" ++ show toDelete' ++ "\n\nToModify: \n" ++ show toModify' ++ "\n\nFinal\n" ++ show bblk)
@@ -90,32 +92,32 @@ getDefUse (AAsmS _ _ aasm) =
                 ACJump' _ val1 val2 _ _ -> (Nothing, getLocs [val1, val2])
                 _ -> (Nothing, Set.empty)
 
-enumBlks :: Map.Map Ident Block -> (Map.Map Ident [StmtS], Map.Map ALoc StmtS, Map.Map ALoc [StmtS], Set.Set StmtS, Int)
+enumBlks :: Map.Map Ident Block -> (Map.Map Ident [StmtS], Map.Map ALoc StmtS, Map.Map ALoc [StmtS], Set.Set StmtS, Map.Map Int StmtS, Int)
 enumBlks =
     Map.foldrWithKey'
-        (\lab (phis, aasms) (m, def, use, sset, next) ->
-             let (phists, phidef, phiuse, phisset, phinext) =
-                     foldr
-                         (\(a, a') (sts, def', use', sset', next') ->
+        (\lab (phis, aasms) (m, def, use, sset, smap, next) ->
+             let (phists, phidef, phiuse, phisset, phismap, phinext) =
+                     foldl
+                         (\(sts, def', use', sset', smap', next') (a, a') ->
                               let st = PhiS next' lab (a, a')
                                   (dfnst, usest) = getDefUse st
                                   ndef = maybe def' (\x -> Map.insert x st def') dfnst
                                   nuse = foldr (\u usemap -> insertHelper u st usemap) use' usest
-                               in (st : sts, ndef, nuse, Set.insert st sset', next' + 1))
-                         ([], def, use, sset, next)
+                               in (st : sts, ndef, nuse, Set.insert st sset', Map.insert next' st smap', next' + 1))
+                         ([], def, use, sset, smap, next)
                          phis
-                 (aasmsts, aasmdef, aasmuse, aasmsset, aasmnext) =
-                     foldr
-                         (\aasm (sts, def', use', sset', next') ->
+                 (aasmsts, aasmdef, aasmuse, aasmsset, assmsmap, aasmnext) =
+                     foldl
+                         (\(sts, def', use', sset', smap', next') aasm ->
                               let st = AAsmS next' lab aasm
                                   (dfnst, usest) = getDefUse st
                                   ndef = maybe def' (\x -> Map.insert x st def') dfnst
                                   nuse = foldr (\u usemap -> insertHelper u st usemap) use' usest
-                               in (st : sts, ndef, nuse, Set.insert st sset', next' + 1))
-                         ([], phidef, phiuse, phisset, phinext)
+                               in (st : sts, ndef, nuse, Set.insert st sset', Map.insert next' st smap', next' + 1))
+                         ([], phidef, phiuse, phisset, phismap, phinext)
                          aasms
-              in (Map.insert lab (phists ++ aasmsts) m, aasmdef, aasmuse, aasmsset, aasmnext))
-        (Map.empty, Map.empty, Map.empty, Set.empty, 0)
+              in (Map.insert lab (reverse phists ++ reverse aasmsts) m, aasmdef, aasmuse, aasmsset, assmsmap, aasmnext))
+        (Map.empty, Map.empty, Map.empty, Set.empty, Map.empty, 0)
 
 removeStmts ::
        Map.Map Ident [StmtS]
@@ -508,6 +510,20 @@ elimUnreachable blks edgeToRemove g pre fn =
         initState = ElimState {elimTodo = Map.keys blks, elimBlk = blks, elimG = g, elimPre = pre}
      in evalState runElimUnreach initState
 
+deleteN :: Int -> [a] -> [a]
+deleteN _ []     = []
+deleteN i (a:as)
+   | i == 0    = as
+   | otherwise = a : deleteN (i-1) as     
+     
+deletePhiBlk :: Ord k => Map.Map k [StmtS] -> k -> Int -> Map.Map k [StmtS]
+deletePhiBlk blk n jth =
+    case Map.lookup n blk of
+        Just stmts -> Map.insert n (map (\st -> case st of
+            PhiS idx pb (a, ps) -> PhiS idx pb (a, deleteN jth ps)
+            _ -> st) stmts) blk
+        _ -> blk
+
 elimUnreachableM :: Map.Map Ident Ident -> Ident -> State ElimState ()
 elimUnreachableM edgeToRemove fn = do
     let loop = do
@@ -517,21 +533,28 @@ elimUnreachableM edgeToRemove fn = do
             unless (nme == fn) $ do
                 gra <- gets elimG
                 pre <- gets elimPre
+                blk <- gets elimBlk
                 let prenme = fromMaybe Map.empty (Map.lookup nme pre)
                     succnme = fromMaybe [] (Map.lookup nme gra)
-                    (npre', ng', allrem) =
-                        foldr
-                            (\p (np, ng, flag) ->
+                    (npre', ng', allrem, newblk) =
+                        Map.foldrWithKey'
+                            (\p jth (np, ng, flag, blk') ->
                                  if Map.member p edgeToRemove && edgeToRemove Map.! p == nme
-                                     then (removeEdgeP nme p np, removeEdge p nme ng, flag)
-                                     else (np, ng, False))
-                            (pre, gra, True)
-                            (Map.keys prenme)
+                                     then (removeEdgeP nme p np, removeEdge p nme ng, flag, deletePhiBlk blk' nme jth)
+                                     else (np, ng, False, blk))
+                            (pre, gra, True, blk)
+                            prenme
                 if allrem
-                    then let rempre = foldr (\s p -> removeEdgeP s nme p) npre' succnme
+                    then let 
+                             remblk = foldr (\s blk' -> 
+                                let
+                                    jth = (pre Map.! s) Map.! nme
+                                in
+                                    deletePhiBlk blk' s jth) newblk succnme
+                             rempre = foldr (\s p -> removeEdgeP s nme p) npre' succnme
                              remg = Map.delete nme ng'
-                          in modify' $ \(ElimState t b g p) -> ElimState (t ++ succnme) (Map.delete nme b) remg rempre
-                    else modify' $ \(ElimState t b g p) -> ElimState t b ng' npre'
+                          in modify' $ \(ElimState t b g p) -> ElimState (t ++ succnme) (Map.delete nme remblk) remg rempre
+                    else modify' $ \(ElimState t b g p) -> ElimState t newblk ng' npre'
             todos' <- gets elimTodo
             unless (null todos') loop
     todos <- gets elimTodo

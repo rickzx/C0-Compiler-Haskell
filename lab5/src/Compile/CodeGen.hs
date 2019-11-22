@@ -14,6 +14,7 @@ import Compile.Backend.LiveVariable
 import Compile.Backend.RegisterAlloc
 import Compile.Backend.SSA
 import Compile.Backend.SSAOptimize
+import Compile.Backend.SSARegAlloc
 import Compile.Types
 import qualified Data.List as List
 import qualified Data.Map as Map
@@ -55,10 +56,10 @@ generateFunc (fn, aasms, localVar) header trdict =
             Just _ -> hd ++ elim
             Nothing -> elim
         (coloring, stackVar, calleeSaved) = if length allVars >= 1000 then allStackColor allVars else
-            let  gr = computerInterfere trelim
+            let  gr = livenessAnalysis optSSA newP
               -- (trace $ "Interference graph: " ++ show graph ++ "\n\n")
                  precolor =
-                     Map.fromList
+                     (trace $ show gr)Map.fromList
                          [ (AReg 0, 0)
                          , (AReg 1, 3)
                          , (AReg 2, 4)
@@ -130,4 +131,4 @@ generateFunc (fn, aasms, localVar) header trdict =
                         _ -> x:remove_move(y:xs)
         fun = prolog ++ optinsts ++ epilog
         -- (trace $ "AAsm:\n" ++ show aasms ++ "\n\nRenamed:\n" ++ show renamed ++ "\n\nElim:\n" ++ show elim)
-     in concatMap (\line -> show line ++ "\n") fun
+     in (trace $ show elim)concatMap (\line -> show line ++ "\n") fun
