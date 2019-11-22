@@ -514,8 +514,8 @@ deleteN :: Int -> [a] -> [a]
 deleteN _ []     = []
 deleteN i (a:as)
    | i == 0    = as
-   | otherwise = a : deleteN (i-1) as     
-     
+   | otherwise = a : deleteN (i-1) as
+   
 deletePhiBlk :: Ord k => Map.Map k [StmtS] -> k -> Int -> Map.Map k [StmtS]
 deletePhiBlk blk n jth =
     case Map.lookup n blk of
@@ -545,8 +545,8 @@ elimUnreachableM edgeToRemove fn = do
                             (pre, gra, True, blk)
                             prenme
                 if allrem
-                    then let 
-                             remblk = foldr (\s blk' -> 
+                    then let
+                             remblk = foldr (\s blk' ->
                                 let
                                     jth = (pre Map.! s) Map.! nme
                                 in

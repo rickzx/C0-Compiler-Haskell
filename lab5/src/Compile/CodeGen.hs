@@ -53,4 +53,3 @@ generateFunc (fn, aasms, localVar) header trdict =
         colorssa = colorSSA fn optSSA newP allVars header serial trdict
     in
         colorssa
-        
