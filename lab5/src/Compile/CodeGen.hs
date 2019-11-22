@@ -55,7 +55,7 @@ module Compile.CodeGen where
             trelim = case Map.lookup fn trdict of
                 Just _ -> hd ++ elim
                 Nothing -> elim
-            (coloring, stackVar, calleeSaved) = if length allVars >= 1000 then allStackColor allVars else
+            (coloring, stackVar, calleeSaved) = if length allVars >= 10000 then allStackColor allVars else
                 let  gr = computerInterfere trelim
                   -- (trace $ "Interference graph: " ++ show graph ++ "\n\n")
                      precolor =

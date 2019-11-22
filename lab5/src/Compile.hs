@@ -26,7 +26,6 @@ import Compile.Frontend.CheckEAST
 import Compile.CodeGen
 import Data.Maybe (fromMaybe)
 import System.Environment
-import Compile.Frontend.EASTOptimize
 import Debug.Trace
 import qualified Data.Set as Set
 import qualified Data.Map as Map
@@ -57,7 +56,7 @@ compile job = do
                 allStructs = sord ++ structOrd header
             _ <- liftEIO $ checkEAST (hEast header) mockHeader
             tast <- liftEIO $ checkEAST east header
-            let optEast = optTAST tast
+            let optEast = tast
             case jobOutFormat job of
                 TC -> liftEIO (Right ()) -- By now, we should have thrown any typechecking errors
                 Asm -> writeString (jobOut job) $ asmGen optEast header allStructs (jobOutUnsafe job)
