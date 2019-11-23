@@ -76,6 +76,7 @@ Executable c0c
     , Compile.Backend.LiveVariable
     , Compile.Backend.TAST2AAsm
     , Compile.Backend.SSA
+    , Compile.Backend.SCC
     , Compile.Backend.Inline
     , Compile.Backend.SSAOptimize
     , Compile.Types.Assembly

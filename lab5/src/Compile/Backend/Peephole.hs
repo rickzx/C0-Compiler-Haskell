@@ -19,7 +19,9 @@ optTAST tast = case tast of
     TAssign x e b -> TAssign x e b
     TPtrAssign x a e -> TPtrAssign x a e
     TIf e et1 et2 -> TIf e (optTAST et1) (optTAST et2)
-    TWhile e et -> optLoop tast
+    TWhile e et -> let (opt, flag) = optLoop et
+        in
+            
     TRet e -> TRet e
     TNop -> tast
     TDecl x t et -> TDecl x t (optTAST et)
@@ -57,7 +59,7 @@ optLoop ::TAST -> TAST
 optLoop t@(TWhile e et) = let
         (useless, tast', flag) = checkUseless (t, TNop, True)
     in
-        if not flag then t else tast'
+        if not flag then TWhile e (optLoop et) else tast'
         where 
             checkUseless :: (TAST, TAST, Bool) -> (TAST, TAST,  Bool)
             checkUseless (t, accum, False) = (t, accum, False)
@@ -74,9 +76,23 @@ optLoop t@(TWhile e et) = let
                     if checksideEffect exp then 
                         case (b, checkNormal ident exp) of 
                             (True, _) -> TNop
-                            (_, True) -> (t, accum, b)
+                            (_, True) -> (t, t, b)
                             _ -> (t, accum, False)
                     else (t, accum, False)
+                TWhile exp t1 ->
+                    if checksideEffect exp then let
+                        (_, accum1, u2) = checkUseless (t1, accum, b)
+                    in
+                        (t, accum1, u2)
+                TDecl id tp t1 -> let
+                    (_, accum1, u1) = checkUseless(t1, accum, b)
+                    in
+                        if not u1 then (t, accum, False) else let
+                            accum' = TDecl id tp accum1
+                        in
+                            (t1, accum', u1)
+                TLeaf exp1 ->
+                    if checksideEffect exp1 then (t, t, b) else (t, t, False)
                 _ -> (t, accum, False)
                 
                         

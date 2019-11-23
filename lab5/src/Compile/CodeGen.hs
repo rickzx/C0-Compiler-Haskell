@@ -14,6 +14,7 @@ module Compile.CodeGen where
     import Compile.Backend.RegisterAlloc
     import Compile.Backend.SSA
     import Compile.Backend.SSAOptimize
+    import Compile.Backend.SCC
     import Compile.Types
     import Compile.Backend.Inline
     import qualified Data.List as List
@@ -49,7 +50,7 @@ module Compile.CodeGen where
                 | fn == "a bort" = "_c0_abort_local411"
                 | otherwise = "_c0_" ++ fn
             (renamed, finalblk, finalG, finalP, serial) = ssa aasms fname
-            (optSSA, allVars, newG, newP) = ssaOptimize renamed finalG finalP fname
+            (optSSA, allVars, newG, newP) = runSCC renamed finalG finalP fname
             elim = deSSA newP optSSA serial
             hd = [AControl $ ALab $ "_c0_"++ fn ++ "_ret", AAsm [AReg 9] ANop [ALoc $ AReg 9]]
             trelim = case Map.lookup fn trdict of

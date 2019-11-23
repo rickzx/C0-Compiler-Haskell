@@ -69,6 +69,8 @@ module Compile.Backend.SSA where
             Just _ -> m
             Nothing -> Map.insert k [] m
     
+    --Return type: (final version with SSA, final version to list, directed graph of blocks, 
+    --   Map block to (predicate, index of the predicate according to phi index), all the block #)
     ssa :: [AAsm]
         -> Ident
         -> (Map.Map Ident Block, [(Ident, Block)], DiGraph Ident, Map.Map Ident (Map.Map Ident Int), [Ident])
@@ -642,10 +644,11 @@ module Compile.Backend.SSA where
     completeJump g blks =
         Map.foldrWithKey'
             (\p cs blks' ->
+                -- (trace $ "blks" ++ show p ++ "    successor:" ++ show cs) 
                  foldr
                      (\c blks'' ->
                           if "E" `List.isPrefixOf` c
-                              then let (phi, aasms) = blks Map.! p
+                              then let (phi, aasms) = blks'' Map.! p
                                        paasms = reverse aasms
                                        next = head (g Map.! c)
                                        lastInst = head paasms
@@ -661,7 +664,8 @@ module Compile.Backend.SSA where
                                                        else AControl $ ACJump' op a b l1 c
                                                _ -> error $ "Cannot have multiple successors: " ++ show p
                                        newaasms = reverse (newLastInst : tail paasms)
-                                    in Map.insert
+                                    in --(trace $ "Last Inst " ++ show newLastInst) 
+                                        Map.insert
                                            c
                                            ([], [AControl $ ALab c, AControl $ AJump next])
                                            (Map.insert p (phi, newaasms) blks'')
