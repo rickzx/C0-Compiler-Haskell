@@ -36,7 +36,7 @@ mcs graph preColor =
 
 -- Color the inteference graph using simplicial elimination ordering
 color :: Graph -> [ALoc] -> Coloring -> (Coloring, Int, [Register])
-color graph seo preColor = (coloring, maximum [maxColor - length regOrder + 3, 0], calleeSaved)
+color graph seo preColor = (coloring, max (maxColor - length regOrder + 3) 0, calleeSaved)
     where
     lowestColor c =
         let colors = Set.fromList $ Map.elems c

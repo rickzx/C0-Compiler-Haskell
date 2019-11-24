@@ -247,13 +247,10 @@ isTemp :: ALoc -> Bool
 isTemp (ATemp _) = True
 isTemp _ = False
 
+
 isTemp' :: AVal -> Bool
 isTemp' (ALoc (ATemp _)) = True
 isTemp' _ = False
-
-unroll :: AVal -> ALoc
-unroll (ALoc (ATemp x)) = ATemp x
-unroll _ = error "Error in unroll"
 
 genLocs :: [AVal] -> Set.Set ALoc
 genLocs [] = Set.empty

@@ -45,8 +45,11 @@ generateFunc (fn, aasms, localVar) header trdict =
             | Map.member fn (fnDecl header) = fn
             | fn == "a bort" = "_c0_abort_local411"
             | otherwise = "_c0_" ++ fn
-        (renamed, finalblk, finalG, finalP, serial) = ssa aasms fname
-        (optSSA, allVars, newG, newP) = runSCC renamed finalG finalP fname
-        colorssa = colorSSA fn optSSA newP allVars header serial trdict
+        (renamed, finalG, finalP, serial, allvars) = ssa aasms fname
+--        (optSSA', allVars',_ , newP') = runSCC renamed finalG finalP fname
+        
+        (optSSA, _, newG, newP) = ssaOptimize renamed finalG finalP fname
+        (optSSA', allVars', _, newP') = runSCC optSSA newG newP fname
+        colorssa = colorSSA fn optSSA' newP' allVars' header serial trdict
     in
         colorssa

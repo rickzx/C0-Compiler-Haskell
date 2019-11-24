@@ -291,7 +291,7 @@ colorSSA fn blk pre livevars header serial trdict =
         (col, stackVar, calleeSaved, deparmove, substVal) =
             if length livevars >= 2000
                 then let (c, s, cs) = allStackColor livevars
-                         dpm = deSSA pre blk serial c
+                         (dpm, pintf) = deSSA pre blk serial c
                       in (c, s, cs, dpm, Map.empty)
                 else let intf = livenessAnalysis nblk npre isTL
                          precolor =
@@ -306,8 +306,9 @@ colorSSA fn blk pre livevars header serial trdict =
                                  , (AReg 9, 7)
                                  ]
                          seo = mcs intf precolor
-                         (c, s, cs) = color intf seo precolor
-                         dpm = deSSA pre blk serial c
+                         (c, _, _) = color intf seo precolor
+                         (dpm, pintf) = deSSA pre blk serial c
+                         intf' = foldr (\(u, v) m -> addEdge (u, v) (addEdge (v, u) m)) intf pintf
                          (allmovs, allmovvars) =
                              foldr
                                  (\aasm (movs, movvars) ->
@@ -324,7 +325,11 @@ colorSSA fn blk pre livevars header serial trdict =
                          allvars = Set.toList allmovvars
                          int2tmp = Map.fromList (zip [0 ..] allvars)
                          tmp2int = Map.fromList (zip allvars [0 ..])
-                         (coalescedColor, substVal') = coalescing intf c allmovs tmp2int int2tmp
+                         (coalescedColor, substVal') = coalescing intf' c allmovs tmp2int int2tmp
+                         maxcol = Map.foldr max 0 coalescedColor
+                         s = max (maxcol - length regOrder + 3) 0
+                         cs = if maxcol <= 6 then [] else drop 7 (take (maxcol + 1) regOrder)
+                         -- (trace $ show intf' ++ "\n\n" ++ show coalescedColor ++ "\n\n" ++ show substVal' ++ "\n\n" ++ show dpm)
                       in (coalescedColor, s, cs, dpm, substVal')
         nonTrivial asm =
             case asm of
@@ -372,7 +377,6 @@ colorSSA fn blk pre livevars header serial trdict =
                              map (Popq . Reg . toReg64) (reverse calleeSaved) ++ [Popq (Reg RBP), Ret]
                         else [Label $ fname ++ "_ret"] ++
                              map (Popq . Reg . toReg64) (reverse calleeSaved) ++ [Popq (Reg RBP), Ret]
-        -- (trace $ show intf ++ "\n\n" ++ show coalescedColor ++ "\n\n" ++ show substVal ++ "\n\n" ++ show deparmove)
         insts = concatMap (\x -> List.filter nonTrivial (toAsm x col header substVal)) deparmove
         optinsts = remove_move insts
           where
@@ -396,15 +400,26 @@ colorSSA fn blk pre livevars header serial trdict =
                     _ -> x : remove_move (y : xs)
         fun = prolog ++ optinsts ++ epilog
      in concatMap (\line -> show line ++ "\n") fun
-
 insertAt :: [a] -> Int -> [a] -> [a]
 insertAt newElement 0 as = newElement ++ as
 insertAt newElement i (a:as) = a : insertAt newElement (i - 1) as
 
-deBlocks :: Map.Map Ident (Map.Map Ident Int) -> Map.Map Ident Block -> Coloring -> Map.Map Ident [AAsm]
+parCopyInterfere :: [(AVal, ALoc)] -> Set.Set (ALoc, ALoc)
+parCopyInterfere copies =
+    let (intf, _) = foldr (\(src, dst) (intf', live') ->
+                let
+                    nlive = case src of
+                                AImm _ -> Set.delete dst live'
+                                _ -> Set.insert (unroll src) (Set.delete dst live')
+                in
+                    (foldr (\nl s -> Set.insert (dst, nl) s) intf' nlive, nlive)) (Set.empty, Set.empty) copies
+    in
+        intf
+
+deBlocks :: Map.Map Ident (Map.Map Ident Int) -> Map.Map Ident Block -> Coloring -> (Map.Map Ident [AAsm], Set.Set (ALoc, ALoc))
 deBlocks pre blks coloring =
     Map.foldrWithKey'
-        (\nme (phis, _) m ->
+        (\nme (phis, _) (m, intf) ->
              if not (null phis)
                  then let colorPhis = map (phiColor coloring) phis
                           numphi = length $ snd (head phis)
@@ -412,22 +427,23 @@ deBlocks pre blks coloring =
                           dest = map (\(p, p') -> (fst p, fst p')) $ zip colorPhis phis
                           srcs = map (getcolumn $ zip colorPhis phis) [0 .. (numphi - 1)]
                        in Map.foldrWithKey'
-                              (\prdc idx m' ->
+                              (\prdc idx (m', intf') ->
                                    let copies = parallelCopy (srcs !! idx) dest (AReg 7)
                                        movs = foldr (\(s, d) l -> AAsm [d] ANopq [s] : l) [] copies
                                        paasms = fromMaybe (error "2") (Map.lookup prdc m')
                                        newpaasms = insertAt movs (length paasms - 1) paasms
-                                    in Map.insert prdc newpaasms m')
-                              m
+                                       pintf = parCopyInterfere copies
+                                    in (Map.insert prdc newpaasms m', Set.union pintf intf'))
+                              (m, intf)
                               (fromMaybe (error "3") (Map.lookup nme pre))
-                 else m)
-        (Map.map snd blks)
+                 else (m, intf))
+        (Map.map snd blks, Set.empty)
         blks
 
-deSSA :: Map.Map Ident (Map.Map Ident Int) -> Map.Map Ident Block -> [Ident] -> Coloring -> [AAsm]
+deSSA :: Map.Map Ident (Map.Map Ident Int) -> Map.Map Ident Block -> [Ident] -> Coloring -> ([AAsm], Set.Set (ALoc, ALoc))
 deSSA pre blks serial coloring =
-    let deblks = deBlocks pre blks coloring
-     in concatMap (\nme -> fromMaybe [] (Map.lookup nme deblks)) serial
+    let (deblks, pintf) = deBlocks pre blks coloring
+     in (concatMap (\nme -> fromMaybe [] (Map.lookup nme deblks)) serial, pintf)
 
 data CopyStatus
     = ToMove
