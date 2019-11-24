@@ -38,7 +38,7 @@ runSCC blks g pre fn =
         (edgeRemovedBlk, newg, newpre) = elimUnreachable propConst toRemove g pre fn
         (bblk, allVars) = backToBlk edgeRemovedBlk
     in
-         (trace $
+        -- (trace $
         --        "regular blk: \n" ++ show eblk ++
         --         "\n varmap: \n" ++ show nvarmap ++ 
         --         "\n blockmap: \n" ++ show nblkmap ++ 
@@ -47,9 +47,9 @@ runSCC blks g pre fn =
         --         "ToDelete: \n" ++ show toDelete ++
         --      "\n\nToModify: \n" ++ show toModify ++ 
             -- "Predecessor graph \n" ++ show pre ++
-            --  "\n\nBlockToRemove \n" ++ show toRemove ++ 
+        --      "\n\nBlockToRemove \n" ++ show toRemove ++ 
             --  "\n\nedgeToRemove: \n" ++ show toRemove ++ 
-            "\n\nFinalRemoved: \n" ++ show bblk)
+        --    "\n\nFinalRemoved: \n" ++ show bblk)
         --     "\n\nNewGraph: \n" ++ show newg ++
         --    "\n\nNewPre: \n" ++ show newpre)
         (bblk, allVars, newg, newpre)
@@ -415,14 +415,14 @@ changeStmt stmt loc c modset =
                         AGt -> c1 > c2
                         AGe -> c1 >= c2 
                 in  
-                    case Map.lookup lno modset of 
-                        Just sth@(AAsmS lno (AControl(ACJump' op (AImm c1) arg2 l1 l2))) -> if 
+                    case stmt' of 
+                        AAsmS lno (AControl(ACJump' op (AImm c1) arg2 l1 l2)) -> if 
                             foldop op c1 c then Map.insert lno (AAsmS lno (AControl $ AJump l1)) modset
                             else Map.insert lno (AAsmS lno (AControl $ AJump l2)) modset
-                        Just sth@(AAsmS lno (AControl(ACJump' op arg1 (AImm c2) l1 l2))) -> if 
+                        AAsmS lno (AControl(ACJump' op arg1 (AImm c2) l1 l2)) -> if 
                             foldop op c c2 then Map.insert lno (AAsmS lno (AControl $ AJump l1)) modset
                             else Map.insert lno (AAsmS lno (AControl $ AJump l2)) modset
-                        Nothing 
+                        AAsmS lno (AControl (ACJump' op arg1 arg2 l1 l2))
                             | arg1 == arg2 ->
                                 if foldop op c c then                               
                                 Map.insert lno (AAsmS lno (AControl $ AJump l1)) modset else
@@ -475,17 +475,17 @@ changeStmtDebug stmt loc c modset =
                         AGt -> c1 > c2
                         AGe -> c1 >= c2 
                 in  
-                    case Map.lookup lno modset of 
-                        Just sth@(AAsmS lno (AControl(ACJump' op (AImm c1) arg2 l1 l2))) -> if 
+                    case stmt' of 
+                        AAsmS lno (AControl(ACJump' op (AImm c1) arg2 l1 l2)) -> if 
                             foldop op c1 c then (trace $
-                            "change stmt:" ++ show loc ++ "to" ++ show c ++ "\n" ++ show sth)Map.insert lno (AAsmS lno (AControl $ AJump l1)) modset
+                            "change stmt:" ++ show loc ++ "to" ++ show c ++ "\n" ++ show stmt')Map.insert lno (AAsmS lno (AControl $ AJump l1)) modset
                             else (trace $
-                            "change stmt:" ++ show loc ++ "to" ++ show c ++ "\n" ++ show sth)Map.insert lno (AAsmS lno (AControl $ AJump l2)) modset
-                        Just sth@(AAsmS lno (AControl(ACJump' op arg1 (AImm c2) l1 l2))) -> if 
+                            "change stmt:" ++ show loc ++ "to" ++ show c ++ "\n" ++ show stmt')Map.insert lno (AAsmS lno (AControl $ AJump l2)) modset
+                        AAsmS lno (AControl(ACJump' op arg1 (AImm c2) l1 l2)) -> if 
                             foldop op c c2 then (trace $
-                            "change stmt:" ++ show loc ++ "to" ++ show c ++ "\n" ++ show sth)Map.insert lno (AAsmS lno (AControl $ AJump l1)) modset
+                            "change stmt:" ++ show loc ++ "to" ++ show c ++ "\n" ++ show stmt')Map.insert lno (AAsmS lno (AControl $ AJump l1)) modset
                             else Map.insert lno (AAsmS lno (AControl $ AJump l2)) modset
-                        Nothing 
+                        AAsmS lno (AControl (ACJump' op arg1 arg2 l1 l2))
                             | arg1 == arg2 ->
                                 if foldop op c c then(trace $ "change stmt:" ++ show loc ++ "to" ++ show c ++ "\n" ++ show stmt)                                  
                                 Map.insert lno (AAsmS lno (AControl $ AJump l1)) modset else
@@ -521,7 +521,19 @@ modifyStmts (varmap, defmap, usemap) (toDelete, toModify) =
                     changeStmt x var c1 modify) mod usest
                 in
                     (del', modified)
-            _ -> (del, mod)
+            N -> 
+                let
+                    defsite = fromMaybe (error "we did something wrongN") (Map.lookup var defmap)
+                in
+                    (Set.insert (getLineNum defsite) del, mod)
+            _ ->
+                let
+                    defsite = fromMaybe (error "we did something wrongP") (Map.lookup var defmap)
+                    usest = fromMaybe [] (Map.lookup var usemap)
+                    del' = if null usest && not (hasSideEffect $ defmap Map.! var) then Set.insert (getLineNum defsite) del
+                        else del     
+                in
+                    (del', mod)
             ) (Set.empty, Map.empty) varmap
 
 --info of whether block is used -> predecessor graph -> Edge to remove block
