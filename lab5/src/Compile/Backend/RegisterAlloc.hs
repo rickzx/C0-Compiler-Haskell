@@ -78,10 +78,46 @@ regOrder =
     [EAX, EDI, ESI, EDX, ECX, R8D, R9D, R12D, R13D, R14D, R15D, EBX]   -- Reserve R11 for moves to and from the stack when necessary
 
 -- Map a variable in abstract assembly to a register / memory location
+mapToRegWithCoalescing :: ALoc -> Coloring -> Map.Map ALoc ALoc -> Operand
+mapToRegWithCoalescing (APtr aloc) coloring coalesce = 
+    let
+        aloc' = Maybe.fromMaybe aloc (Map.lookup aloc coalesce)
+    in
+        Mem (mapToReg64 aloc' coloring)
+mapToRegWithCoalescing (APtrq aloc) coloring coalesce =
+    let
+        aloc' = Maybe.fromMaybe aloc (Map.lookup aloc coalesce)
+    in
+        Mem (mapToReg64 aloc' coloring)
+mapToRegWithCoalescing APtrNull coloring coalesce = Mem (Imm 0)
+mapToRegWithCoalescing (AReg 7) coloring coalesce = Reg R10D
+mapToRegWithCoalescing aloc coloring coalesce = 
+    let
+        aloc' = Maybe.fromMaybe aloc (Map.lookup aloc coalesce)
+        coloringIdx = Maybe.fromMaybe 0 (Map.lookup aloc' coloring)
+    in
+        if coloringIdx < length regOrder
+            then Reg $ regOrder !! coloringIdx
+            else Mem' ((coloringIdx - length regOrder + 1) * 8) RSP
+
+-- 64 bit version of mapToReg
+mapToRegWithCoalescing64 :: ALoc -> Coloring -> Map.Map ALoc ALoc -> Operand
+mapToRegWithCoalescing64 (APtrq aloc) coloring coalesce = Mem (mapToRegWithCoalescing64 aloc coloring coalesce)
+mapToRegWithCoalescing64 APtrNull coloring coalesce = Mem (Imm 0)
+mapToRegWithCoalescing64 (AReg 7) coloring coalesce = Reg R10
+mapToRegWithCoalescing64 aloc coloring coalesce = case mappedReg of
+    Reg r -> Reg $ toReg64 r
+    _     -> mappedReg
+    where 
+        aloc' = Maybe.fromMaybe aloc (Map.lookup aloc coalesce)
+        mappedReg = mapToReg aloc' coloring
+
+-- Map a variable in abstract assembly to a register / memory location
 mapToReg :: ALoc -> Coloring -> Operand
 mapToReg (APtr aloc) coloring = Mem (mapToReg64 aloc coloring)
 mapToReg (APtrq aloc) coloring = Mem (mapToReg64 aloc coloring)
 mapToReg APtrNull coloring = Mem (Imm 0)
+mapToReg (AReg 7) coloring = Reg R10D
 mapToReg reg coloring = if coloringIdx < length regOrder
     then Reg $ regOrder !! coloringIdx
     else Mem' ((coloringIdx - length regOrder + 1) * 8) RSP
@@ -91,6 +127,7 @@ mapToReg reg coloring = if coloringIdx < length regOrder
 mapToReg64 :: ALoc -> Coloring -> Operand
 mapToReg64 (APtrq aloc) coloring = Mem (mapToReg64 aloc coloring)
 mapToReg64 APtrNull coloring = Mem (Imm 0)
+mapToReg64 (AReg 7) coloring = Reg R10
 mapToReg64 reg coloring = case mappedReg of
     Reg r -> Reg $ toReg64 r
     _     -> mappedReg

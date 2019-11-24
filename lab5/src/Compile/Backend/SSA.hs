@@ -247,6 +247,14 @@ isTemp :: ALoc -> Bool
 isTemp (ATemp _) = True
 isTemp _ = False
 
+isTemp' :: AVal -> Bool
+isTemp' (ALoc (ATemp _)) = True
+isTemp' _ = False
+
+unroll :: AVal -> ALoc
+unroll (ALoc (ATemp x)) = ATemp x
+unroll _ = error "Error in unroll"
+
 genLocs :: [AVal] -> Set.Set ALoc
 genLocs [] = Set.empty
 genLocs (x:rest) =
@@ -679,7 +687,7 @@ completeJump g blks =
              foldr
                  (\c blks'' ->
                       if "E" `List.isPrefixOf` c
-                          then let (phi, aasms) = blks Map.! p
+                          then let (phi, aasms) = blks'' Map.! p
                                    paasms = reverse aasms
                                    next = head (g Map.! c)
                                    lastInst = head paasms

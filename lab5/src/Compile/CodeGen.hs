@@ -8,15 +8,12 @@
 -}
 module Compile.CodeGen where
 
-import Compile.Backend.AAsm2Asm
 import Compile.Backend.TAST2AAsm
-import Compile.Backend.LiveVariable
-import Compile.Backend.RegisterAlloc
 import Compile.Backend.SSA
+import Compile.Backend.SCC
 import Compile.Backend.SSAOptimize
 import Compile.Backend.SSARegAlloc
 import Compile.Types
-import qualified Data.List as List
 import qualified Data.Map as Map
 import Debug.Trace
 
@@ -49,7 +46,7 @@ generateFunc (fn, aasms, localVar) header trdict =
             | fn == "a bort" = "_c0_abort_local411"
             | otherwise = "_c0_" ++ fn
         (renamed, finalblk, finalG, finalP, serial) = ssa aasms fname
-        (optSSA, allVars, newG, newP) = ssaOptimize renamed finalG finalP fname
+        (optSSA, allVars, newG, newP) = runSCC renamed finalG finalP fname
         colorssa = colorSSA fn optSSA newP allVars header serial trdict
     in
         colorssa
