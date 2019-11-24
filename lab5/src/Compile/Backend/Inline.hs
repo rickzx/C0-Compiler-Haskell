@@ -15,14 +15,6 @@ import qualified Data.Set as Set
 findAAsmMap :: [(Ident, ([AAsm], Int))] -> Map.Map Ident [AAsm]
 findAAsmMap = foldr (\(id, (aasm, _)) fnmap -> Map.insert id aasm fnmap) Map.empty
 
--- inline :: ([(Ident, ([AAsm], Int))], Map.Map String String) -> 
---     Map.Map Ident [AAsm] -> 
---     ([(Ident, ([AAsm], Int))], Map.Map String String)
--- inline (l, trrec) fnmap = let
---         indexed = List.zip l [0..]
---     in
---         (map (\((id, (aasm, a)), index) -> (id, (mapinline aasm fnmap trrec index, a))) indexed,
---         trrec)
 
 inline :: ([((Ident, ([AAsm], Int)), Int)], Map.Map String String, Map.Map Ident [AAsm])-> [((Ident, ([AAsm], Int)), Int)] -> 
     ([((Ident, ([AAsm], Int)), Int)], Map.Map String String, Map.Map Ident [AAsm])
@@ -37,6 +29,7 @@ inline (((id, (aasm, a)), index):xs, trec, fnmap) accum =
             inline (xs, trec, fnmap') (added:accum)
 
 --flag = we seen return in the basic block already
+--replace the function call with the function body. Remove redundant and not needed statemnts
 removeUseless :: Ident -> Int -> [AAsm] -> Bool -> [AAsm]
 removeUseless fn idx [] _ = 
     let
@@ -82,6 +75,7 @@ removeUseless fn idx (x:xs) flag=
                     AControl(ACJump' r a1 a2 newlabel1 newlabel2):removeUseless fn idx xs flag
             _ -> if flag then removeUseless fn idx xs flag else x:removeUseless fn idx xs flag
 
+--apply for each function of a reasonable length
 --(AAsm before, map fn -> translated, Map fn-> recursive or not, Count for generating label) 
 mapinline :: (Ident, [AAsm]) -> Map.Map Ident [AAsm] -> Map.Map String String -> Int -> Int -> [AAsm]
 mapinline (_,[]) _fnmap _trrec _idx _cnt = []
