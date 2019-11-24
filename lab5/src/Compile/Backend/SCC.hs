@@ -86,6 +86,7 @@ scc :: Map.Map Ident [StmtS] -- Set of all stmts
     -> (Map.Map ALoc Value, Map.Map Ident Bool, Map.Map ALoc StmtS, Map.Map ALoc [StmtS])
 scc stmts varwork blockwork vmap usemap (varmap, blockmap) 
     | null varwork && null blockwork = (varmap, blockmap, vmap, usemap) 
+    --look through all blocks first then we find new blocks through variable worklist
     | not(null blockwork) =
         --worklist for blocks non empty, we can keep going
         let
@@ -512,7 +513,7 @@ modifyStmts ::
 modifyStmts (varmap, defmap, usemap) (toDelete, toModify) = 
     Map.foldrWithKey'(\var val (del, mod) ->
         case val of 
-            --we remove these statements
+            --we remove these variables with constant value definition and replace their use with constant
             Const c1 -> let 
                 usest = fromMaybe [] (Map.lookup var usemap)
                 defsite = fromMaybe (error "we did somthing wrong") (Map.lookup var defmap)
@@ -521,6 +522,7 @@ modifyStmts (varmap, defmap, usemap) (toDelete, toModify) =
                     changeStmt x var c1 modify) mod usest
                 in
                     (del', modified)
+            --if the variable never has a value, we remove where it is defined
             N -> 
                 let
                     defsite = fromMaybe (error "we did something wrongN") (Map.lookup var defmap)
@@ -530,6 +532,7 @@ modifyStmts (varmap, defmap, usemap) (toDelete, toModify) =
                 let
                     defsite = fromMaybe (error "we did something wrongP") (Map.lookup var defmap)
                     usest = fromMaybe [] (Map.lookup var usemap)
+                    --if never used, dead code
                     del' = if null usest && not (hasSideEffect $ defmap Map.! var) then Set.insert (getLineNum defsite) del
                         else del     
                 in

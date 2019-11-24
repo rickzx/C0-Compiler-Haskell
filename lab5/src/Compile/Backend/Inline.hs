@@ -20,6 +20,7 @@ inline :: ([((Ident, ([AAsm], Int)), Int)], Map.Map String String, Map.Map Ident
     ([((Ident, ([AAsm], Int)), Int)], Map.Map String String, Map.Map Ident [AAsm])
 inline ([], trec, fnmap) accum = (accum, trec, fnmap)
 inline (((id, (aasm, a)), index):xs, trec, fnmap) accum = 
+    -- if function is too long, we dont do inline since replacing code is very time costly and mess up register
     if length aasm > 150 then inline (xs, trec, fnmap) (((id, (aasm, a)), index):accum) else
         let 
             processed = mapinline (id, aasm) fnmap trec index 1
@@ -106,6 +107,7 @@ mapinline (id, x:xs) fnmap trrec idx cnt = case x of
     _ -> x : mapinline (id, xs) fnmap trrec idx cnt
 
 inlineOpt :: ([(Ident, ([AAsm], Int))], Map.Map String String) -> ([(Ident, ([AAsm], Int))], Map.Map String String)
+--if a file has too many functions, inlining is too inefficient.
 inlineOpt (fnlist, trmap) = if length fnlist > 99 then (fnlist, trmap) else let
             indexed = List.zip fnlist [0..]
             funmap = findAAsmMap fnlist
