@@ -273,10 +273,11 @@ colorSSA fn blk pre livevars header serial trdict optimization =
             | Map.member fn (fnDecl header) = fn
             | fn == "a bort" = "_c0_abort_local411"
             | otherwise = "_c0_" ++ fn
-        isTL = case Map.lookup fn trdict of
-            Just "ADD" -> True
-            Just "MUL" -> True
-            _ -> False
+        isTL =
+            case Map.lookup fn trdict of
+                Just "ADD" -> True
+                Just "MUL" -> True
+                _ -> False
         nblk =
             if isTL
                 then Map.insert
@@ -314,7 +315,7 @@ colorSSA fn blk pre livevars header serial trdict optimization =
                                  , (AReg 9, 7)
                                  ]
                          seo = mcs intf precolor
-                         (c, _, _) = color intf seo precolor
+                         (c, s'', cs'') = color intf seo precolor
                          (dpm, pintf) = deSSA pre blk serial c
                          intf' = foldr (\(u, v) m -> addEdge (u, v) (addEdge (v, u) m)) intf pintf
                          (allmovs, allmovvars) =
@@ -330,29 +331,30 @@ colorSSA fn blk pre livevars header serial trdict optimization =
                                           _ -> (movs, movvars))
                                  ([], Set.empty)
                                  dpm
-                         allvars = Set.toList allmovvars
-                         int2tmp = Map.fromList (zip [0 ..] allvars)
-                         tmp2int = Map.fromList (zip allvars [0 ..])
-                         (coalescedColor, substVal') = coalescing intf' c allmovs tmp2int int2tmp
-                         maxcol =
-                             Map.foldrWithKey'
-                                 (\l co mint ->
-                                      case l of
-                                          ATemp _ -> max co mint
-                                          _ -> mint)
-                                 0
-                                 coalescedColor
-                         s = max (maxcol - length regOrder + 3) 0
-                         cs =
-                             if maxcol <= 6
-                                 then []
-                                 else drop 7 (take (maxcol + 1) regOrder)
-                         cs' =
-                             if isTL && notElem R12D cs
-                                 then R12D : cs
-                                 else cs
-                         -- (trace $ show intf ++ "\n\n" ++ show c ++ "\n\n" ++ show coalescedColor ++ "\n\n" ++ show substVal' ++ "\n\n" ++ show dpm ++ "\n\n" ++ show blk)
-                      in (coalescedColor, s, cs', dpm, substVal')
+                      in (if length allmovs >= 1000
+                              then (c, s'', cs'', dpm, Map.empty)
+                              else (let allvars = Set.toList allmovvars
+                                        int2tmp = Map.fromList (zip [0 ..] allvars)
+                                        tmp2int = Map.fromList (zip allvars [0 ..])
+                                        (coalescedColor, substVal') = coalescing intf' c allmovs tmp2int int2tmp
+                                        maxcol =
+                                            Map.foldrWithKey'
+                                                (\l co mint ->
+                                                     case l of
+                                                         ATemp _ -> max co mint
+                                                         _ -> mint)
+                                                0
+                                                coalescedColor
+                                        s = max (maxcol - length regOrder + 3) 0
+                                        cs =
+                                            if maxcol <= 6
+                                                then []
+                                                else drop 7 (take (maxcol + 1) regOrder)
+                                        cs' =
+                                            if isTL && notElem R12D cs
+                                                then R12D : cs
+                                                else cs
+                                     in (coalescedColor, s, cs', dpm, substVal')))
         nonTrivial asm =
             case asm of
                 Movl op1 op2 -> op1 /= op2

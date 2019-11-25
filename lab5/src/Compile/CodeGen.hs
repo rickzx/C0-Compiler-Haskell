@@ -38,6 +38,12 @@ asmGen tast header structs unsafe optimization =
         globs = map (\(x, _) -> if x == "a bort" then Global "_c0_abort_local411" else Global $ "_c0_" ++ x) tastGen
         globString = concatMap (\line -> show line ++ "\n") globs
      in globString ++ concatMap (\(fn, (aasms, lv)) -> generateFunc (fn, aasms, lv) header tr optimization) tastGen ++ memerr
+     
+getBlkLength :: Map.Map Ident Block -> Int
+getBlkLength = Map.foldr (\(_, as) acc -> acc + length as) 0
+
+getBlkComplexity :: DiGraph Ident -> Int
+getBlkComplexity = Map.foldr (\ngbrs acc -> acc + length ngbrs) 0
 
 generateFunc :: (String, [AAsm], Int) -> Header -> Map.Map String String -> Int -> String
 generateFunc (fn, aasms, localVar) header trdict optimization =
@@ -49,7 +55,7 @@ generateFunc (fn, aasms, localVar) header trdict optimization =
 --        (optSSA', allVars',_ , newP') = runSCC renamed finalG finalP fname
         (optSSA, allVars, newG, newP) = ssaOptimize renamed finalG finalP fname
         colorssa =
-            if length allVars >= 7000 && optimization == 0
+            if length allVars >= 1000
                 then colorSSA fn optSSA newP allVars header serial trdict optimization
                 else let (optSSA', allVars', _, newP') = runSCC optSSA newG newP fname
                       in colorSSA fn optSSA' newP' allVars' header serial trdict optimization
