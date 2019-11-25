@@ -77,6 +77,7 @@ Executable c0c
     , Compile.Backend.TAST2AAsm
     , Compile.Backend.SSA
     , Compile.Backend.Inline
+    , Compile.Backend.Peephole
     , Compile.Backend.SSAOptimize
     , Compile.Types.Assembly
     , Compile.Types.Job

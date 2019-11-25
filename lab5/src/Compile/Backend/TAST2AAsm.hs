@@ -275,7 +275,7 @@ genTast (TRet expr) = do
                 return $ gen ++ [AControl $ AJump $ fname ++ "_ret"]
         Just e@(TBinop b exp1 (TFunc fun args _tp)) -> if fun == fn then
             case b of
-                Add -> do
+                Add | fn /= "fn" -> do
                         startid <- State.gets currentIDStart
                         n <- getNewUniqueID
                         accum <- genExp exp1 (ATemp n)

@@ -67,6 +67,9 @@ constantFold (TBinop LAnd e1 e2) = let
     in
         case (fold1, fold2) of
             (TF, _) -> TF
+            (_, TF) -> TF
+            (TT, _) -> fold2
+            (_, TT) -> fold1
             _ -> TBinop LAnd fold1 fold2
 constantFold (TBinop LOr e1 e2) = let
         fold1 = constantFold e1
@@ -74,6 +77,9 @@ constantFold (TBinop LOr e1 e2) = let
     in
         case (fold1, fold2) of
             (TT, _) -> TT
+            (TF, _) -> fold2
+            (_, TT) -> TT
+            (_, TF) -> fold1
             _ -> TBinop LOr fold1 fold2
 constantFold (TBinop Lt e1 e2) = let
         fold1 = constantFold e1

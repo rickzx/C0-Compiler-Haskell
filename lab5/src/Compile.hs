@@ -24,6 +24,7 @@ import Compile.Frontend.EASTOptimize
 import Compile.Frontend.Elaborate
 import Compile.Lexer
 import Compile.Parser
+import Compile.Backend.Peephole
 import Compile.Types
 import qualified Data.Map as Map
 import Data.Maybe (fromMaybe)
@@ -57,7 +58,7 @@ compile job = do
                 allStructs = sord ++ structOrd header
             _ <- liftEIO $ checkEAST (hEast header) mockHeader
             tast <- liftEIO $ checkEAST east header
-            let optEast = optTAST tast
+            let optEast = optLoop $ optTAST tast
             case jobOutFormat job of
                 TC -> liftEIO (Right ()) -- By now, we should have thrown any typechecking errors
                 Asm ->
