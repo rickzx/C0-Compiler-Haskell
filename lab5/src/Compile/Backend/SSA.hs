@@ -253,6 +253,7 @@ isTemp' _ = False
 
 unroll :: AVal -> ALoc
 unroll (ALoc (ATemp x)) = ATemp x
+unroll (ALoc (AReg x)) = AReg x
 unroll _ = error "Error in unroll"
 
 genLocs :: [AVal] -> Set.Set ALoc

@@ -491,7 +491,7 @@ changeStmt stmt loc c modset =
                          ( dest
                          , map (\x ->
                                     if x == ALoc (loc)
-                                        then (AImm c)
+                                        then AImm c
                                         else x)
                                args))
                     modset
@@ -506,7 +506,7 @@ changeStmt stmt loc c modset =
                               op
                               (map (\x ->
                                         if x == ALoc (loc)
-                                            then (AImm c)
+                                            then AImm c
                                             else x)
                                    args)))
                     modset
@@ -521,7 +521,7 @@ changeStmt stmt loc c modset =
                               op
                               (map (\x ->
                                         if x == ALoc (loc)
-                                            then (AImm c)
+                                            then AImm c
                                             else x)
                                    args)))
                     modset
@@ -536,7 +536,7 @@ changeStmt stmt loc c modset =
                               lab
                               (map (\x ->
                                         if x == ALoc (loc)
-                                            then (AImm c)
+                                            then AImm c
                                             else x)
                                    args)
                               i))
@@ -545,7 +545,7 @@ changeStmt stmt loc c modset =
                 if c /= 0
                     then Map.insert lno (AAsmS lno pb (AControl $ AJump l1)) modset
                     else Map.insert lno (AAsmS lno pb (AControl $ AJump l2)) modset
-            AAsmS lno pb (AControl (ACJump' op arg1 arg2 l1 l2)) ->
+            AAsmS _lno _pb (AControl (ACJump' op arg1 arg2 l1 l2)) ->
                 let foldop op c1 c2 =
                         case op of
                             AEq -> c1 == c2
@@ -556,16 +556,16 @@ changeStmt stmt loc c modset =
                             ALe -> c1 <= c2
                             AGt -> c1 > c2
                             AGe -> c1 >= c2
-                 in case Map.lookup lno modset of
-                        Just sth@(AAsmS lno pb (AControl (ACJump' op (AImm c1) arg2 l1 l2))) ->
+                 in case stmt' of
+                        AAsmS lno pb (AControl (ACJump' op (AImm c1) arg2 l1 l2)) ->
                             if foldop op c1 c
                                 then Map.insert lno (AAsmS lno pb (AControl $ AJump l1)) modset
                                 else Map.insert lno (AAsmS lno pb (AControl $ AJump l2)) modset
-                        Just sth@(AAsmS lno pb (AControl (ACJump' op arg1 (AImm c2) l1 l2))) ->
+                        AAsmS lno pb (AControl (ACJump' op arg1 (AImm c2) l1 l2)) ->
                             if foldop op c c2
                                 then Map.insert lno (AAsmS lno pb (AControl $ AJump l1)) modset
                                 else Map.insert lno (AAsmS lno pb (AControl $ AJump l2)) modset
-                        Nothing
+                        AAsmS lno pb (AControl (ACJump' op arg1 arg2 l1 l2))
                             | arg1 == arg2 ->
                                 if foldop op c c
                                     then Map.insert lno (AAsmS lno pb (AControl $ AJump l1)) modset
@@ -574,7 +574,6 @@ changeStmt stmt loc c modset =
                                 Map.insert lno (AAsmS lno pb (AControl (ACJump' op (AImm c) arg2 l1 l2))) modset
                             | otherwise ->
                                 Map.insert lno (AAsmS lno pb (AControl (ACJump' op arg1 (AImm c) l1 l2))) modset
-                        _ -> modset
             _ -> modset
 
 changeStmtDebug :: StmtS -> ALoc -> Int -> Map.Map Int StmtS -> Map.Map Int StmtS
@@ -591,7 +590,7 @@ changeStmtDebug stmt loc c modset =
                          ( dest
                          , map (\x ->
                                     if x == ALoc (loc)
-                                        then (AImm c)
+                                        then AImm c
                                         else x)
                                args))
                     modset
@@ -607,7 +606,7 @@ changeStmtDebug stmt loc c modset =
                               op
                               (map (\x ->
                                         if x == ALoc (loc)
-                                            then (AImm c)
+                                            then AImm c
                                             else x)
                                    args)))
                     modset
@@ -622,12 +621,12 @@ changeStmtDebug stmt loc c modset =
                               [dest]
                               op
                               (map (\x ->
-                                        if x == ALoc (loc)
-                                            then (AImm c)
+                                        if x == ALoc loc
+                                            then AImm c
                                             else x)
                                    args)))
                     modset
-            AAsmS lno pb (ARet arg) ->
+            AAsmS lno pb (ARet _arg) ->
                 (trace $ "change stmt:" ++ show loc ++ "to" ++ show c ++ "\n" ++ show stmt)
                     Map.insert
                     lno
@@ -643,8 +642,8 @@ changeStmtDebug stmt loc c modset =
                          (ACall
                               lab
                               (map (\x ->
-                                        if x == ALoc (loc)
-                                            then (AImm c)
+                                        if x == ALoc loc
+                                            then AImm c
                                             else x)
                                    args)
                               i))
@@ -661,7 +660,7 @@ changeStmtDebug stmt loc c modset =
                              lno
                              (AAsmS lno pb (AControl $ AJump l2))
                              modset
-            AAsmS lno pb (AControl (ACJump' op arg1 arg2 l1 l2)) ->
+            AAsmS _lno _pb (AControl (ACJump' op arg1 arg2 l1 l2)) ->
                 let foldop op c1 c2 =
                         case op of
                             AEq -> c1 == c2
@@ -672,28 +671,28 @@ changeStmtDebug stmt loc c modset =
                             ALe -> c1 <= c2
                             AGt -> c1 > c2
                             AGe -> c1 >= c2
-                 in case Map.lookup lno modset of
-                        Just sth@(AAsmS lno pb (AControl (ACJump' op (AImm c1) arg2 l1 l2))) ->
+                 in case stmt' of
+                        AAsmS lno pb (AControl (ACJump' op (AImm c1) arg2 l1 l2)) ->
                             if foldop op c1 c
-                                then (trace $ "change stmt:" ++ show loc ++ "to" ++ show c ++ "\n" ++ show sth)
+                                then (trace $ "change stmt:" ++ show loc ++ "to" ++ show c ++ "\n" ++ show stmt')
                                          Map.insert
                                          lno
                                          (AAsmS lno pb (AControl $ AJump l1))
                                          modset
-                                else (trace $ "change stmt:" ++ show loc ++ "to" ++ show c ++ "\n" ++ show sth)
+                                else (trace $ "change stmt:" ++ show loc ++ "to" ++ show c ++ "\n" ++ show stmt')
                                          Map.insert
                                          lno
                                          (AAsmS lno pb (AControl $ AJump l2))
                                          modset
-                        Just sth@(AAsmS lno pb (AControl (ACJump' op arg1 (AImm c2) l1 l2))) ->
+                        AAsmS lno pb (AControl (ACJump' op arg1 (AImm c2) l1 l2)) ->
                             if foldop op c c2
-                                then (trace $ "change stmt:" ++ show loc ++ "to" ++ show c ++ "\n" ++ show sth)
+                                then (trace $ "change stmt:" ++ show loc ++ "to" ++ show c ++ "\n" ++ show stmt')
                                          Map.insert
                                          lno
                                          (AAsmS lno pb (AControl $ AJump l1))
                                          modset
                                 else Map.insert lno (AAsmS lno pb (AControl $ AJump l2)) modset
-                        Nothing
+                        AAsmS lno pb (AControl (ACJump' op arg1 arg2 l1 l2))
                             | arg1 == arg2 ->
                                 if foldop op c c
                                     then (trace $ "change stmt:" ++ show loc ++ "to" ++ show c ++ "\n" ++ show stmt)
@@ -747,20 +746,30 @@ modifyStmts (varmap, defmap, usemap) (toDelete, toModify) =
                                  mod
                                  usest
                       in (del', modified)
-                 _ -> (del, mod))
+                 N ->
+                     let defsite = fromMaybe (error "we did something wrongN") (Map.lookup var defmap)
+                      in (Set.insert (getLineNum defsite) del, mod)
+                 _ ->
+                     let defsite = fromMaybe (error "we did something wrongP") (Map.lookup var defmap)
+                         usest = fromMaybe [] (Map.lookup var usemap)
+                         del' =
+                             if null usest && not (hasSideEffect $ defmap Map.! var)
+                                 then Set.insert (getLineNum defsite) del
+                                 else del
+                      in (del', mod))
         (Set.empty, Map.empty)
         varmap
 
 --info of whether block is used -> predecessor graph -> Edge to remove block
 modifyBlocks :: Map.Map Ident Bool -> Map.Map Ident (Map.Map Ident Int) -> Map.Map Ident Ident
-modifyBlocks blockmap pred =
+modifyBlocks blockmap p =
     Map.foldrWithKey'
         (\blk use toRemove ->
              if not use
             --predecessors = fromMaybe (error "the block has no pred") (Map.lookup blk pred)
-                 then let predecessors = fromMaybe Map.empty (Map.lookup blk pred)
+                 then let pre = fromMaybe Map.empty (Map.lookup blk p)
                 -- (trace $ "The block" ++ show blk ++ "Predecessors to delete" ++ show predecessors ) 
-                       in Map.foldrWithKey' (\blks _ rem -> Map.insert blks blk rem) toRemove predecessors
+                       in Map.foldrWithKey' (\blks _ re -> Map.insert blks blk re) toRemove pre
                  else toRemove)
         Map.empty
         blockmap

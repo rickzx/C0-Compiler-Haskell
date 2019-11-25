@@ -169,8 +169,12 @@ toAsm (AAsm [assign] AMod [src1, src2]) coloring _ coalesce =
         [src1', src2'] = getRegAlloc [src1, src2] coloring False coalesce
      in case src2' of
             Imm _ -> [Movl src2' (Reg R11D), Movl src1' (Reg EAX), Cdq, Idivl (Reg R11D)] ++ genMovMemlDest (Reg EDX) assign'
-            Reg EAX -> [Movl src2' (Reg R11D), Movl src1' (Reg EAX), Cdq, Idivl (Reg R11D)] ++ genMovMemlDest (Reg EDX) assign' ++ [Movl (Reg R11D) (Reg EAX)]
-            Reg EDX -> [Movl src2' (Reg R11D), Movl src1' (Reg EAX), Cdq, Idivl (Reg R11D)] ++ genMovMemlDest (Reg EDX) assign' ++ [Movl (Reg R11D) (Reg EDX)]
+            Reg EAX -> case assign' of
+                Reg EAX -> [Movl src2' (Reg R11D), Movl src1' (Reg EAX), Cdq, Idivl (Reg R11D)] ++ genMovMemlDest (Reg EDX) assign'
+                _ -> [Movl src2' (Reg R11D), Movl src1' (Reg EAX), Cdq, Idivl (Reg R11D)] ++ genMovMemlDest (Reg EDX) assign' ++ [Movl (Reg R11D) (Reg EAX)]
+            Reg EDX -> case assign' of
+                Reg EDX -> [Movl src2' (Reg R11D), Movl src1' (Reg EAX), Cdq, Idivl (Reg R11D)]
+                _ -> [Movl src2' (Reg R11D), Movl src1' (Reg EAX), Cdq, Idivl (Reg R11D)] ++ genMovMemlDest (Reg EDX) assign' ++ [Movl (Reg R11D) (Reg EDX)]
             _ -> [Movl src1' (Reg EAX), Cdq, Idivl src2'] ++ genMovMemlDest (Reg EDX) assign'
 
 toAsm (AAsm [assign] AModq [src1, src2]) coloring _ coalesce =
@@ -178,8 +182,12 @@ toAsm (AAsm [assign] AModq [src1, src2]) coloring _ coalesce =
         [src1', src2'] = getRegAlloc [src1, src2] coloring True coalesce
      in case src2' of
             Imm _ -> [Movq src2' (Reg R11), Movq src1' (Reg RAX), Cqto, Idivq (Reg R11)] ++ genMovMemqDest (Reg RDX) assign'
-            Reg RAX -> [Movq src2' (Reg R11), Movq src1' (Reg RAX), Cqto, Idivq (Reg R11)] ++ genMovMemqDest (Reg RDX) assign'  ++ [Movq (Reg R11) (Reg RAX)]
-            Reg RDX -> [Movq src2' (Reg R11), Movq src1' (Reg RAX), Cqto, Idivq (Reg R11)] ++ genMovMemqDest (Reg RDX) assign'  ++ [Movq (Reg R11) (Reg RDX)]
+            Reg RAX -> case assign' of
+                Reg RAX -> [Movq src2' (Reg R11), Movq src1' (Reg RAX), Cqto, Idivq (Reg R11)] ++ genMovMemqDest (Reg RDX) assign'
+                _ -> [Movq src2' (Reg R11), Movq src1' (Reg RAX), Cqto, Idivq (Reg R11)] ++ genMovMemqDest (Reg RDX) assign' ++ [Movq (Reg R11) (Reg RAX)]
+            Reg RDX -> case assign' of
+                Reg RDX -> [Movq src2' (Reg R11), Movq src1' (Reg RAX), Cqto, Idivq (Reg R11)]
+                _ -> [Movq src2' (Reg R11), Movq src1' (Reg RAX), Cqto, Idivq (Reg R11)] ++ genMovMemqDest (Reg RDX) assign' ++ [Movq (Reg R11) (Reg RDX)]
             _ -> [Movq src1' (Reg RAX), Cqto, Idivq src2'] ++ genMovMemqDest (Reg RDX) assign'
 toAsm (AAsm [assign] ABAnd [src1, src2]) coloring _ coalesce =
     let assign' = mapToRegWithCoalescing assign coloring coalesce

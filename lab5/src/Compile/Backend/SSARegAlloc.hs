@@ -266,13 +266,17 @@ colorSSA ::
     -> Header
     -> [Ident]
     -> Map.Map String String
+    -> Int
     -> String
-colorSSA fn blk pre livevars header serial trdict =
+colorSSA fn blk pre livevars header serial trdict optimization =
     let fname
             | Map.member fn (fnDecl header) = fn
             | fn == "a bort" = "_c0_abort_local411"
             | otherwise = "_c0_" ++ fn
-        isTL = Map.member fn trdict
+        isTL = case Map.lookup fn trdict of
+            Just "ADD" -> True
+            Just "MUL" -> True
+            _ -> False
         nblk =
             if isTL
                 then Map.insert
@@ -288,8 +292,12 @@ colorSSA fn blk pre livevars header serial trdict =
             if isTL
                 then Map.insert fname (Map.singleton (fname ++ "_ret") 0) pre
                 else pre
+        threshold =
+            if optimization == 0
+                then 1000
+                else 2000
         (col, stackVar, calleeSaved, deparmove, substVal) =
-            if length livevars >= 2000
+            if length livevars >= threshold
                 then let (c, s, cs) = allStackColor livevars
                          (dpm, pintf) = deSSA pre blk serial c
                       in (c, s, cs, dpm, Map.empty)
@@ -326,11 +334,25 @@ colorSSA fn blk pre livevars header serial trdict =
                          int2tmp = Map.fromList (zip [0 ..] allvars)
                          tmp2int = Map.fromList (zip allvars [0 ..])
                          (coalescedColor, substVal') = coalescing intf' c allmovs tmp2int int2tmp
-                         maxcol = Map.foldr max 0 coalescedColor
+                         maxcol =
+                             Map.foldrWithKey'
+                                 (\l co mint ->
+                                      case l of
+                                          ATemp _ -> max co mint
+                                          _ -> mint)
+                                 0
+                                 coalescedColor
                          s = max (maxcol - length regOrder + 3) 0
-                         cs = if maxcol <= 6 then [] else drop 7 (take (maxcol + 1) regOrder)
-                         -- (trace $ show intf' ++ "\n\n" ++ show coalescedColor ++ "\n\n" ++ show substVal' ++ "\n\n" ++ show dpm)
-                      in (coalescedColor, s, cs, dpm, substVal')
+                         cs =
+                             if maxcol <= 6
+                                 then []
+                                 else drop 7 (take (maxcol + 1) regOrder)
+                         cs' =
+                             if isTL && notElem R12D cs
+                                 then R12D : cs
+                                 else cs
+                         -- (trace $ show intf ++ "\n\n" ++ show c ++ "\n\n" ++ show coalescedColor ++ "\n\n" ++ show substVal' ++ "\n\n" ++ show dpm ++ "\n\n" ++ show blk)
+                      in (coalescedColor, s, cs', dpm, substVal')
         nonTrivial asm =
             case asm of
                 Movl op1 op2 -> op1 /= op2
@@ -400,36 +422,50 @@ colorSSA fn blk pre livevars header serial trdict =
                     _ -> x : remove_move (y : xs)
         fun = prolog ++ optinsts ++ epilog
      in concatMap (\line -> show line ++ "\n") fun
+
 insertAt :: [a] -> Int -> [a] -> [a]
 insertAt newElement 0 as = newElement ++ as
 insertAt newElement i (a:as) = a : insertAt newElement (i - 1) as
 
-parCopyInterfere :: [(AVal, ALoc)] -> Set.Set (ALoc, ALoc)
+parCopyInterfere :: [(ParEntry, ParEntry)] -> Set.Set (ALoc, ALoc)
 parCopyInterfere copies =
-    let (intf, _) = foldr (\(src, dst) (intf', live') ->
-                let
-                    nlive = case src of
-                                AImm _ -> Set.delete dst live'
-                                _ -> Set.insert (unroll src) (Set.delete dst live')
-                in
-                    (foldr (\nl s -> Set.insert (dst, nl) s) intf' nlive, nlive)) (Set.empty, Set.empty) copies
-    in
-        intf
+    let (intf, _) =
+            foldr
+                (\(PE _ src, PE _ dst) (intf', live') ->
+                     let nlive =
+                             case src of
+                                 AImm _ -> Set.delete (unroll dst) live'
+                                 _ -> Set.insert (unroll src) (Set.delete (unroll dst) live')
+                      in (foldr (\nl s -> Set.insert (unroll dst, nl) s) intf' nlive, nlive))
+                (Set.empty, Set.empty)
+                copies
+     in intf
 
-deBlocks :: Map.Map Ident (Map.Map Ident Int) -> Map.Map Ident Block -> Coloring -> (Map.Map Ident [AAsm], Set.Set (ALoc, ALoc))
+deBlocks ::
+       Map.Map Ident (Map.Map Ident Int)
+    -> Map.Map Ident Block
+    -> Coloring
+    -> (Map.Map Ident [AAsm], Set.Set (ALoc, ALoc))
 deBlocks pre blks coloring =
     Map.foldrWithKey'
         (\nme (phis, _) (m, intf) ->
              if not (null phis)
                  then let colorPhis = map (phiColor coloring) phis
                           numphi = length $ snd (head phis)
-                          getcolumn ps i = map (\(p, p') -> (snd p !! i, snd p' !! i)) ps
-                          dest = map (\(p, p') -> (fst p, fst p')) $ zip colorPhis phis
+                          getcolumn ps i = map (\(p, p') -> PE (snd p !! i) (snd p' !! i)) ps
+                          dest = map (\(p, p') -> PE (fst p) (ALoc $ fst p')) $ zip colorPhis phis
                           srcs = map (getcolumn $ zip colorPhis phis) [0 .. (numphi - 1)]
                        in Map.foldrWithKey'
                               (\prdc idx (m', intf') ->
-                                   let copies = parallelCopy (srcs !! idx) dest (AReg 7)
-                                       movs = foldr (\(s, d) l -> AAsm [d] ANopq [s] : l) [] copies
+                                   let copies = parallelCopy (srcs !! idx) dest (PE (Reg R11) (ALoc $ AReg 7))
+                                       movs =
+                                           foldr
+                                               (\(PE _ s, PE _ d) l ->
+                                                    if s /= d
+                                                        then AAsm [unroll d] ANopq [s] : l
+                                                        else l)
+                                               []
+                                               copies
                                        paasms = fromMaybe (error "2") (Map.lookup prdc m')
                                        newpaasms = insertAt movs (length paasms - 1) paasms
                                        pintf = parCopyInterfere copies
@@ -439,8 +475,8 @@ deBlocks pre blks coloring =
                  else (m, intf))
         (Map.map snd blks, Set.empty)
         blks
-
-deSSA :: Map.Map Ident (Map.Map Ident Int) -> Map.Map Ident Block -> [Ident] -> Coloring -> ([AAsm], Set.Set (ALoc, ALoc))
+deSSA ::
+       Map.Map Ident (Map.Map Ident Int) -> Map.Map Ident Block -> [Ident] -> Coloring -> ([AAsm], Set.Set (ALoc, ALoc))
 deSSA pre blks serial coloring =
     let (deblks, pintf) = deBlocks pre blks coloring
      in (concatMap (\nme -> fromMaybe [] (Map.lookup nme deblks)) serial, pintf)
@@ -454,8 +490,8 @@ data CopyStatus
 data ParCopyState =
     ParCopyState
         { copyStat :: Map.Map Int CopyStatus
-        , emit :: [(Operand, Operand)]
-        , loc :: [Operand]
+        , emit :: [(ParEntry, ParEntry)]
+        , loc :: [ParEntry]
         }
 
 data UFInstruction
@@ -569,19 +605,26 @@ coalescingM interfGraph coloring movs tmp2int int2tmp = do
             movvars
     return (intf, col, finalRoots)
 
-parallelCopy :: [(Operand, AVal)] -> [(Operand, ALoc)] -> ALoc -> [(AVal, ALoc)]
+data ParEntry =
+    PE Operand AVal
+    deriving (Show)
+
+instance Eq ParEntry where
+    (==) (PE op1 _) (PE op2 _) = op1 == op2
+
+instance Ord ParEntry where
+    compare (PE op1 _) (PE op2 _) = compare op1 op2
+
+parallelCopy :: [ParEntry] -> [ParEntry] -> ParEntry -> [(ParEntry, ParEntry)]
 parallelCopy src dst tmp =
-    let srcMap = Map.insert (Reg R10) (ALoc tmp) (Map.fromList src)
-        dstMap = Map.insert (Reg R10) tmp (Map.fromList dst)
-        runParCopy = do
-            parallelCopyM (map fst src) (map fst dst) (Reg R10)
+    let runParCopy = do
+            parallelCopyM src dst tmp
             emits <- gets emit
-            let result = map (\(s, d) -> (srcMap Map.! s, dstMap Map.! d)) (reverse emits)
-            return result
+            return $ reverse emits
         initState = ParCopyState Map.empty [] []
      in evalState runParCopy initState
 
-parallelCopyM :: [Operand] -> [Operand] -> Operand -> State ParCopyState ()
+parallelCopyM :: [ParEntry] -> [ParEntry] -> ParEntry -> State ParCopyState ()
 parallelCopyM src dst tmp = do
     let n = length src
         cstat = foldr (\i m -> Map.insert i ToMove m) Map.empty [0 .. n - 1]
@@ -607,7 +650,7 @@ parallelCopyM src dst tmp = do
                     locs'' <- gets loc
                     modify' $ \(ParCopyState c e l) ->
                         ParCopyState (Map.insert i Moved c) ((locs'' !! i, dst !! i) : e) l
-                else modify' $ \(ParCopyState c e l) -> ParCopyState c ((locs !! i, locs !! i) : e) l
+                else modify' $ \(ParCopyState c e l) -> ParCopyState c ((locs !! i, dst !! i) : e) l
     foldM_
         (\_ i -> do
              stat <- gets copyStat

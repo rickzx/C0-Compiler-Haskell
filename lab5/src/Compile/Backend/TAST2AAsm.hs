@@ -366,6 +366,10 @@ genTast (TSDef _ _ e) = genTast e
 
 genSideEffect :: TExp -> CodeGenStateM [AAsm]
 genSideEffect (TFunc fn args _) = do
+    let fname =
+            if fn == "a bort"
+                then "_c0_abort_local411"
+                else "_c0_" ++ fn
     curr <- State.gets currentFunction
     let argLen = length args
     ids <- replicateM argLen getNewUniqueID

@@ -45,7 +45,7 @@ removeUseless fn idx [] _ =
         newlabel = show idx ++ retlabel
     in
         [AControl(AJump newlabel)]
-removeUseless fn idx (x:xs) flag= 
+removeUseless fn idx (x:xs) flag = 
     let 
         fname = if fn == "a bort" then "_c0_abort_local411" else "_c0_" ++ fn
         startlabel = fname ++ "_start"
@@ -61,23 +61,23 @@ removeUseless fn idx (x:xs) flag=
                         AControl(AJump newlabel):removeUseless fn idx xs True
                 | s == "memerror" -> x:removeUseless fn idx xs True
                 | otherwise -> let
-                        newlabel = show idx ++ s
+                        newlabel = show idx ++ "_" ++ s
                     in
                         AControl(AJump newlabel):removeUseless fn idx xs False
             AControl (ALab s) -> 
                 if s == startlabel then removeUseless fn idx xs flag
                 else let
-                        newlabel = show idx ++ s
+                        newlabel = show idx ++ "_" ++ s
                     in
                         AControl(ALab newlabel):removeUseless fn idx xs False
             AControl (ACJump a l1 l2) -> let
-                    newlabel1 = if l1 == "memerror" then l1 else show idx ++ l1
-                    newlabel2 = if l2 == "memerror" then l2 else show idx ++ l2
+                    newlabel1 = if l1 == "memerror" then l1 else show idx ++ "_" ++ l1
+                    newlabel2 = if l2 == "memerror" then l2 else show idx ++ "_" ++ l2
                 in if flag then removeUseless fn idx xs flag else
                     AControl(ACJump a newlabel1 newlabel2):removeUseless fn idx xs flag
             AControl (ACJump' r a1 a2 l1 l2) -> let
-                    newlabel1 = if l1 == "memerror" then l1 else show idx ++ l1
-                    newlabel2 = if l2 == "memerror" then l2 else show idx ++ l2
+                    newlabel1 = if l1 == "memerror" then l1 else show idx ++ "_" ++ l1
+                    newlabel2 = if l2 == "memerror" then l2 else show idx ++ "_" ++ l2
                 in if flag then removeUseless fn idx xs flag else
                     AControl(ACJump' r a1 a2 newlabel1 newlabel2):removeUseless fn idx xs flag
             _ -> if flag then removeUseless fn idx xs flag else x:removeUseless fn idx xs flag
@@ -93,17 +93,17 @@ mapinline (id, x:xs) fnmap trrec idx cnt = case x of
         in
             if len == 0 || not(null l) then x : mapinline (id, xs) fnmap trrec idx cnt else
                 case (len > 35, Map.lookup nme trrec) of
-                    (_, Just a) 
-                        | a == "MUL" || a == "ADD" || a == "REG" || a == id 
+                    (True, _) -> x: mapinline (id, xs) fnmap trrec idx cnt-- Way too long
+                    (_, Just a)
+                        | a == "MUL" || a == "ADD" || a == "REG" || a == id
                             -> x : mapinline (id, xs) fnmap trrec idx cnt --recursions are too complicated for fn inline
                         | otherwise -> let
                             fname = if nme == "a bort" then "_c0_abort_local411" else "_c0_" ++ nme
                             retlabel = show idx ++ fname ++ "_ret"
                             in
-                            removeUseless nme idx fungen False ++ 
+                            removeUseless nme idx fungen False ++
                                 [AControl $ ALab retlabel] ++ mapinline (id, xs) fnmap trrec (idx + cnt*99) (cnt+1)
-                    (True, Nothing) -> x: mapinline (id, xs) fnmap trrec idx cnt-- Way too long
-                    (False, Nothing) -> let
+                    (_, Nothing) -> let
                             fname = if nme == "a bort" then "_c0_abort_local411" else "_c0_" ++ nme
                             retlabel = show idx ++ fname ++ "_ret"
                             in
@@ -117,7 +117,7 @@ inlineOpt (fnlist, trmap) = if length fnlist > 99 then (fnlist, trmap) else let
             funmap = findAAsmMap fnlist
             (optimised, trlist, funmap') = inline (indexed, trmap, funmap) []
             useful = List.map(\(id, (aasm, c)) -> (id, 
-                (Maybe.fromMaybe(error "this hsould not happen")(Map.lookup id funmap'), c))) fnlist
+                (Maybe.fromMaybe(error "this should not happen")(Map.lookup id funmap'), c))) fnlist
         in
             (useful, trlist)
         --We can now delete the aasm tree for those small functions as they will never be called
