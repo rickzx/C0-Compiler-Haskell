@@ -14,10 +14,6 @@ import qualified Data.Set as Set
 
 import Debug.Trace
 
-type PhiA = (Operand, [Operand])
-
-type ColorBlock = ([PhiA], [Inst])
-
 data LivenessState =
     LivenessState
         { blkM :: Set.Set Ident
@@ -60,6 +56,7 @@ locsSet (x:rest) =
         ALoc (APtrq p) -> Set.insert p (locsSet rest)
         _ -> locsSet rest
 
+-- Get Used and Defined variables in a statement
 defUse :: StmtS -> Bool -> (Set.Set ALoc, Set.Set ALoc)
 defUse (PhiS _ _ (dest, srcs)) isTL = (Set.singleton dest, locsSet srcs)
 defUse (AAsmS _ _ aasm) isTL =
@@ -97,6 +94,7 @@ defUse (AAsmS _ _ aasm) isTL =
                 ACJump' _ val1 val2 _ _ -> (Set.empty, locsSet [val1, val2])
                 _ -> (Set.empty, Set.empty)
 
+-- Converting a basic-block into a list of statments with line numbers
 enumBlks ::
        Map.Map Ident Block
     -> Bool
@@ -128,6 +126,7 @@ enumBlks blk isTL =
         (Map.empty, Map.empty, Map.empty, Set.empty, Map.empty, 0)
         blk
 
+-- Generate interference graph from live analysis
 livenessAnalysis :: Map.Map Ident Block -> Map.Map Ident (Map.Map Ident Int) -> Bool -> Graph
 livenessAnalysis blk pre isTL =
     let (blks, defs, uses, _, smap, _) = enumBlks blk isTL
@@ -258,6 +257,7 @@ phiColor coloring (a, ps) =
         ps' = getRegAlloc ps coloring True Map.empty
      in (a', ps')
 
+-- Perform register allocation directly on SSA IR
 colorSSA ::
        String
     -> Map.Map Ident Block
@@ -443,6 +443,7 @@ parCopyInterfere copies =
                 copies
      in intf
 
+-- Deconstruct SSA to machine code
 deBlocks ::
        Map.Map Ident (Map.Map Ident Int)
     -> Map.Map Ident Block
@@ -520,6 +521,7 @@ findPredicate (x:xs) s =
         then Just x
         else findPredicate xs s
 
+-- Perform aggresive register coalescing
 coalescing ::
        Foldable t
     => Map.Map ALoc (Set.Set ALoc)
@@ -617,6 +619,7 @@ instance Eq ParEntry where
 instance Ord ParEntry where
     compare (PE op1 _) (PE op2 _) = compare op1 op2
 
+-- Perform parallel copy of src and dst registers
 parallelCopy :: [ParEntry] -> [ParEntry] -> ParEntry -> [(ParEntry, ParEntry)]
 parallelCopy src dst tmp =
     let runParCopy = do
