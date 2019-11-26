@@ -49,7 +49,7 @@ data TExp
 
 instance Show TAST where
     show (TSeq e1 e2) = "ESeq" ++ "(" ++ show e1 ++ " , "  ++ show e2 ++ ")"
-    show (TAssign lval leaf _b) = "EAssign" ++ "(" ++ show lval ++ " , " ++ show leaf ++ ")"
+    show (TAssign lval leaf b) = "EAssign" ++ "(" ++ show lval ++ " , " ++ show leaf ++ ")" ++ "(" ++ show b ++ ")"
     show (TPtrAssign lval asop expr1) = "EPtrAssign" ++ "(" ++ show lval ++ "," ++ show asop ++ "=" ++ "," ++ show expr1 ++ ")"
     show (TIf leaf e1 e2) = "Eif" ++ "(" ++ show leaf ++ " , " ++ show e1 ++ " , " ++ show e2 ++ ")"
     show (TWhile leaf e1) = "EWhile" ++ "(" ++ show leaf ++ " , " ++ show e1 ++ ")"

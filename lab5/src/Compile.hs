@@ -8,27 +8,28 @@
    Main compiler module; takes a job and compiles it
 -}
 module Compile
-  ( compile
-  , Job(..)
-  , defaultJob
-  , OF(..)
-  ) where
+    ( compile
+    , Job(..)
+    , defaultJob
+    , OF(..)
+    ) where
 
 import System.IO
 
 import Control.Monad.Trans.Except
 
-import Compile.Types
+import Compile.CodeGen
+import Compile.Frontend.CheckEAST
+import Compile.Frontend.EASTOptimize
+import Compile.Frontend.Elaborate
 import Compile.Lexer
 import Compile.Parser
-import Compile.Frontend.Elaborate
-import Compile.Frontend.CheckEAST
-import Compile.CodeGen
-import Data.Maybe (fromMaybe)
-import System.Environment
-import Debug.Trace
-import qualified Data.Set as Set
+import Compile.Types
 import qualified Data.Map as Map
+import Data.Maybe (fromMaybe)
+import qualified Data.Set as Set
+import Debug.Trace
+import System.Environment
 
 import LiftIOE
 
@@ -56,17 +57,26 @@ compile job = do
                 allStructs = sord ++ structOrd header
             _ <- liftEIO $ checkEAST (hEast header) mockHeader
             tast <- liftEIO $ checkEAST east header
-            let optEast = tast
+            let optEast = optTAST tast
             case jobOutFormat job of
                 TC -> liftEIO (Right ()) -- By now, we should have thrown any typechecking errors
-                Asm -> writeString (jobOut job) $ asmGen optEast header allStructs (jobOutUnsafe job)
-                Abs -> writeString (jobOut job) $ testPrintAAsm (codeGen optEast allStructs (jobOutUnsafe job)) (jobOut job)
+                Asm ->
+                    writeString (jobOut job) $
+                    asmGen optEast header allStructs (jobOutUnsafe job) (fromIntegral $ jobOptimization job)
+                Abs ->
+                    writeString (jobOut job) $
+                    testPrintAAsm
+                        (codeGen optEast allStructs (jobOutUnsafe job) (fromIntegral $ jobOptimization job))
+                        (jobOut job)
     case res of
         Left msg -> error msg
         Right () -> return ()
 
 addHeader :: String -> IO String
 addHeader pgm = do
-  os <- fromMaybe "Darwin" <$> lookupEnv "UNAME"
-  let entry = if os == "Darwin" then "\t.globl  __c0_main\n__c0_main:\n" else "\t.globl  _c0_main\n_c0_main:\n"
-  return (entry ++ pgm)
+    os <- fromMaybe "Darwin" <$> lookupEnv "UNAME"
+    let entry =
+            if os == "Darwin"
+                then "\t.globl  __c0_main\n__c0_main:\n"
+                else "\t.globl  _c0_main\n_c0_main:\n"
+    return (entry ++ pgm)

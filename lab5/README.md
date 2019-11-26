@@ -71,7 +71,20 @@ SSA -> Assembly:
     , and all the unreachable blocks in our run. 
 
 ### 6. Liveness Analysis
+    We perform live analysis directly on SSA before converting back to machine code,
+    which gives us the opportunity to make use of the SSA properties such as basic blocks,
+    data-flow graphs, dominance properties, liveness information, etc.  After live analysis,
+    we will get an interference graph for all the variables in the program.
+    Using the interference graph, we can run the standard greedy coloring algorithm
+    to assign registers to temps.
+
 ### 7. Register Coalescing
+    We implemented a greedy and aggressive coalescing scheme as proposed in (
+    http://web.cs.ucla.edu/~palsberg/paper/aplas05.pdf). We also use a union-find
+     structure to make the algorithm more efficient. As Haskell does not intrinsically 
+     support mutable data structures such as union-find, we use an implementation from 
+     (https://gist.github.com/kseo/8693028) which uses strict state monads.
+
 ### 8. Remove Redundant Code
     In our final Assembly, we do another scan to remove the redundant moves 
     that we are not able to eliminate before. Particularly, instructions in the form
