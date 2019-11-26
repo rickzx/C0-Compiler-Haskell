@@ -86,7 +86,7 @@ removeUseless fn idx (x:xs) flag =
 mapinline :: (Ident, [AAsm]) -> Map.Map Ident [AAsm] -> Map.Map String String -> Int -> Int -> [AAsm]
 mapinline (_,[]) _fnmap _trrec _idx _cnt = []
 mapinline (id, x:xs) fnmap trrec idx cnt = case x of
-    ACall nme l _ ->
+    ACall nme l _ | nme /= "calloc" ->
         let 
             fungen = Maybe.fromMaybe [] (Map.lookup nme fnmap)
             len = length fungen
