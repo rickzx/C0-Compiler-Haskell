@@ -151,6 +151,8 @@ hasSideEffect (AAsmS _ _ aasm) =
     case aasm of
         AAsm _ ADiv _ -> True
         AAsm _ AMod _ -> True
+        AAsm _ ASal _ -> True
+        AAsm _ ASar _ -> True
         ACall {} -> True
         _ -> False
 
