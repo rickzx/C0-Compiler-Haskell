@@ -26,11 +26,12 @@ TAST -> Abstract Assembly:
 Abstract Assembly -> SSA:
     4. Function Inlining
 SSA: 
-    5. SCC (Sparse conditional constant folding) with Deadcode removal
-    6. Liveness Analysis 
-    7. Register Coalescing
+    5. Copy Propagation and Deadcode Removal
+    6. SCC (Sparse conditional constant folding) with Deadcode removal
+    7. Liveness Analysis 
+    8. Register Coalescing
 SSA -> Assembly:
-    8. Redundant Code Removal
+    9. Redundant Code Removal
 ```
 
 ### 1. Constant Propagation
@@ -60,17 +61,23 @@ SSA -> Assembly:
     the larger functions that calls the function instead to save the calling 
     convention and jumps. 
 
-### 5a. Sparse Conditional Constant Propagation
+### 5. Copy Propagation and Deadcode removal
+    We first eliminated the variable definitions where all the uses are empty, and also
+    added simple copy propagation to remove x <- y, x <- phi(y) . As complex copy
+    propagation would remove CSSA property, we did not eliminate copy propagations for 
+    variables involved in phi functions.
+
+### 6a. Sparse Conditional Constant Propagation
     On our SSA, we conduct SCC, in the process we mark all the blocks that can be
     executed in the program, and all the variables with constant values. We then 
     replace these variables with the corresponding constants in their corresponding
     uses in the statement.
 
-### 5b. Deadcode Removal
+### 6b. Deadcode Removal
     Pairing with SCC, we remove all the statements defining the constant variables
     , and all the unreachable blocks in our run. 
 
-### 6. Liveness Analysis
+### 7. Liveness Analysis
     We perform live analysis directly on SSA before converting back to machine code,
     which gives us the opportunity to make use of the SSA properties such as basic blocks,
     data-flow graphs, dominance properties, liveness information, etc.  After live analysis,
@@ -78,14 +85,14 @@ SSA -> Assembly:
     Using the interference graph, we can run the standard greedy coloring algorithm
     to assign registers to temps.
 
-### 7. Register Coalescing
+### 8. Register Coalescing
     We implemented a greedy and aggressive coalescing scheme as proposed in (
     http://web.cs.ucla.edu/~palsberg/paper/aplas05.pdf). We also use a union-find
      structure to make the algorithm more efficient. As Haskell does not intrinsically 
      support mutable data structures such as union-find, we use an implementation from 
      (https://gist.github.com/kseo/8693028) which uses strict state monads.
 
-### 8. Remove Redundant Code
+### 9. Remove Redundant Code
     In our final Assembly, we do another scan to remove the redundant moves 
     that we are not able to eliminate before. Particularly, instructions in the form
         Mov op1 op1 (We remove it)
