@@ -1,0 +1,18 @@
+//test error 
+
+<'u, 'v, 'w> struct genericsth1{
+    'u first;
+    'v second;
+    struct <'v, 'w> genericsth2 *third;
+};
+
+//'u needs to be in there.
+<'v, 'w> struct genericsth2{
+    'v first;
+    'w second;
+    struct <'u, 'v, 'w> genericsth1 *third;
+};
+
+int main(){
+    return 986;
+}

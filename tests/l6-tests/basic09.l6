@@ -1,0 +1,9 @@
+//test error
+
+//can not compare strings directly
+int main(){
+    string string1 = "hello world";
+    string string2 = "Hello world";
+    assert(string1 != string2);
+    return 0;
+}

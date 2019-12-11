@@ -1,0 +1,33 @@
+//test return 15411
+//simple OOP style
+
+<'a> struct pair {
+    'a left;
+    'a right;
+    (struct <'a> pair* -> void)* print_pair;
+};
+
+void print_int_pair(struct <int> pair* pair) {
+    int left = pair -> left;
+    int right = pair -> right;
+
+    print_int(left);
+    print_int(right);
+}
+
+<'a> struct <'a> pair* create_pair('a left, 'a right, (struct <'a> pair* -> void)* print_pair) {
+    struct <'a> pair* pair = alloc(struct <'a> pair);
+    pair -> left = left;
+    pair -> right = right;
+    pair -> print_pair = print_pair;
+    return pair;
+}
+
+int main() {
+    struct <int> pair* pair = create_pair(15, 411, &print_int_pair);
+
+    (struct <int> pair* -> void)* print_fn = pair->print_pair;
+    <*print_fn>(pair);
+
+    return 15411;
+}

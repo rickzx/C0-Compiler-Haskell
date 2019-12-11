@@ -1,0 +1,14 @@
+//test error
+
+//can not typedef generic types
+
+typedef 'a ok;
+
+<ok> ok return_sth(ok x){
+    return x;
+}
+
+int main(){
+    int x = 5;
+    return return_sth(x);
+}

@@ -1,0 +1,14 @@
+//test return 15411
+//test constant function
+
+<'a> 'a const((() -> 'a)* f) {
+	return <*f>();
+}
+
+int const_int() {
+	return 15411;
+}
+
+int main() {
+	return const(&const_int);
+}

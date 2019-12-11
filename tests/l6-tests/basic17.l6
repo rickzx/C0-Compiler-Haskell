@@ -1,0 +1,40 @@
+//test return 15411
+
+//Implement a generic map function
+
+<'u, 'v> 'v[] map ('u[] thearray, int length, ('u -> 'v)* elem_fn){
+    'v[] newarray = alloc_array('v, length);
+    for(int i = 0; i < length; i++){
+        newarray[i] = <*elem_fn>(thearray[i]);
+    }
+    return newarray;
+}
+
+bool int_to_bool(int x){
+    return x > 0;
+}
+
+int char_to_int(char c){
+    return char_ord(c);
+}
+
+int main(){
+    int[] funarray = alloc_array(int, 5);
+    char[] ch = alloc_array(char, 5);
+    ch[0] = 'a';
+    ch[1] = 'b';
+    ch[2] = 'c';
+    ch[3] = 'd';
+    ch[4] = 'e';
+    int[] newa = map(ch, 5, &char_to_int);
+    bool[] boola = map(funarray, 5, &int_to_bool);
+    assert(newa[0] == 97);
+    assert(newa[1] == 98);
+    assert(newa[4] == char_ord(ch[4]));
+    for(int i = 0; i < 5; i++){
+        if (boola[i]){
+            return 1;
+        }
+    }
+    return 15411;
+}

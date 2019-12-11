@@ -1,0 +1,11 @@
+//test error
+
+// There should never be a function of type () -> 'a
+<'a> 'a f() {
+	return 1;
+}
+
+int main() {
+	f();
+	return 0;
+}

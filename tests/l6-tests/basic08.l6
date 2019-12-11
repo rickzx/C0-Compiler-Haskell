@@ -1,0 +1,19 @@
+//test return 0
+
+<'a, 'b> bool eq('a x, 'b y, ('a, 'b -> int)* cmp) {
+    if (<*cmp>(x, y) == 0) {
+        return true;
+    }
+    return false;
+}
+
+int int_cmp(int x, int y) {
+    return x - y;
+}
+
+int main() {
+    if (eq(0, 1, &int_cmp)) {
+        return 1;
+    }
+    return 0;
+}

@@ -1,0 +1,21 @@
+//test return 1
+
+
+<'e, 'f> 'e first2('e x, 'f y) {
+	return x;
+}
+
+<'c, 'd> 'c first1('c x, 'd y) {
+	return first2(x, y);
+}
+
+<'a, 'b> 'a first('a x, 'b y) {
+	return first1(x, y);
+}
+
+int main() {
+	if (first(true, 2)) {
+		return first(1, false);
+	}
+	return 0;
+}

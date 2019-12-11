@@ -1,0 +1,16 @@
+//test error
+
+//string is different from char array
+typedef char[] fakestring;
+typedef string realstring;
+
+int main(){
+    fakestring str1 = alloc_array(char, 4);
+    realstring str2 = "abc";
+    str1[0] = 'a';
+    str1[1] = 'b';
+    str1[2] = 'c';
+    assert(string_equal(str2, string_from_chararray(str1)));
+    assert(string_equal(str1, str2));
+    return 1;
+}

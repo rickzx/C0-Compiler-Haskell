@@ -1,0 +1,33 @@
+//test return 3
+
+//test with string functions
+string ret_hello(){
+    char[] hi = alloc_array(char, 6);
+    hi[0] = 'h';
+    hi[1] = 'e';
+    hi[2] = 'l';
+    hi[3] = 'l';
+    hi[4] = 'o';
+    return string_from_chararray(hi);
+}
+bool checkequal(string a, string b){
+    return string_equal(a, b);
+}
+int main(){
+    int count = 0;
+    string a = "hello";
+    string b = "hel";
+    string c = "lo";
+    string d = string_join(b, c);
+    string e = ret_hello();
+    if(checkequal(a, e)){
+        count++;
+    }
+    if(string_equal(d, a)){
+        count++;
+    }
+    if(string_equal(d, e)){
+        count++;
+    }
+    return count;
+}

@@ -1,0 +1,19 @@
+//test return 1
+
+<'a, 'b> bool compare ('a x, 'b y, ('a, 'b -> bool)* f) {
+	return <*f>(x, y);
+}
+
+bool cmp(int x, string y) {
+	if (x > 0) {
+		return true;
+	}
+	return false;
+}
+
+int main() {
+	if (compare(2, "hello", &cmp)) {
+		return 1;
+	}
+	return 0;
+}

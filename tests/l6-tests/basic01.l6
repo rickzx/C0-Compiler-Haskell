@@ -1,0 +1,32 @@
+//test return 6
+
+//test basic char compare operations
+int main(){
+    char a = 'a';
+    char b = 'b';
+    char c = 'c';
+    char d = 'd';
+    char e = 'e';
+    int count = 0;
+    if (a < b){
+        count++;
+    }
+    if (c > b){
+        count++;
+    }
+    if (d >= c){
+        count++;
+    }
+    if (d <= e){
+        count++;
+    }
+    if (a == a){
+        count++;
+    }
+    if (c != b){
+        count++;
+    }
+    char h = 'n';
+    string hi = "\n\t\'hello\v\"";
+    return count;
+}

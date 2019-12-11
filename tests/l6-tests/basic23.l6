@@ -1,0 +1,109 @@
+//test return 32
+
+//15122 spring 2017 bloom lab
+typedef struct bloom_filter bloom;
+typedef struct bloom_filter* bloom_t;
+struct bloom_filter{
+    bool[] data;
+    int capacity;
+};
+
+bool correctlength(bloom_t B)
+{
+    return true;
+}
+
+bool is_bloom(bloom_t B)
+{
+    if(B == NULL)
+    {
+        return false;
+    }
+    else
+    {
+        return correctlength(B) && B -> capacity > 0;
+    }
+}
+
+bloom_t bloom_new(int capac)
+{
+    bloom_t newbloom = alloc(bloom);
+    newbloom -> data = alloc_array(bool, capac);
+    newbloom -> capacity = capac;
+    return newbloom;
+}
+
+int hash_mul31(string x)
+{
+    int val = 0;
+    for(int i = 0; i < string_length(x); i++)
+    //@loop_invariant i >= 0&& i <= string_length(x);
+    {
+        val *= 31;
+        val += char_ord(string_charat(x,i));
+    }
+    return val;
+}
+
+int abs(int a){
+    if(a < 0){
+        return -a;
+    }
+    return a;
+}
+
+bool bloom_contains(bloom_t B, string x)
+{
+    int hashvalue = hash_mul31(x);
+    if(B->data[abs(hashvalue % (B->capacity))] == true)
+    {
+        return true;
+    }
+    return false;
+}
+
+void bloom_add(bloom_t B, string x)
+{
+    int hashvalue = hash_mul31(x);
+    B->data[abs(hashvalue % (B->capacity))] = true;
+}
+
+//this is a very bad bloom....
+int main()
+{
+    int performance_score = 100;
+    bloom_t testbloom = bloom_new(1);
+    bloom_add(testbloom, "hi");
+    bloom_add(testbloom, "my");
+    bloom_add(testbloom, "name");
+    bloom_add(testbloom, "is");
+    bloom_add(testbloom, "Eric");
+    if(!(bloom_contains(testbloom, "hi")))
+    {
+        assert(false);
+    }
+    if(!(bloom_contains(testbloom, "my")))
+    {
+        assert(false);
+    }
+    if(!(bloom_contains(testbloom, "name")))
+    {
+        assert(false);
+    }
+    if(!(bloom_contains(testbloom, "is")))
+    {
+        assert(false);
+    }
+    if(!(bloom_contains(testbloom, "Eric")))
+    {
+        assert(false);
+    }
+    for(int i = 32; i < 100; i++)
+    {
+        if(bloom_contains(testbloom, string_fromchar(char_chr(i))))
+        {
+            performance_score--;
+        }
+    }
+    return performance_score;
+}

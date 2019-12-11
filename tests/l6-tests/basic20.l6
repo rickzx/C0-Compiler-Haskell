@@ -1,0 +1,40 @@
+//test return 495
+
+//try to implement our favorite function in functional language....
+<'u, 'v> 'v foldr_it ('u[] l, 'v accum, int length, ('u, 'v -> 'v)* fold_fn){
+    'v temp = accum;
+    for(int i = 0; i < length; i++){
+        temp = <*fold_fn>(l[i], temp);
+    }
+    return temp;
+}
+
+<'u, 'v> 'v foldr_recur ('u[] l, 'v accum, int length, ('u, 'v -> 'v)* fold_fn){
+    if(length == 0){
+        return accum;
+    }
+    else{
+        'u[] xs = alloc_array('u, length-1);
+        for(int i = 0; i < length-1; i++){
+            xs[i] = l[i+1];
+        }
+        'v new_accum = <*fold_fn>(l[0], accum);
+        return foldr_recur(xs, new_accum, length-1, fold_fn);
+    }
+}
+
+int char_to_ascii_sum(char a, int accum){
+    return accum + char_ord(a);
+}
+
+int main(){
+    string ok = "abcde";
+    char[] okchar = string_to_chararray(ok);
+    int iter = foldr_it(okchar, 0, 5, &char_to_ascii_sum);
+    int recr = foldr_recur(okchar, 0, 5, &char_to_ascii_sum);
+    //addsup 97+98+99+100+101
+    print_int(iter);
+    print_int(recr);
+    assert(iter == recr);
+    return iter;
+}

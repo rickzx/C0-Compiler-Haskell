@@ -1,0 +1,29 @@
+//test return 1
+//build a string from an array of ints
+
+typedef char letters;
+typedef int asc;
+
+asc[] abcde(){
+    asc[] abd = alloc_array(int, 5);
+    for(int i = 0; i < 5; i++){
+        abd[i] = 97+i;
+    }
+    return abd;
+}
+
+int main(){
+    bool correct = true;
+    string wow = string_frombool(correct);
+    assert(string_equal(wow, "true"));
+    letters[] letr = alloc_array(letters, 6);
+    asc[] alphabet = abcde();
+    for(int i = 0; i < 5; i++){
+        letr[i] = char_chr(alphabet[i]);
+    }
+    assert(string_equal("a", string_fromchar(letr[0])));
+    string res = string_from_chararray(letr);
+    assert(string_terminated(letr, 6));
+    assert(string_equal("abcde", res));
+    return 1;
+}

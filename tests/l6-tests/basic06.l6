@@ -1,0 +1,50 @@
+//test return 15411
+
+//test string functions with special characters
+string ret_some_strange(){
+    char[] s = alloc_array(char, 6);
+    s[0] = '1';
+    s[1] = '5';
+    s[2] = '4';
+    s[3] = '1';
+    s[4] = '1';
+    return string_from_chararray(s);
+}
+int main(){
+    string str = "15411\a\n\"\'";
+    string strange = ret_some_strange();
+    string rest = "\a\n\"\'";
+    string okkk = string_join(strange, rest);
+    string partyhard = "15411an\"\'";
+    char what = string_charat(strange, 4);
+    char ok = string_charat(strange, 0);
+    if (what > ok){
+        return 15410;
+    }
+    if (string_equal(partyhard, str)){
+        return 15400;
+    }
+    char this = string_charat(okkk, 5);
+    char that = string_charat(partyhard, 5);
+    char thus = string_charat(str, 5);
+    print_int(string_length(str));
+    print_int(string_length(partyhard));
+    print_int(char_ord(this));
+    print_int(char_ord(that));
+    print_int(char_ord(thus));
+    assert(this != that);
+    assert(char_ord(this) != char_ord(that));
+    assert(string_length(str) == string_length(partyhard));
+    print_int(string_compare(okkk, partyhard));
+    assert(string_compare(okkk, partyhard) == -1);
+    if (string_equal(okkk, partyhard)){
+        return 15751;
+    }
+    if (string_equal(okkk, str)){
+        print_int(string_length(str));
+        print_int(string_length(okkk));
+        print_int(string_length(partyhard));
+        return 15411;
+    }
+    return 15859;
+}

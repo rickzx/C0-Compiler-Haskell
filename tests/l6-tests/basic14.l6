@@ -1,0 +1,27 @@
+//test abort
+
+//distinguish escape sequence strings and regular strings
+
+typedef string words;
+
+int main(){
+    words escapesequence = "\b\t\n\a\v\f\r";
+    words whate = "\\b\\t\\n\\a\\v\\f\\r";
+    if(string_equal(escapesequence, whate)){
+        return 15213;
+    }
+    if(string_length(escapesequence) == string_length(whate)){
+        return 15317;
+    }
+    char[] array1 = string_to_chararray(escapesequence);
+    char[] array2 = string_to_chararray(whate);
+    for(int i = 0; i < string_length(escapesequence); i++){
+        for(int j = 0; j < string_length(whate); j++){
+            if(array1[i] == array2[j]){
+                return 15312;
+            }
+        }
+    }
+    assert(false);
+    return 15411;
+}

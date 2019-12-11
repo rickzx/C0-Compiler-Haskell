@@ -1,7 +1,7 @@
 # L6 overview
 
 In L6, we modified our L4 compiler to support string libraray and functions, polymorphic struct and polymorphic functions. Furthermore, we implemented function pointers so that our functions are 
-able to take in functions as parameters.
+able to take in functions as parameters. Check `./tests/l6-tests` for example test programs related to L6.
 
 ## Overall Workflow
 

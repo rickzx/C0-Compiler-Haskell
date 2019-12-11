@@ -1,0 +1,72 @@
+//test return 0
+//test polymorphic merge sort
+
+<'a> void merge('a[] freq, int lo, int mid, int hi, ('a, 'a -> bool)* lt) {
+	'a[] B = alloc_array('a, hi - lo);
+
+	int i = lo;
+	int j = mid;
+	int k = 0;
+
+	while (i < mid && j < hi) {
+		if (<*lt>(freq[i], freq[j])) {
+			B[k] = freq[i];
+			i++;
+		}
+		else {
+			B[k] = freq[j];
+			j++;
+		}
+		k++;
+	}
+
+	while (i < mid) {
+		B[k] = freq[i];
+		i++;
+		k++;
+	}
+
+	while (j < hi) {
+		B[k] = freq[j];
+		j++;
+		k++;
+	}
+
+	for (k = 0; k < hi-lo; k++) {
+		freq[lo + k] = B[k];
+	}
+}
+
+bool lt_str(string s1, string s2) {
+	return (string_compare(s1, s2) < 0);
+}
+
+<'a> void sort('a[] freq, int lo, int hi, ('a, 'a -> bool)* lt) {
+	if (hi-lo <= 1) return;
+	int mid = lo + (hi - lo) / 2;
+	sort(freq, lo, mid, lt);
+	sort(freq, mid, hi, lt);
+	merge(freq, lo, mid, hi, lt);
+	return;
+}
+
+int main() {
+	string[] arr = alloc_array(string, 6);
+
+	arr[0] = "cf";
+	arr[1] = "zk";
+	arr[2] = "cd";
+	arr[3] = "ab";
+	arr[4] = "xy";
+	arr[5] = "ac";
+
+	sort(arr, 0, 6, &lt_str);
+	assert(string_equal(arr[0], "ab"));
+	assert(string_equal(arr[1], "ac"));
+	assert(string_equal(arr[2], "cd"));
+	assert(string_equal(arr[3], "cf"));
+	assert(string_equal(arr[4], "xy"));
+	assert(string_equal(arr[5], "zk"));
+
+	return 0;
+}

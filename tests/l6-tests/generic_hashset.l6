@@ -1,0 +1,151 @@
+//test return 82
+
+<'a> struct node {
+	'a val;
+	struct <'a> node* next;
+};
+
+<'a> struct hashset {
+	int size;
+	int capacity;
+	struct <'a> node*[] table;
+
+	('a, 'a -> bool)* key_eq;
+	('a -> int)* key_hash;
+};
+
+<'a> struct <'a> hashset* hset_new (int capacity, ('a, 'a -> bool)* key_eq, ('a -> int)* key_hash) {
+	struct <'a> hashset* hset = alloc(struct <'a> hashset);
+	hset -> size = 0;
+	hset -> capacity = capacity;
+	hset -> table = alloc_array(struct <'a> node*, capacity);
+	hset -> key_eq = key_eq;
+	hset -> key_hash = key_hash;
+
+	return hset;
+}
+
+<'a> bool hset_contains (struct <'a> hashset* hset, 'a elem) {
+	('a -> int)* hash_fn = hset -> key_hash;
+	('a, 'a -> bool)* eq_fn = hset -> key_eq;
+
+	int hash = <*hash_fn>(elem) % (hset -> capacity);
+	int i = hash >= 0 ? hash : (-hash);
+
+	for (struct <'a> node* p = hset -> table[i]; p != NULL; p = p -> next) {
+		if (<*eq_fn>(p -> val, elem)) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
+<'a> void hset_insert (struct <'a> hashset* hset, 'a elem) {
+	('a -> int)* hash_fn = hset -> key_hash;
+	('a, 'a -> bool)* eq_fn = hset -> key_eq;
+
+	int hash = <*hash_fn>(elem) % (hset -> capacity);
+	int i = hash >= 0 ? hash : (-hash);
+
+	for (struct <'a> node* p = hset -> table[i]; p != NULL; p = p -> next) {
+		if (<*eq_fn>(p -> val, elem)) {
+			return;
+		}
+	}
+
+	struct <'a> node* entry = alloc(struct <'a> node);
+	entry -> val = elem;
+	entry -> next = hset -> table[i];
+	hset -> table[i] = entry;
+	(hset -> size)++;
+}
+
+<'a> int hset_size (struct <'a> hashset* hset) {
+	return hset -> size;
+}
+
+int hash_int (int x) {
+	x = ((x >> 16) ^ x) * 0x45d9f3b;
+	x = ((x >> 16) ^ x) * 0x45d9f3b;
+	x = (x >> 16) ^ x;
+	return x;
+}
+
+bool eq_int (int x, int y) {
+	return (x == y);
+}
+
+int hash_string (string s) {
+	char[] chars = string_to_chararray(s);
+	int hash = 0;
+
+	for (int i = 0; i < string_length(s); i++) {
+		int ord = char_ord(chars[i]);
+		hash = hash * 31 + ord;
+	}
+
+	return hash;
+}
+
+bool eq_string (string s1, string s2) {
+	return string_equal(s1, s2);
+}
+
+int main() {
+	struct <int> hashset* hset_int = hset_new(10, &eq_int, &hash_int);
+
+	hset_insert(hset_int, 10);
+	assert(hset_contains(hset_int, 10));
+	assert(!hset_contains(hset_int, 11));
+	assert(hset_size(hset_int) == 1);
+
+	hset_insert(hset_int, 10);
+	assert(hset_contains(hset_int, 10));
+	assert(!hset_contains(hset_int, 11));
+	assert(hset_size(hset_int) == 1);
+
+	hset_insert(hset_int, 11);
+	assert(hset_contains(hset_int, 10));
+	assert(hset_contains(hset_int, 11));
+	assert(hset_size(hset_int) == 2);
+
+	for (int i = 0; i < 50; i++) {
+		hset_insert(hset_int, i);
+	}
+
+	for (int i = 0; i < 50; i++) {
+		assert(hset_contains(hset_int, i));
+	}
+
+	assert(hset_size(hset_int) == 50);
+
+	struct <string> hashset* hset_string = hset_new(10, &eq_string, &hash_string);
+
+	hset_insert(hset_string, "15411");
+	assert(hset_contains(hset_string, "15411"));
+	assert(!hset_contains(hset_string, "15410"));
+	assert(hset_size(hset_string) == 1);
+
+	hset_insert(hset_string, "15411");
+	assert(hset_contains(hset_string, "15411"));
+	assert(!hset_contains(hset_string, "15410"));
+	assert(hset_size(hset_string) == 1);
+
+	hset_insert(hset_string, "15410");
+	assert(hset_contains(hset_string, "15411"));
+	assert(hset_contains(hset_string, "15410"));
+	assert(hset_size(hset_string) == 2);
+
+	for (int i = 20; i < 100; i++) {
+		string s = string_fromchar(char_chr(i));
+		hset_insert(hset_string, s);
+	}
+
+	for (int i = 20; i < 100; i++) {
+		string s = string_fromchar(char_chr(i));
+		assert(hset_contains(hset_string, s));
+	}
+
+	return hset_size(hset_string);	// 80 + 2 = 82
+}

@@ -1,0 +1,34 @@
+//test return 15
+
+<'k, 'v> struct node {
+	'k key;
+	'v value;
+};
+
+<'k, 'v> 'k[] allKeys (struct <'k, 'v> node[] nodes, int size) {
+	'k[] keys = alloc_array('k, size);
+
+	for (int i = 0; i < size; i++) {
+		keys[i] = nodes[i].key;
+	}
+
+	return keys;
+}
+
+int main() {
+	struct <int, bool> node[] nodes = alloc_array(struct <int, bool> node, 5);
+	nodes[0].key = 1;
+	nodes[1].key = 2;
+	nodes[2].key = 3;
+	nodes[3].key = 4;
+	nodes[4].key = 5;
+
+	int[] keys = allKeys(nodes, 5);
+	int res = 0;
+
+	for (int i = 0; i < 5; i++) {
+		res += keys[i];
+	}
+
+	return res;
+}

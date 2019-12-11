@@ -1,0 +1,13 @@
+//test return 1
+
+int test((int, int -> int)* f) {
+	return <*f>(1, 2);
+}
+
+int fst(int x, int y) {
+	return x;
+}
+
+int main() {
+	return test(&fst);
+}

@@ -1,0 +1,57 @@
+//test return 45
+
+<'a> struct pair {
+	'a[] list;
+	int size;
+};
+
+<'a> struct <'a> pair* filter (('a -> bool)* f, struct <'a> pair* p) {
+	'a[] list = p -> list;
+	int size = p -> size;
+
+	'a[] res = alloc_array('a, size);
+	int cnt = 0;
+
+	for (int i = 0; i < size; i++) {
+		if (<*f>(list[i])) {
+			res[cnt] = list[i];
+			cnt += 1;
+		}
+	}
+
+	struct <'a> pair* npair = alloc(struct <'a> pair);
+	npair -> list = res;
+	npair -> size = cnt;
+
+	return npair;
+}
+
+bool less_than_10(int x) {
+	return (x < 10);
+}
+
+int main() {
+	int[] arr = alloc_array(int, 100);
+
+	for (int i = 0; i < 100; i++) {
+		arr[i] = i;
+	}
+
+	struct <int> pair* pair = alloc(struct <int> pair);
+
+	pair -> list = arr;
+	pair -> size = 100;
+
+	struct <int> pair* npair = filter(&less_than_10, pair);
+
+	int[] narr = npair -> list;
+	int nsize = npair -> size;
+	int sum = 0;
+
+	for (int i = 0; i < nsize; i++) {
+		print_int(narr[i]);
+		sum += narr[i];
+	}
+
+	return sum;
+}

@@ -1,0 +1,63 @@
+//test return 0
+//implement iterator in OOP style
+
+<'a> struct iterator {
+	struct <'a> iterImpl* iter;
+	(struct <'a> iterImpl* -> bool)* has_next;
+	(struct <'a> iterImpl* -> 'a)* next;
+};
+
+<'a> struct iterImpl {
+	int idx;
+	int size;
+	'a[] data;
+};
+
+bool has_next(struct <int> iterImpl* iter) {
+	return (iter->idx < iter->size);
+} 
+
+int next(struct <int> iterImpl* iter) {
+	int elem = iter->data[iter->idx];
+	iter->idx += 1;
+	return elem;
+}
+
+<'a> struct <'a> iterator* iterator_new(struct <'a> iterImpl* iter, 
+								   (struct <'a> iterImpl* -> bool)* has_next,
+								   (struct <'a> iterImpl* -> 'a)* next) 
+{
+	struct <'a> iterator* iterator = alloc(struct <'a> iterator);	
+	iterator -> iter = iter;
+	iterator -> has_next = has_next;
+	iterator -> next = next;
+
+	return iterator;
+}
+
+<'a> void foreach(struct <'a> iterator* iterator, ('a -> void)* f) {
+	(struct <'a> iterImpl* -> bool)* has_next = iterator -> has_next;
+	(struct <'a> iterImpl* -> 'a)* next = iterator -> next;
+	struct <'a> iterImpl* iter = iterator -> iter;
+
+	while (<*has_next>(iter)) {
+		'a elem = <*next>(iter);
+		<*f>(elem);
+	}
+}
+
+int main() {
+	struct <int> iterImpl* iterImpl = alloc(struct <int> iterImpl);
+	iterImpl -> idx = 0;
+	iterImpl -> size = 100;
+	iterImpl -> data = alloc_array(int, 100);
+
+	for (int i = 0; i < 100; i++) {
+		iterImpl -> data[i] = i;
+	}
+
+	struct <int> iterator* iterator = iterator_new(iterImpl, &has_next, &next);
+	foreach(iterator, &print_int);		// should print 0 to 99
+
+	return 0;
+}

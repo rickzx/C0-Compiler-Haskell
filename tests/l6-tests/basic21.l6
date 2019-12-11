@@ -1,0 +1,17 @@
+//test error
+
+//can not assign other types to an already defined generic struct
+
+<'u, 'v> struct sandwich{
+    'u top;
+    'v mid;
+    'u bot;
+};
+
+int main(){
+    struct <int, char> sandwich *hi = alloc(struct <int, char> sandwich);
+    hi -> top = 1;
+    hi -> mid = 'c';
+    hi -> bot = true;
+    return hi->top;
+}

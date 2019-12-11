@@ -1,0 +1,14 @@
+//test error
+
+//can not use generic types in non generic functions
+
+<'u, 'v> 'u ret_first_ptr ('u *first, 'v *irrel){
+    return *first;
+}
+
+int main(){
+    'v *whocares = alloc('v);
+    int *who = alloc(int);
+    *who = 125;
+    return ret_first_ptr(who, whocares);
+}

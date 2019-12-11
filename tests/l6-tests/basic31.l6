@@ -1,0 +1,14 @@
+//test return 1024
+
+<'a> 'a[] duplicate(int size, 'a elem) {
+	'a[] x = alloc_array('a, size);
+	for (int i = 0; i < size; i++) {
+		x[i] = elem;
+	}
+	return x;
+}
+
+int main() {
+	int[] arr = duplicate(10, 1024);
+	return arr[3];
+}

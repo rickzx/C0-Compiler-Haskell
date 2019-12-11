@@ -1,0 +1,66 @@
+//test return 0
+//Y-combinator for fun :) (Modified from https://rosettacode.org/wiki/Y_combinator#C)
+
+typedef struct func_t* func;
+typedef struct func_t func_t;
+
+struct func_t {
+    (func, func -> func)* fn;
+    func _;
+    int num;
+};
+ 
+func new((func, func -> func)* f, func _) {
+    func x = alloc(func_t);
+    x->fn = f;
+    x->_ = _;       /* closure, sort of */
+    x->num = 0;
+    return x;
+}
+ 
+func call(func f, func n) {
+	(func, func -> func)* fn = f->fn;
+    return <*fn>(f, n);
+}
+ 
+func Y((func, func -> func)* f) {
+    func g = new(f, NULL);
+    g->_ = g;
+    return g;
+}
+ 
+func num(int n) {
+    func x = new(NULL, NULL);
+    x->num = n;
+    return x;
+}
+ 
+ 
+func fac(func self, func n) {
+    int nn = n->num;
+    return nn > 1   ? num(nn * call(self->_, num(nn - 1))->num)
+                    : num(1);
+}
+ 
+func fib(func self, func n) {
+    int nn = n->num;
+    return nn > 1
+            ? num(  call(self->_, num(nn - 1))->num +
+                    call(self->_, num(nn - 2))->num )
+            : num(1);
+}
+ 
+void show(func n) { print_int(n -> num); }
+ 
+int main() {
+    int i;
+    func f = Y(&fac);
+    for (i = 1; i < 10; i++)
+            show( call(f, num(i)) );
+
+    f = Y(&fib);
+    for (i = 1; i < 10; i++)
+            show( call(f, num(i)) );
+
+    return 0;
+}

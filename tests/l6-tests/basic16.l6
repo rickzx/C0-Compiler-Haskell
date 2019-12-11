@@ -1,0 +1,12 @@
+//test error
+
+//char is different from int
+int main(){
+    if('a' < 'b'){
+        if('a' < 100){
+            return 0;
+        }
+        return 1;
+    }
+    return 15411;
+}

@@ -1,0 +1,37 @@
+//test return 6
+
+//test memory char compare operations
+int main(){
+    char* a = alloc(char);
+    char* b = alloc(char);
+    char* c = alloc(char);
+    char* d = alloc(char);
+    char* e = alloc(char);
+    *a = 'a';
+    *b = 'b';
+    *c = 'c';
+    *d = 'd';
+    *e = 'e';
+    int count = 0;
+    if (*a < *b){
+        count++;
+    }
+    if (*c > *b){
+        count++;
+    }
+    if (*d >= *c){
+        count++;
+    }
+    if (*d <= *e){
+        count++;
+    }
+    if (*a == *a){
+        count++;
+    }
+    if (*c != *b){
+        count++;
+    }
+    char h = 'n';
+    string hi = "\n\t\'hello\v\"";
+    return count;
+}

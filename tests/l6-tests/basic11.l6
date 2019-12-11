@@ -1,0 +1,56 @@
+//test return 1;
+
+//test string and characters in struct and memory
+struct nametag{
+    string *name;
+    char[] anotherName;
+    char *grade;
+    string class;
+    bool valid;
+};
+
+typedef int asc;
+
+asc[] abcde(){
+    asc[] abd = alloc_array(int, 5);
+    for(int i = 0; i < 5; i++){
+        abd[i] = 97+i;
+    }
+    return abd;
+}
+
+char[] intarray_tochar(asc[] alphabet){
+    char[] letr = alloc_array(char, 6);
+    for(int i = 0; i < 5; i++){
+        letr[i] = char_chr(alphabet[i]);
+    }
+    return letr;
+}
+
+bool isValidName(string nme){
+    char[] nmearray = string_to_chararray(nme);
+    for(int i = 0; i < string_length(nme); i++){
+        if(char_ord(nmearray[i]) < 65){
+            return false;
+        }
+    }
+    return true;
+}
+
+typedef struct nametag *name_t;
+
+int main(){
+    name_t myname = alloc(struct nametag);
+    myname->name = alloc(string);
+    string thename = string_from_chararray(intarray_tochar(abcde()));
+    *(myname->name) = thename;
+    myname->anotherName = string_to_chararray(thename);
+    myname->grade = alloc(char);
+    *(myname->grade) = char_chr(65);
+    assert(*(myname->grade) == 'A');
+    assert(string_equal(*(myname->name), "abcde"));
+    myname->class = "15151";
+    myname->valid = isValidName(*(myname->name));
+    assert(myname->valid);
+    return 1;
+}

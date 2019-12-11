@@ -1,0 +1,9 @@
+//test error
+
+<'a, 'b> 'a swap('a x, 'b y) {
+	return swap(y, x);	// should not type check;
+}
+
+int main() {
+	return swap(3, true);
+}

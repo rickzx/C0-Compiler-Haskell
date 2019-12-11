@@ -1,0 +1,36 @@
+//test return 0
+
+<'a> struct s {
+	'a x;
+};
+
+<'a> 'a id ('a x) {
+	return x;
+}
+
+int f (int x) {
+	return x + 1;
+}
+
+int g (int x, int y) {
+	return x + y;
+}
+
+int main() {
+	assert(id(1) == 1);
+	assert(id(2) == 2);
+	assert(id(true) == true);
+	assert(id(false) == false);
+	assert(string_equal("15411", id("15411")));
+	assert(string_equal("", id("")));
+	assert(&f == id(&f));
+	assert(&g == id(&g));
+
+	int *x = alloc(int);
+	assert(x == id(x));
+
+	struct <int> s* S = alloc(struct <int> s);
+	assert(S == id(S));
+
+	return 0;
+}

@@ -1,0 +1,27 @@
+//test return 0
+
+//test chars with special characters
+int main(){
+    string special = "zzst\t\a";
+    char whate ='\t';
+    char lm = '\0';
+    char ifd = '\'';
+    char space = ' ';
+    char bANG = '!';
+    char quEstion = '?';
+    print_int(char_ord(bANG));
+    assert(char_ord(bANG) == 33);
+    char qq = char_chr(63);
+    assert(qq == quEstion);
+    assert('\t' != '\a');
+    assert(lm != ifd);
+    assert(char_ord(lm) == 0);
+    assert(char_ord(ifd) == 39);
+    print_int(char_ord(ifd));
+    assert(ifd == ifd);
+    print_int(char_ord(space));
+    assert(char_ord(space) == 32);
+    print_int(string_length(special));
+    assert(string_length(special) == 6);
+    return 0;
+}

@@ -1,0 +1,13 @@
+//test error
+
+//should not have unused generic variables in generic type list
+
+<'u, 'v, 'w> 'u return_first('u a, 'v b){
+    return a;
+}
+
+int main(){
+    int x = 5;
+    bool y = true;
+    return return_first(x, y);
+}

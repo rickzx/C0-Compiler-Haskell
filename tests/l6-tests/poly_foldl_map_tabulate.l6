@@ -1,0 +1,63 @@
+//test return 25
+//count number of primes less than 100 in functional programming style
+
+<'a, 'b> 'b foldl(('a, 'b -> 'b)* f, 'b base, 'a[] list, int size) {
+	if (size == 0) {
+		return base;
+	}
+
+	'b res = base;
+
+	for (int i = 0; i < size; i++) {
+		res = <*f>(list[i], res);
+	}
+
+	return res;
+}
+
+<'a, 'b> 'b[] map(('a -> 'b)* f, 'a[] as, int size) {
+	'b[] bs = alloc_array('b, size);
+
+	for (int i = 0; i < size; i++) {
+		bs[i] = <*f>(as[i]);
+	}
+
+	return bs;
+}
+
+<'a> 'a[] tabulate((int -> 'a)* f, int size) {
+	'a[] as = alloc_array('a, size);
+
+	for (int i = 0; i < size; i++) {
+		as[i] = <*f>(i);
+	}
+
+	return as;
+}
+
+int id(int x) {
+	return x;
+}
+
+bool is_prime(int num)
+{
+     if (num <= 1) return false;
+     if (num % 2 == 0 && num > 2) return false;
+     for(int i = 3; i < num / 2; i+= 2)
+     {
+         if (num % i == 0)
+             return false;
+     }
+     return true;
+}
+
+int count_true(bool b, int cnt) {
+	if (b) {
+		return cnt + 1;
+	}
+	return cnt;
+}
+
+int main() {
+	return foldl(&count_true, 0, map(&is_prime, tabulate(&id, 100), 100), 100);
+}

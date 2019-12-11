@@ -1,0 +1,18 @@
+//test return 5
+
+//check simple generic types
+<'e> struct pair{
+    'e first;
+    'e second;
+};
+
+<'e> 'e first('e a, 'e b){
+    return a;
+}
+
+int main(){
+    struct <int> pair *hi = alloc(struct <int> pair);
+    hi -> first = 5;
+    hi -> second = 10;
+    return first(hi->first, hi->second);
+}
