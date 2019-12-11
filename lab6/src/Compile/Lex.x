@@ -15,8 +15,14 @@ $decstart = [1-9]
 $hexdigit = [0-9A-Fa-f]
 $identstart = [A-Za-z_]
 $identletter = [A-Za-z0-9_]
+$escape = [\a\b\'\" $white]
+@charesc = \ ($escape | \0)
+@stringesc = \ ($escape)
+$gra = $printable # [\\]
+$graphic = $printable # $escape
 
-
+@charhc = \\t | \\a | \\b | \\v | \\n | \\f | \\r | \\0 | \\' | \\\"
+@stringhc = \\t | \\a | \\b | \\v | \\n | \\f | \\r | \\' | \\\" | \ 
 tokens :-
 
   continue {\_ -> TokReserved}
@@ -28,8 +34,8 @@ tokens :-
   alloc {\_ -> TokAlloc}
   alloc_array {\_ -> TokArrayAlloc}
   void {\_ -> TokVoid}
-  char {\_ -> TokReserved}
-  string {\_ -> TokReserved}
+  char {\_ -> TokCharType}
+  string {\_ -> TokStringType}
 
   if {\_ -> TokIf}
   else {\_ -> TokElse}
@@ -77,17 +83,19 @@ tokens :-
   "<<="  {\_ -> TokAsgnop (AsnOp Sal)}
   ">>="  {\_ -> TokAsgnop (AsnOp Sar)}
 
-
   $white+ ;
   0 {\_ -> TokDec 0}
   $decstart $decdigit* {\s -> TokDec (read s)}
   0 [xX] $hexdigit+ {\s -> TokHex (read s)}
+  \' ($graphic | @charesc | @charhc | \ ) \' {\s -> TokChar (process $ tail $ init s)}
+  \" ($graphic | (\\ $escape # [\"\']) | (\\ [\"\']) | @stringhc)* \" {\s -> TokString (processString $ tail $ init s)}
 
   return {\_ -> TokReturn}
   int {\_ -> TokInt}
   bool {\_ -> TokBool}
 
   $identstart $identletter* {\s -> TokIdent s}
+  \' $identstart {\s -> TokGenType (tail s)}
 
   [\[] {\_ -> TokLBracket}
   [\]] {\_ -> TokRBracket}
@@ -162,8 +170,41 @@ data Token =
   TokArrayAlloc |
   TokField |
   TokTypeDefIdent String |
+  TokCharType|
+  TokStringType|
+  TokChar Char |
+  TokString String |
+  TokGenType String |
   TokReserved
   deriving (Eq,Show)
+
+process :: String -> Char
+process [] = '\0'
+process [x] = x
+process (x:xs)
+  |xs == "r" = '\r'
+  |xs == "f" = '\f'
+  |xs == "t" = '\t'
+  |xs == "a" = '\a'
+  |xs == "b" = '\b'
+  |xs == "n" = '\n'
+  |xs == "v" = '\v'
+  |xs == "'" = '\''
+  |xs == "\"" = '\"'
+  |otherwise = '\0'
+process _ = error "invalid char"
+
+processString :: String -> String
+processString [] = []
+processString [x] = [x]
+processString (x:y:xs) 
+  | x == '\\' = case y of 
+      '\\' -> x:y:(processString xs)
+      'a' -> x:("007") ++ processString xs
+      'v' -> x:("013") ++ processString xs
+      '0' -> error "string can't contain NUL in middle"
+      _ -> x:processString (y:xs)
+  | otherwise = x:processString (y:xs)
 
 -- Our Parser monad
 type P a = State (AlexInput, Set.Set String) a
@@ -177,7 +218,7 @@ readToken = do
     (s@(_, _, str), typedefs) <- get
     case alexScan s 0 of
         AlexEOF -> return TokEOF
-        AlexError _ -> error "Lexical Error"
+        AlexError _ -> error $ show s ++ "Lexical Error"
         AlexSkip inp' _ -> do
             put (inp', typedefs)
             readToken

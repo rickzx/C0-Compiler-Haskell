@@ -60,11 +60,6 @@ argTable =
       ["link"]
       (ReqArg injectHeader "LINK")
       "Link the c0 file with an h0 header"
-  , Option
-      []
-      ["unsafe"]
-      (NoArg setUnsafe)
-      "Compiling programs without checks for runtime error"
   , Option [] ["opt"] (ReqArg setOpti "OPT") "Optimization level"
   ]
 
@@ -79,9 +74,6 @@ optiTable = [("0", 0), ("1", 1), ("2", 2)]
 
 setOF :: String -> Job -> Job
 setOF outFormat j = j {jobOutFormat = fromJust $ lookup outFormat typeTable}
-
-setUnsafe :: Job -> Job
-setUnsafe j = j {jobOutUnsafe = True}
 
 injectHeader :: String -> Job -> Job
 injectHeader header j = j {jobHeader = header}

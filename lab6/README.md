@@ -1,94 +1,188 @@
-# Design Decisions for L5
+# L6 overview
 
-In L5 we modified our L4 compiler so that it will compile codes that will run more efficiently than before. Specifically, we looked into peephole strength reduction, tail recursive function call, function inlining, constant propagation, and SSA based optimizations(sparse conditional constant folding, deadcode removal, register allocation, and coalescing)
+In L6, we modified our L4 compiler to support string libraray and functions, polymorphic struct and polymorphic functions. Furthermore, we implemented function pointers so that our functions are 
+able to take in functions as parameters.
 
-Furthermore, we added the flags --unsafe and -O1 to our compiler.
+## Overall Workflow
 
-## Unsafe
-    With flag --unsafe, we do not consider any safety checks in the program 
-    (array access, shift, etc.), this is similarly to C's actual behavior.
-    
-## -O1
-    With -O1, we will aggressively use all the optimizations implemented, 
-    this will increase the runtime speed, with the expense of increasing the
-    compile time of programs due to doing more passes at compile time.
+**C0 Code** ---Lexer/Parser---> **AST** ---Elaboration---> **EAST** 
+---TypeChecking & Optimization--> **EAST** ---Translation---> **Abstract Assembly**
+---Live Analysis & Register Allocation---> **Assembly** ---CodeGen---> **x86-64**
 
-## Overall Workflow of Compiler
+## Overall Code Structure
 
-**C0 Code** ---Lexer/Parser---> **AST** ---Elaboration---> **EAST** ---TypeChecking--> **TAST** ---Translation---> **Abstract Assembly** ---SSA Transform ---> **SSA** ---> Live Analysis & Register Allocation---> **Assembly** ---CodeGen---> **x86-64**
-
-## Optimizations Done:
 ```
-TAST -> Abstract Assembly: 
-    1. Constant propagation on TAST
-    2. Peephole optimization on Strength Reduction
-    3. Tail Recursion
-Abstract Assembly -> SSA:
-    4. Function Inlining
-SSA: 
-    5. SCC (Sparse conditional constant folding) with Deadcode removal
-    6. Liveness Analysis 
-    7. Register Coalescing
-SSA -> Assembly:
-    8. Redundant Code Removal
+.
+├── Args.hs     Parse arguments (Add in -l option for l3)
+├── Compile
+│   ├── Backend
+│   │   ├── AAsm2Asm.hs     Convert abstract assembly to x86-64 assembly
+│   │   ├── EAST2AAsm.hs    Convert elaborated AST to abstract assembly
+│   │   ├── LiveVariable.hs     Conduct live analysis
+│   │   └── RegisterAlloc.hs    Register allocation
+│   ├── CodeGen.hs      Entry point for abstract assembly/x86-64 code generation
+│   ├── Frontend
+│   │   ├── CheckEAST.hs        Type-checker
+│   │   ├── EASTOptimize.hs     Optimizations on elaborated AST
+│   │   └── Elaborate.hs        Elaboration
+│   ├── Lex.hs
+│   ├── Lex.x       Lexer
+│   ├── Parse.hs
+│   ├── Parse.y     Parser
+│   ├── Types
+│   │   ├── AST.hs
+│   │   ├── AbstractAssembly.hs
+│   │   ├── Assembly.hs
+│   │   ├── EAST.hs         Elaborated AST Type
+│   │   ├── Header.hs       Type for the header file
+│   │   ├── Job.hs
+│   │   └── Ops.hs
+│   └── Types.hs
+├── Compile.hs      Compile code with various options
+├── LiftIOE.hs
+├── Util.hs
+└── c0c.hs      Entry point of the compiler
 ```
 
-### 1. Constant Propagation
-    On our IR before transforming to Abstract Assembly, we did our first
-    round of constant propagation, simiplifying binop statements that only
-    has integer as operands.
+## Lexing and Parsing
 
-    ex: TAssign x (Binop Add (Int 1) (Int 2)) will instead be shown as 
-        TAssign x (Int 3) on our IR
+For Lexing, we added the regular expressions to pattern match strings and characters, 
+furthermore, we lexed the generic type by single letters preceeded by a ', to distinguish 
+them from regular idents.
 
-### 2. Peephole optimization on Strength Reduction
-    On our Abstract Assembly, we changed the instructions for arithmetic 
-    instructions to cheaper ones, such as adding 0, subtracting 0, and multiplying
-    powers of 2(into shifts)
+For Parsing, we added the Char and String type, and we introduced the generic type functions 
+and structs as follows:
 
-### 3. Tail Recursion
-    In our Abstract Assmebly, we mark all the tail recusive functions and functions 
-    that can be implemented in a tail recursively with a accumulator 
-        Ex: functions f return a * f()  
-    Rather than calling these functions upon return, we turn such functions into a loop 
-    and we jump back to the beginning of the function. For functions that require an 
-    accumulator to store the result, we uses R12 as the accumulator, and add to RAX upon final return.
+```
+    < GenericTypelist > struct ident block;
+    < GenericTypelist > retType ident (paramlist) block;
+```
 
-### 4. Function Inlining
-    After finish converting all the abstract assembly, we do another scan,
-    particularily search for small functions that we can pull its body inside 
-    the larger functions that calls the function instead to save the calling 
-    convention and jumps. 
+We added type POLY for generic types and GENSTRUCT for generic structs.
+Finally, we added function pointer types, which is represented and called as follows:
 
-### 5a. Sparse Conditional Constant Propagation
-    On our SSA, we conduct SCC, in the process we mark all the blocks that can be
-    executed in the program, and all the variables with constant values. We then 
-    replace these variables with the corresponding constants in their corresponding
-    uses in the statement.
+```
+    (paramlist -> return_type)* f, paramlist = () if no args for function.
+    <*f>(arguments) -- call function represented by pointer f
+```
 
-### 5b. Deadcode Removal
-    Pairing with SCC, we remove all the statements defining the constant variables
-    , and all the unreachable blocks in our run. 
+Example Polymorphic Struct:
 
-### 6. Liveness Analysis
-    We perform live analysis directly on SSA before converting back to machine code,
-    which gives us the opportunity to make use of the SSA properties such as basic blocks,
-    data-flow graphs, dominance properties, liveness information, etc.  After live analysis,
-    we will get an interference graph for all the variables in the program.
-    Using the interference graph, we can run the standard greedy coloring algorithm
-    to assign registers to temps.
+```
+<'k, 'v> struct node {
+    'k key;
+    'v value;
+}
+```
 
-### 7. Register Coalescing
-    We implemented a greedy and aggressive coalescing scheme as proposed in (
-    http://web.cs.ucla.edu/~palsberg/paper/aplas05.pdf). We also use a union-find
-     structure to make the algorithm more efficient. As Haskell does not intrinsically 
-     support mutable data structures such as union-find, we use an implementation from 
-     (https://gist.github.com/kseo/8693028) which uses strict state monads.
+Example Polymorphic Function:
 
-### 8. Remove Redundant Code
-    In our final Assembly, we do another scan to remove the redundant moves 
-    that we are not able to eliminate before. Particularly, instructions in the form
-        Mov op1 op1 (We remove it)
-    and 
-        Jmp l. (We remove the jump)
-        Label l.
+```
+<'a, 'b> 'a fst('a x, 'b y) {
+    return x;
+}
+```
+
+Example Function Pointer:
+
+```
+<'a, 'b> bool eq('a x, 'b y, ('a, 'b -> int)* cmp) {
+    if (<*cmp>(x, y) == 0) {
+        return true;
+    }
+    return false;
+}
+
+int int_cmp(int x, int y) {
+    return x - y;
+}
+
+// return 0
+int main() {
+    if (eq(0, 1, &int_cmp)) {
+        return 1;
+    }
+    return 0;
+}
+```
+
+## Elaboraton
+
+We modified our IR structure EAST by adding following nodes:
+
+```
+EAST:
+    | EGDef [Type] Ident Type EAST -- define generic fucntion
+    | EGSDef [Type] Ident [(Ident, Type)] EAST -- define generic struct
+    | EGDecl [Type] Ident Type EAST -- Generic function declare
+EExp:
+    | EChar Int
+    | EString Ident
+    | ERefFun Ident
+    | ERefFunAp Ident [EExp]
+```
+Character is represented by the corresponding ascii integer, 1 byte, String is 
+represented by itself. The extra list of types after EGDef, EGSDef, and EGSDecl
+are for the generic types used in the function/struct.
+
+
+
+## Typechecking
+During the typechecking phase, we collect the parameter types for all run-time calls to polymorphic functions, and substitute the poly types with concrete types.
+
+However, after substituting in the concrete types, the new concrete function might induce more calls to polymoprhic functions. Therefore, we 
+repeat this process until no fresh concrete functions are created.
+
+## EAST -> Abstract Assembly
+
+Translating to 3 address form, we added in char and string types and their corresponding
+sizes (1 and 8) when calculating memory. We also saved a map of constant strings to
+an index during translate for assembly generation.
+
+We added the following types:
+```
+    AAsm -> ACallRef ALoc [ALoc] Int -- for calling functions from function pointers
+    AVal -> AFunPtr String
+            AStr String
+    ALoc -> APtrb ALoc -- for characters
+```
+
+
+## Liveness and interference graph
+
+We added the corresponding liveness and interference calculation for ACallRef nodes
+
+## Abstract Assembly -> Assembly
+
+### Define Assembly
+
+For L6 compiler, we added the following instances and operands:
+
+```
+data  Inst
+= Movb Operand Operand
+  Cmpb Operand Operand
+
+data Operand
+    = Str Int
+      FPtr String
+```
+
+Where the int in Str is the constant string index that maps to the string, which we get 
+from the map when doing 3 address form.
+
+For Strings, we added in a .DATA section to store all the constant strings 
+similar to cc0:
+
+```
+    .DATA
+	    str0: .string "aa"
+```
+And Movq $str0 Operand move the costant string to the operand.
+
+Function pointers are created using the following template
+
+```
+    leaq fun_name(%rip), %rax       // now %rax holds the function address
+    call *%rax                      // call function fun_name
+```

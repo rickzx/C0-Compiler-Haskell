@@ -36,7 +36,7 @@ mcs graph preColor =
 
 -- Color the inteference graph using simplicial elimination ordering
 color :: Graph -> [ALoc] -> Coloring -> (Coloring, Int, [Register])
-color graph seo preColor = (coloring, max (maxColor - length regOrder + 3) 0, calleeSaved)
+color graph seo preColor = (coloring, maximum [maxColor - length regOrder + 3, 0], calleeSaved)
     where
     lowestColor c =
         let colors = Set.fromList $ Map.elems c
@@ -45,8 +45,8 @@ color graph seo preColor = (coloring, max (maxColor - length regOrder + 3) 0, ca
     (coloring, maxColor) = foldl
         (\(c, maxC) v -> if Map.member v preColor
             then (c, max maxC $ preColor Map.! v)
-            else
-                let
+            else 
+                let 
                     colorToUse = lowestColor $ Map.restrictKeys c $ graph Map.! v
                 in
                     (Map.insert v colorToUse c, max maxC colorToUse)
@@ -55,8 +55,8 @@ color graph seo preColor = (coloring, max (maxColor - length regOrder + 3) 0, ca
         seo
     calleeSaved = if maxColor <= 6 then [] else drop 7 (take (maxColor + 1) regOrder)
 
-allStackColor :: Set.Set Int -> (Coloring, Int, [Register])
-allStackColor allVars =
+allStackColor :: Int -> (Coloring, Int, [Register])
+allStackColor localVar = 
     let
         precolor =
              Map.fromList
@@ -67,57 +67,20 @@ allStackColor allVars =
              , (AReg 4, 2)
              , (AReg 5, 5)
              , (AReg 6, 6)
-             , (AReg 9, 7)
              ]
-        (l, _) = foldr (\n (m, idx) -> (Map.insert (ATemp n) idx m, idx + 1)) (Map.empty, length regOrder) allVars
+        vars = map ATemp [0..localVar]
+        l = zip vars [0..]
     in
-        (Map.union precolor l, length allVars + 3, [])
+        (Map.union precolor (Map.fromList $ map (\(loc, i) -> (loc, i + length regOrder)) l), localVar + 3, [])
 
 regOrder :: [Register]
 regOrder =
     [EAX, EDI, ESI, EDX, ECX, R8D, R9D, R12D, R13D, R14D, R15D, EBX]   -- Reserve R11 for moves to and from the stack when necessary
 
 -- Map a variable in abstract assembly to a register / memory location
-mapToRegWithCoalescing :: ALoc -> Coloring -> Map.Map ALoc ALoc -> Operand
-mapToRegWithCoalescing (APtr aloc) coloring coalesce = 
-    let
-        aloc' = Maybe.fromMaybe aloc (Map.lookup aloc coalesce)
-    in
-        Mem (mapToReg64 aloc' coloring)
-mapToRegWithCoalescing (APtrq aloc) coloring coalesce =
-    let
-        aloc' = Maybe.fromMaybe aloc (Map.lookup aloc coalesce)
-    in
-        Mem (mapToReg64 aloc' coloring)
-mapToRegWithCoalescing APtrNull coloring coalesce = Mem (Imm 0)
-mapToRegWithCoalescing (AReg 7) coloring coalesce = Reg R10D
-mapToRegWithCoalescing aloc coloring coalesce = 
-    let
-        aloc' = Maybe.fromMaybe aloc (Map.lookup aloc coalesce)
-        coloringIdx = Maybe.fromMaybe 0 (Map.lookup aloc' coloring)
-    in
-        if coloringIdx < length regOrder
-            then Reg $ regOrder !! coloringIdx
-            else Mem' ((coloringIdx - length regOrder + 1) * 8) RSP
-
--- 64 bit version of mapToReg
-mapToRegWithCoalescing64 :: ALoc -> Coloring -> Map.Map ALoc ALoc -> Operand
-mapToRegWithCoalescing64 (APtrq aloc) coloring coalesce = Mem (mapToRegWithCoalescing64 aloc coloring coalesce)
-mapToRegWithCoalescing64 APtrNull coloring coalesce = Mem (Imm 0)
-mapToRegWithCoalescing64 (AReg 7) coloring coalesce = Reg R10
-mapToRegWithCoalescing64 aloc coloring coalesce = case mappedReg of
-    Reg r -> Reg $ toReg64 r
-    _     -> mappedReg
-    where 
-        aloc' = Maybe.fromMaybe aloc (Map.lookup aloc coalesce)
-        mappedReg = mapToReg aloc' coloring
-
--- Map a variable in abstract assembly to a register / memory location
 mapToReg :: ALoc -> Coloring -> Operand
 mapToReg (APtr aloc) coloring = Mem (mapToReg64 aloc coloring)
 mapToReg (APtrq aloc) coloring = Mem (mapToReg64 aloc coloring)
-mapToReg APtrNull coloring = Mem (Imm 0)
-mapToReg (AReg 7) coloring = Reg R10D
 mapToReg reg coloring = if coloringIdx < length regOrder
     then Reg $ regOrder !! coloringIdx
     else Mem' ((coloringIdx - length regOrder + 1) * 8) RSP
@@ -126,10 +89,18 @@ mapToReg reg coloring = if coloringIdx < length regOrder
 -- 64 bit version of mapToReg
 mapToReg64 :: ALoc -> Coloring -> Operand
 mapToReg64 (APtrq aloc) coloring = Mem (mapToReg64 aloc coloring)
-mapToReg64 APtrNull coloring = Mem (Imm 0)
-mapToReg64 (AReg 7) coloring = Reg R10
 mapToReg64 reg coloring = case mappedReg of
     Reg r -> Reg $ toReg64 r
+    _     -> mappedReg
+    where mappedReg = mapToReg reg coloring
+
+-- 64 bit version of mapToReg
+mapToReg8 :: ALoc -> Coloring -> Operand
+mapToReg8 (APtrb aloc) coloring = Mem (mapToReg64 aloc coloring)
+mapToReg8 (APtr aloc) coloring = Mem (mapToReg64 aloc coloring)
+mapToReg8 (APtrq aloc) coloring = Mem (mapToReg64 aloc coloring)
+mapToReg8 reg coloring = case mappedReg of
+    Reg r -> Reg $ toReg8 r
     _     -> mappedReg
     where mappedReg = mapToReg reg coloring
 

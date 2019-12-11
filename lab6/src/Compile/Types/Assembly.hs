@@ -3,6 +3,7 @@ module Compile.Types.Assembly where
 data Inst
     = Movq Operand Operand
     | Movl Operand Operand
+    | Movb Operand Operand
     | Movabsq Int Operand
     | Addq Operand Operand
     | Addl Operand  Operand
@@ -31,7 +32,9 @@ data Inst
     | Label String
     | Cmp Operand Operand
     | Cmpq Operand Operand
+    | Cmpb Operand Operand --comparing char
     | Test Operand Operand
+    | Testb Operand Operand
     | Sete Operand
     | Setne Operand
     | Setg Operand
@@ -47,17 +50,19 @@ data Inst
     | Jge String
     | Movzbl Operand Operand
     | Global String
-    | Movls Operand Operand
+    | Leaq Operand Operand
     | Ret deriving (Eq, Ord)
 
 data Operand
     = Imm Int
+    | Str Int
     | Reg Register
     | Mem Operand
     | Mem'
         { imm :: Int
         , base :: Register
-        } deriving (Eq, Ord)
+        }
+    | FPtr String deriving (Eq, Ord)
 
 data Register
     = RAX
@@ -161,15 +166,16 @@ instance Show Register where
 
 instance Show Operand where
     show (Imm x) = "$" ++ show x
+    show (Str i) = "$str" ++ show i
     show (Reg r) = show r
-    show (Mem (Imm 0)) = "(0x0)"
     show (Mem o) = "(" ++ show o ++ ")"
     show (Mem' x b) = show x ++ "(" ++ show b ++ ")"
+    show (FPtr fn) = fn ++ "(%rip)"
 
 instance Show Inst where
     show (Movq x1 x2) = "\tmovq " ++ show x1 ++ ", " ++ show x2
     show (Movl x1 x2) = "\tmovl " ++ show x1 ++ ", " ++ show x2
-    show (Movls x1 x2) = "\tmovl " ++ show x1 ++ ", " ++ show x2
+    show (Movb x1 x2) = "\tmovb " ++ show x1 ++ ", " ++ show x2
     show (Movabsq x1 x2) = "\tmovabsq " ++ show x1 ++ ", " ++ show x2
     show (Addq x1 x2) = "\taddq " ++ show x1 ++ ", " ++ show x2
     show (Addl x1 x2) = "\taddl " ++ show x1 ++ ", " ++ show x2
@@ -197,7 +203,9 @@ instance Show Inst where
     show (Label s) = "." ++ s ++ ":"
     show (Cmp x1 x2) = "\tcmpl " ++ show x1 ++ ", " ++ show x2
     show (Cmpq x1 x2) = "\tcmpq " ++ show x1 ++ ", " ++ show x2 
-    show (Test x1 x2) = "\ttestl " ++ show x1 ++ ", " ++ show x2 
+    show (Cmpb x1 x2) = "\tcmpb " ++ show x1 ++ ", " ++ show x2
+    show (Test x1 x2) = "\ttestl " ++ show x1 ++ ", " ++ show x2
+    show (Testb x1 x2) = "\ttestb " ++ show x1 ++ ", " ++ show x2
     show (Sete x) = "\tsete " ++ show x
     show (Setne x) = "\tsetne " ++ show x
     show (Setg x) = "\tsetg " ++ show x
@@ -211,10 +219,11 @@ instance Show Inst where
     show (Jle label) = "\tjle ." ++ label
     show (Jg label) = "\tjg ." ++ label
     show (Jge label) = "\tjge ." ++ label
-    show (Movzbl x1 x2) = "\tmovzbl " ++ show x1 ++ ", " ++ show x2
+    show (Movzbl x1 x2) = "\tmovzbl " ++ show x1 ++ ", " ++ show x2 
     show (Call f) = "\tcall " ++ f
     show (Fun f) = f ++ ":"
     show (Global f) = "\t.globl " ++ f
+    show (Leaq x1 x2) = "\tleaq " ++ show x1 ++ ", " ++ show x2
 
 
 toReg64 :: Register -> Register

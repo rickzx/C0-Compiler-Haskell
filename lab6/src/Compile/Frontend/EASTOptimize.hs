@@ -17,8 +17,11 @@ optTAST east = case east of
     TAssert e -> TAssert (constantFold e)
     TDef idd tp et -> TDef idd tp (optTAST et)
     TSDef idd l et -> TSDef idd l (optTAST et)
+    TGDecl _ _ _ et -> optTAST et
+    TGDef {} -> TNop
+    TGSDef _ _ _ et -> optTAST et
+    
 
---Eliminate simple operations with constants only on our IR tree.
 constantFold :: TExp -> TExp
 constantFold (TBinop Add e1 e2) = let
         fold1 = constantFold e1
@@ -68,8 +71,6 @@ constantFold (TBinop LAnd e1 e2) = let
     in
         case (fold1, fold2) of
             (TF, _) -> TF
-            (TT, _) -> fold2
-            (_, TT) -> fold1
             _ -> TBinop LAnd fold1 fold2
 constantFold (TBinop LOr e1 e2) = let
         fold1 = constantFold e1
@@ -77,8 +78,6 @@ constantFold (TBinop LOr e1 e2) = let
     in
         case (fold1, fold2) of
             (TT, _) -> TT
-            (TF, _) -> fold2
-            (_, TF) -> fold1
             _ -> TBinop LOr fold1 fold2
 constantFold (TBinop Lt e1 e2) = let
         fold1 = constantFold e1

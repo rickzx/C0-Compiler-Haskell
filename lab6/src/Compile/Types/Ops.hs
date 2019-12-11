@@ -21,6 +21,7 @@ data AOp
   | AModq
   | ANop
   | ANopq
+  | ANopb -- for char
   | ABAnd -- Bitwise And
   | ALAnd -- Logical And
   | ABOr  -- Bitwise Or
@@ -30,6 +31,7 @@ data AOp
   | ASal
   | ASar
   | AXor
+  | ALeaq
   deriving Eq
 
 data ARelOp
@@ -41,13 +43,19 @@ data ARelOp
   | AGt
   | ALe
   | AGe
+  | AEqb
+  | ANeb
+  | ALtb
+  | AGtb
+  | ALeb
+  | AGeb
   deriving Eq
 
 -- For AST
 data Binop = Add | Sub | Mul | Div | Mod |
   BAnd | LAnd | BOr | LOr | Xor |
   Eql | Neq | Lt | Gt | Le | Ge | Sal | Sar |
-  Eqlq | Neqq deriving Eq
+  Eqlq | Neqq | Eqlb | Neqb | Ltb | Gtb | Leb | Geb  deriving Eq
 
 data Unop = Neg | LNot | BNot deriving Eq
 
@@ -71,6 +79,7 @@ instance Show AOp where
   show AModq = "%"
   show ANop  = "[nop]"
   show ANopq = "[nop]"
+  show ANopb = "[nop]"
   show ABAnd = "&"
   show ALAnd = "&&"
   show ABOr  = "|"
@@ -80,6 +89,7 @@ instance Show AOp where
   show AXor  = "^"
   show ASal = "<<"
   show ASar = ">>"
+  show ALeaq = "leaq"
 
 instance Show Binop where
   show Mul = "*"
@@ -102,6 +112,12 @@ instance Show Binop where
   show Ge = ">="
   show Sal = "<<"
   show Sar = ">>"
+  show Eqlb = "=="
+  show Neqb = "!="
+  show Ltb = "<"
+  show Gtb = ">"
+  show Leb = "<="
+  show Geb = ">="
 
 instance Show Unop where
   show Neg = "-"
@@ -125,10 +141,18 @@ instance Show ARelOp where
   show AGt = ">"
   show ALe = "<="
   show AGe = ">="
+  show AEqb = "="
+  show ANeb = "!="
+  show ALtb = "<"
+  show AGtb = ">"
+  show ALeb = "<="
+  show AGeb = ">="
+
 
 isRelOp :: Binop -> Bool
 isRelOp op
-  | op == Eql || op == Neq || op == Lt || op == Gt || op == Le || op == Ge || op == Eqlq || op == Neqq
+  | op == Eql || op == Neq || op == Lt || op == Gt || op == Le || op == Ge || op == Eqlq || op == Neqq || op == Eqlb 
+  || op == Neqb || op == Ltb || op == Gtb || op == Leb || op == Geb 
   = True
   | otherwise
   = False

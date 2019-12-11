@@ -33,6 +33,11 @@ import Debug.Trace
   ident   {TokIdent $$}
   ret     {TokReturn}
   int     {TokInt}
+  char    {TokCharType}
+  gentype {TokGenType $$}
+  string  {TokStringType}
+  ch      {TokChar $$}
+  str     {TokString $$}
   void    {TokVoid}
   '-'     {TokMinus}
   '+'     {TokPlus}
@@ -104,7 +109,11 @@ Gdecl : Fdecl {$1}
       | Typedef ';' {$1}
 
 Fdecl : Type ident Paramlist ';' {Fdecl $1 $2 $3}
+      | '<' GenTypelist '>' Type ident Paramlist ';' {GenFdecl $2 $4 $5 $6}
+
 Fdefn : Type ident Paramlist Block {Fdefn $1 $2 $3 $4}
+      | '<' GenTypelist '>' Type ident Paramlist Block {GenFdefn $2 $4 $5 $6 $7}
+
 Param : Type ident {($1,$2)}
 
 ParamlistFollow : {- Empty -} {[]}
@@ -113,13 +122,27 @@ ParamlistFollow : {- Empty -} {[]}
 Paramlist : '(' ')' {[]}
       | '(' Param ParamlistFollow ')' {$2 : $3}
 
-Sdecl : struct ident ';' {Sdecl $2}
+Sdecl : '<' GenTypelist '>' struct ident ';' {GenSdecl $5 $2}
+      | '<' GenTypelist '>' struct typeIdent ';' {GenSdecl $5 $2}
+      | struct ident ';' {Sdecl $2}
       | struct typeIdent ';' {Sdecl $2}
 
-Sdef : struct ident '{' Fieldlist '}' ';' {Sdef $2 $4}
+GenTypelist : Type GentypeFollow {(checkType $1) : $2}
+GentypeFollow : {- Empty -} {[]}
+      | ',' Type GentypeFollow {(checkType $2) : $3}
+
+Typelist : Type TypeFollow {$1 : $2}
+TypeFollow : {- Empty -} {[]}
+      | ',' Type TypeFollow {$2 : $3}
+
+Sdef : '<' GenTypelist '>' struct ident  '{' Fieldlist '}' ';' {GenSdef $5 $2 $7}
+      | '<' GenTypelist '>' struct typeIdent  '{' Fieldlist '}' ';'  {GenSdef $5 $2 $7}
+      | struct ident '{' Fieldlist '}' ';' {Sdef $2 $4}
       | struct typeIdent '{' Fieldlist '}' ';' {Sdef $2 $4}
+
 Field : Type ident ';' {($2, $1)}
       | Type typeIdent ';' {($2, $1)}
+
 Fieldlist : {- Empty -} {[]}
       | Field Fieldlist {$1 : $2}
 
@@ -128,13 +151,21 @@ Typedef : typedef Type ident {% wrapTypeDef (Typedef $2 $3) $3}
 Block : '{' Stmts '}' {$2}
 
 Type  : int {INTEGER}
+      | char {CHAR}
+      | string {STRING}
+      | gentype {POLY $1}
       | bool {BOOLEAN}
       | typeIdent {DEF $1}
       | void {VOID}
       | Type '[' ']'{ARRAY $1}
       | Type '*'{POINTER $1}
+      | '(' Typelist '->' Type ')' '*' {FUNPTR $2 $4}
+      | '(' '(' ')' '->' Type ')' '*' {FUNPTR [] $5}
       | struct ident {STRUCT $2}
       | struct typeIdent {STRUCT $2}
+      | struct '<' Typelist '>' ident {GENSTRUCT $3 $5}
+      | struct '<' Typelist '>' typeIdent {GENSTRUCT $3 $5}
+
 
 Decl  : Type ident asgnop Exp {checkDeclAsgn $2 $3 $1 $4}
       | Type typeIdent asgnop Exp {checkDeclAsgn $2 $3 $1 $4}
@@ -175,9 +206,13 @@ Exp : '(' Exp ')' {$2}
     | false {F}
     | NULL {NULL}
     | Intconst {$1}
+    | ch {Char $1}
+    | str {String $1}
     | ident {Ident $1}
     | Operation {$1}
     | ident Arglist {Function $1 $2}
+    | '&' ident {RefFun $2}
+    | '<' '*' ident '>' Arglist {RefFunApply $3 $5}
     | alloc '(' Type ')' {Alloc $3}
     | alloc_array '(' Type ',' Exp ')' {ArrayAlloc $3 $5}
     | Exp '[' Exp ']' {ArrayAccess $1 $3}
@@ -266,4 +301,9 @@ wrapTypeDef td name = do
     (str, typedefs) <- get
     put (str, Set.insert name typedefs)
     return td
+
+checkType a = 
+    case a of 
+        POLY _ -> a
+        _ -> error "can't have non generic types in the generic param list"
 }

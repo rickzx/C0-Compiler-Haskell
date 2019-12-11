@@ -3,7 +3,6 @@ module Compile.Backend.LiveVariable where
 import qualified Data.Map as Map
 import qualified Data.Maybe as Maybe
 import qualified Data.Set as Set
-import qualified Data.List as List
 import Debug.Trace
 
 import Compile.Types
@@ -17,7 +16,7 @@ type Pred = Map.Map Int (Set.Set ALoc, [Int], Set.Set ALoc)
 type Ancestor = Map.Map Int (Set.Set Int)
 
 --line num to corresponding live variables
-type LiveList = Map.Map Int (Set.Set ALoc)
+type Livelist = Map.Map Int (Set.Set ALoc)
 
 --given a list of AVal, we just care about the temps, not the
 --constants.
@@ -30,6 +29,12 @@ getLoc (x:rest) =
         ALoc (APtr p) -> Set.insert p (getLoc rest)
         ALoc (APtrq p) -> Set.insert p (getLoc rest)
         _ -> getLoc rest
+
+--reverse the abstract assembly, so that we can work backwards for live variables
+--Stop at first return statment seen
+--reverserAAsm accumulate original -> reversed result
+reverseAAsm :: [(Int, AAsm)] -> [(Int, AAsm)] -> [(Int, AAsm)]
+reverseAAsm = foldl (flip (:))
 
 addLineNum :: [AAsm] -> [(Int, AAsm)]
 addLineNum = zip [0 ..]
@@ -44,6 +49,7 @@ findlabels ((idx, x):xs) mapping =
              in findlabels xs newmap
         _ -> findlabels xs mapping
 
+--TODO: make this an useful error message instead of just -1
 findlabelIdx :: ALabel -> Map.Map ALabel Int -> Int
 findlabelIdx l mapping = Maybe.fromMaybe (-1) (Map.lookup l mapping)
 
@@ -64,7 +70,8 @@ computePredicate ((idx, x):xs) mapping pr =
                     ATemp _ -> Map.insert idx (Set.singleton assign, [idx + 1], getLoc args) pr
                     APtr p -> Map.insert idx (Set.singleton p, [idx + 1], Set.insert p $ getLoc args) pr
                     APtrq p -> Map.insert idx (Set.singleton p, [idx + 1], Set.insert p $ getLoc args) pr
-                    APtrNull -> Map.insert idx (Set.empty, [idx + 1], getLoc args) pr
+                    APtrb p -> Map.insert idx (Set.singleton p, [idx + 1], Set.insert p $ getLoc args) pr
+                    APtrb p -> Map.insert idx (Set.singleton p, [idx + 1], Set.insert p $ getLoc args) pr
              in computePredicate xs mapping linemap
         ARel [assign] _ args ->
             let linemap = case assign of
@@ -72,25 +79,40 @@ computePredicate ((idx, x):xs) mapping pr =
                     ATemp _ -> Map.insert idx (Set.singleton assign, [idx + 1], getLoc args) pr
                     APtr p -> Map.insert idx (Set.singleton p, [idx + 1], Set.insert p $ getLoc args) pr
                     APtrq p -> Map.insert idx (Set.singleton p, [idx + 1], Set.insert p $ getLoc args) pr
-                    APtrNull -> Map.insert idx (Set.empty, [idx + 1], getLoc args) pr
+                    APtrb p -> Map.insert idx (Set.singleton p, [idx + 1], Set.insert p $ getLoc args) pr
+                    APtrb p -> Map.insert idx (Set.singleton p, [idx + 1], Set.insert p $ getLoc args) pr
              in computePredicate xs mapping linemap
         AFun l extraargs -> computePredicate xs mapping (Map.insert idx (Set.empty, [idx + 1], Set.empty) pr)
         ACall l extraargs number ->
             let definedregs = [AReg 3, AReg 4, AReg 1, AReg 2, AReg 5, AReg 6, AReg 0, AReg 7, AReg 8]
                 usedregs = take number definedregs
-                extra = getLoc extraargs
-                linemap = Map.insert idx (Set.fromList definedregs, [idx + 1], Set.union extra (Set.fromList usedregs)) pr
+                extra = map (\arg -> case arg of
+                                AReg _ -> arg
+                                ATemp _ -> arg
+                                APtr p -> p
+                                APtrq p -> p
+                                APtrb p -> p
+                                APtrb p -> p) extraargs
+                linemap = Map.insert idx (Set.fromList definedregs, [idx + 1], Set.fromList (usedregs ++ extra)) pr
+             in computePredicate xs mapping linemap
+        ACallRef fptr extraargs number ->
+            let definedregs = [AReg 3, AReg 4, AReg 1, AReg 2, AReg 5, AReg 6, AReg 0, AReg 7, AReg 8]
+                usedregs = take number definedregs
+                extra = map (\arg -> case arg of
+                                AReg _ -> arg
+                                ATemp _ -> arg
+                                APtr p -> p
+                                APtrq p -> p
+                                APtrb p -> p
+                                APtrb p -> p) extraargs
+                linemap = Map.insert idx (Set.fromList definedregs, [idx + 1], Set.fromList (fptr : usedregs ++ extra)) pr
              in computePredicate xs mapping linemap
         AControl c ->
             case c of
                 ALab _ -> computePredicate xs mapping (Map.insert idx (Set.empty, [idx + 1], Set.empty) pr)
-                AJump l 
-                    | "_ret" `List.isSuffixOf` l ->
-                        let labelidx = findlabelIdx l mapping
-                         in computePredicate xs mapping (Map.insert idx (Set.empty, [labelidx], Set.singleton (AReg 0)) pr)                        
-                    | otherwise -> 
-                        let labelidx = findlabelIdx l mapping
-                         in computePredicate xs mapping (Map.insert idx (Set.empty, [labelidx], Set.empty) pr)
+                AJump l ->
+                    let labelidx = findlabelIdx l mapping
+                     in computePredicate xs mapping (Map.insert idx (Set.empty, [labelidx], Set.empty) pr)
                 ACJump val l1 l2 ->
                     let label1 = findlabelIdx l1 mapping
                         label2 = findlabelIdx l2 mapping
@@ -121,21 +143,21 @@ findAncestor = Map.foldlWithKey f Map.empty
 
 --check whether the variable is already in the livelist of the line, if it is
 --then it must also be in all of its predecessors so we dont have to compute again
-linelive :: LiveList -> ALoc -> Int -> (LiveList, Bool)
+linelive :: Livelist -> ALoc -> Int -> (Livelist, Bool)
 linelive livel var idx =
     let curr = Maybe.fromMaybe Set.empty (Map.lookup idx livel)
      in if Set.member var curr
             then (livel, False)
             else (Map.insert idx (Set.insert var curr) livel, True)
 
-singleVarLive :: ALoc -> Set.Set Int -> Pred -> Ancestor -> LiveList -> LiveList
+singleVarLive :: ALoc -> Set.Set Int -> Pred -> Ancestor -> Livelist -> Livelist
 --ALoc -> ancestor list -> predicate -> livelist
 singleVarLive a ancesset pr ancest livel =
     if ancesset == Set.empty
         then livel
         else Set.foldr g livel ancesset
   where
-    g :: Int -> LiveList -> LiveList
+    g :: Int -> Livelist -> Livelist
     g line liveset =
         let (defset, _, _) = pr Map.! line
             currlive = Maybe.fromMaybe Set.empty (Map.lookup line liveset)
@@ -152,7 +174,7 @@ singleVarLive a ancesset pr ancest livel =
 --i is the line we start looking at, initialized as the length of AASM, when i = 0 we done,
 --we only increment i if there is no more used variable to look at at the line i
 --ances is the list of predessors we use to look upwards
-computeLive :: Int -> Int -> Pred -> Ancestor -> LiveList -> LiveList
+computeLive :: Int -> Int -> Pred -> Ancestor -> Livelist -> Livelist
 computeLive 0 _ _ _ livel = livel
 computeLive linenum varidx pr ances livel =
     let (_, _, useset) = pr Map.! linenum
@@ -183,7 +205,7 @@ isSameLoc x y =
         ALoc x' -> x' == y
         _ -> False
 
-combinelive :: [Int] -> LiveList -> Set.Set ALoc
+combinelive :: [Int] -> Livelist -> Set.Set ALoc
 combinelive l live = foldl h (Set.empty) l
   where
     h :: Set.Set ALoc -> Int -> Set.Set ALoc
@@ -193,7 +215,7 @@ combinelive l live = foldl h (Set.empty) l
 
 --build interference graph, we can just care about the succlist relationship for each line, but
 --we do need to case on div, mod (rax, rdx) and shift (rcx) for special register allocation.
-buildInterfere :: [(Int, AAsm)] -> LiveList -> Pred -> Graph -> Graph
+buildInterfere :: [(Int, AAsm)] -> Livelist -> Pred -> Graph -> Graph
 buildInterfere [] _ _ g = g
 buildInterfere ((idx, x):xs) live pr g =
     let (_, succlist, _) = pr Map.! idx
@@ -280,7 +302,47 @@ buildInterfere ((idx, x):xs) live pr g =
                             ginit
                             liveVars
                  in buildInterfere xs live pr newg
+            ACallRef _ _ _ ->
+                let regused = [AReg 3, AReg 4, AReg 1, AReg 2, AReg 5, AReg 6, AReg 0, AReg 7, AReg 8]
+                    res = foldl f_fn g regused
+                      where
+                        f_fn :: Graph -> ALoc -> Graph
+                        f_fn gra a =
+                            let ginit =
+                                    case Map.lookup a gra of
+                                        Just _ -> gra
+                                        Nothing -> Map.insert a Set.empty gra
+                                newg =
+                                    foldl
+                                        (\g' v ->
+                                             if a /= v
+                                                 then addEdge (v, a) (addEdge (a, v) g')
+                                                 else g')
+                                        ginit
+                                        liveVars
+                             in newg
+                 in buildInterfere xs live pr res
             ACall _ _ _ ->
+                let regused = [AReg 3, AReg 4, AReg 1, AReg 2, AReg 5, AReg 6, AReg 0, AReg 7, AReg 8]
+                    res = foldl f_fn g regused
+                      where
+                        f_fn :: Graph -> ALoc -> Graph
+                        f_fn gra a =
+                            let ginit =
+                                    case Map.lookup a gra of
+                                        Just _ -> gra
+                                        Nothing -> Map.insert a Set.empty gra
+                                newg =
+                                    foldl
+                                        (\g' v ->
+                                             if a /= v
+                                                 then addEdge (v, a) (addEdge (a, v) g')
+                                                 else g')
+                                        ginit
+                                        liveVars
+                             in newg
+                 in buildInterfere xs live pr res
+            ACallRef _ _ _ ->
                 let regused = [AReg 3, AReg 4, AReg 1, AReg 2, AReg 5, AReg 6, AReg 0, AReg 7, AReg 8]
                     res = foldl f_fn g regused
                       where
@@ -325,7 +387,7 @@ buildInterfere ((idx, x):xs) live pr g =
 --(function name, (AASM generated, # of var)
 computerInterfere :: [AAsm] -> Graph
 computerInterfere aasm =
-    let processed = reverse (addLineNum aasm)
+    let processed = reverseAAsm [] (addLineNum aasm)
         labels = findlabels processed Map.empty
         predec = computePredicate processed labels Map.empty
         ancestors = findAncestor predec
@@ -336,16 +398,3 @@ computerInterfere aasm =
         liveness = computeLive size 0 predec ancestors Map.empty
         -- (trace $ "Predicate: " ++ show predec ++ "\n\n" ++ "Ancestors :" ++ show ancestors ++ "\n\n" ++ "Liveness: " ++ show liveness ++ "\n")
      in buildInterfere processed liveness predec Map.empty
-     
-ssaLive :: [AAsm] -> (LiveList, Pred)
-ssaLive aasm =
-    let processed = reverse (addLineNum aasm)
-        labels = findlabels processed Map.empty
-        predec = computePredicate processed labels Map.empty
-        ancestors = findAncestor predec
-        size =
-            case processed of
-                [] -> 0
-                (idx, _):_xs -> idx
-        ll = computeLive size 0 predec ancestors Map.empty
-    in (ll, predec)
